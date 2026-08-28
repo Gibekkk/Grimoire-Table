@@ -4,12 +4,12 @@
 // Until you fill these in with real values, the app runs in local Demo Mode
 // automatically (see js/db.js) so you can click through every screen first.
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBrbPV8GJtMFvXzYdsH55AzVWipG6H_SUg",
+  authDomain: "dnd-app-b08ed.firebaseapp.com",
+  projectId: "dnd-app-b08ed",
+  storageBucket: "dnd-app-b08ed.firebasestorage.app",
+  messagingSenderId: "642119887492",
+  appId: "1:642119887492:web:f43f9fa618b6c5e7e930d1"
 };
 
 export function isFirebaseConfigured() {
