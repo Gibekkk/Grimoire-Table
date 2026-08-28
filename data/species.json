@@ -1,0 +1,91 @@
+[
+  {
+    "id": "aasimar", "name": "Aasimar", "size": ["Medium", "Small"], "speed": 30,
+    "traits": [
+      "Celestial Resistance \u2014 resistance to Necrotic and Radiant damage",
+      "Darkvision 60 ft.",
+      "Healing Hands \u2014 touch a creature to heal it (Proficiency Bonus in d4s), once per Long Rest",
+      "Light Bearer \u2014 knows the Light cantrip",
+      "Celestial Revelation (level 3) \u2014 transform to gain wings, radiant aura, or a necrotic shroud"
+    ]
+  },
+  {
+    "id": "dragonborn", "name": "Dragonborn", "size": ["Medium"], "speed": 30,
+    "traits": [
+      "Draconic Ancestry \u2014 choose a dragon type that sets damage type and Breath Weapon shape",
+      "Breath Weapon \u2014 replaces an action, area damage equal to your ancestry's type, uses scale with level",
+      "Damage Resistance to your ancestry's damage type",
+      "Darkvision 60 ft.",
+      "Draconic Flight (level 5) \u2014 sprout wings and fly for 10 minutes, once per Long Rest"
+    ]
+  },
+  {
+    "id": "dwarf", "name": "Dwarf", "size": ["Medium"], "speed": 30,
+    "traits": [
+      "Darkvision 120 ft.",
+      "Dwarven Resilience \u2014 resistance to Poison damage, advantage on saves vs. the Poisoned condition",
+      "Dwarven Toughness \u2014 extra hit point per character level",
+      "Stonecunning \u2014 Expertise on Intelligence (History) checks about stonework, tremorsense 60 ft. through stone when casting Stonecunning"
+    ]
+  },
+  {
+    "id": "elf", "name": "Elf", "size": ["Medium", "Small"], "speed": 30,
+    "traits": [
+      "Darkvision 60 ft.",
+      "Fey Ancestry \u2014 advantage on saves vs. the Charmed condition, immune to magical sleep",
+      "Keen Senses \u2014 proficiency in Insight, Perception, or Survival",
+      "Trance \u2014 needs no sleep, 4-hour meditation instead",
+      "Elven Lineage \u2014 choose Drow, High Elf, or Wood Elf for a bonus cantrip that scales with level"
+    ]
+  },
+  {
+    "id": "gnome", "name": "Gnome", "size": ["Small"], "speed": 30,
+    "traits": [
+      "Darkvision 60 ft.",
+      "Gnomish Cunning \u2014 advantage on Intelligence, Wisdom, and Charisma saving throws against magic",
+      "Gnomish Lineage \u2014 choose Forest Gnome (Minor Illusion + Speak with Animals) or Rock Gnome (Mage Hand with Tinker variant)"
+    ]
+  },
+  {
+    "id": "goliath", "name": "Goliath", "size": ["Medium"], "speed": 35,
+    "traits": [
+      "Giant Ancestry \u2014 choose a benefit (Cloud's Jaunt, Fire's Burn, Frost's Chill, Hill's Tumble, Stone's Endurance, or Storm's Thunder), usable Proficiency Bonus times per Long Rest",
+      "Large Form (level 5) \u2014 become Large for 10 minutes, once per Long Rest",
+      "Powerful Build \u2014 advantage on checks to end the Grappled condition, counts as one size larger for carrying capacity"
+    ]
+  },
+  {
+    "id": "halfling", "name": "Halfling", "size": ["Small"], "speed": 30,
+    "traits": [
+      "Brave \u2014 advantage on saving throws against the Frightened condition",
+      "Halfling Nimbleness \u2014 can move through the space of any creature Medium or larger",
+      "Luck \u2014 reroll a 1 on a d20 Test",
+      "Naturally Stealthy \u2014 can hide behind a creature at least one size larger"
+    ]
+  },
+  {
+    "id": "human", "name": "Human", "size": ["Medium", "Small"], "speed": 30,
+    "traits": [
+      "Resourceful \u2014 gain Heroic Inspiration whenever you finish a Long Rest",
+      "Skillful \u2014 proficiency in one skill of your choice",
+      "Versatile \u2014 gain an Origin feat of your choice"
+    ]
+  },
+  {
+    "id": "orc", "name": "Orc", "size": ["Medium"], "speed": 30,
+    "traits": [
+      "Adrenaline Rush \u2014 Dash as a Bonus Action and gain temporary hit points, Proficiency Bonus uses per Long Rest",
+      "Darkvision 120 ft.",
+      "Relentless Endurance \u2014 drop to 1 HP instead of 0 once per Long Rest"
+    ]
+  },
+  {
+    "id": "tiefling", "name": "Tiefling", "size": ["Medium", "Small"], "speed": 30,
+    "traits": [
+      "Darkvision 60 ft.",
+      "Fiendish Legacy \u2014 choose Abyssal, Chthonic, or Infernal legacy for a scaling bonus spell",
+      "Otherworldly Presence \u2014 knows the Thaumaturgy cantrip",
+      "Resistance to the damage type matching your fiendish legacy"
+    ]
+  }
+]

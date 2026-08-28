@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isDm(campaignId) {
+      return signedIn() &&
+        get(/databases/$(database)/documents/campaigns/$(campaignId)).data.dmUid == request.auth.uid;
+    }
+    function isMember(campaignId) {
+      return signedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/campaigns/$(campaignId)).data.memberUids;
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.dmUid == request.auth.uid;
+      // Starter rule: any signed-in user can update (covers joining by invite code
+      // and the DM editing campaign fields). Tighten this once your player list is stable.
+      allow update: if signedIn();
+      allow delete: if isDm(campaignId);
+
+      match /log/{entryId} {
+        allow read, create: if isMember(campaignId);
+        allow update, delete: if false;
+      }
+
+      match /notes/{noteId} {
+        allow read, write: if isDm(campaignId);
+      }
+    }
+
+    match /characters/{characterId} {
+      allow read: if signedIn() && (
+        resource.data.ownerUid == request.auth.uid ||
+        (resource.data.campaignId != null && isMember(resource.data.campaignId))
+      );
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && (
+        resource.data.ownerUid == request.auth.uid ||
+        (resource.data.campaignId != null && isDm(resource.data.campaignId))
+      );
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}
