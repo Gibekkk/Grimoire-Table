@@ -9,6 +9,26 @@ export function renderDescriptionTab(ctx) {
   const bg = findById(ruleset.backgrounds, character.backgroundId);
   const sp = findById(ruleset.species, character.speciesId);
 
+  // Portrait
+  const portraitCard = h("div", { class: "card" });
+  portraitCard.appendChild(h("h3", {}, "Portrait"));
+  const portraitRow = h("div", { style: "display:flex; align-items:center; gap:14px;" });
+  const preview = h("div", { class: "portrait-preview lg" });
+  preview.innerHTML = character.portraitBase64 ? `<img src="${character.portraitBase64}">` : `<span>${(character.name || "?")[0].toUpperCase()}</span>`;
+  portraitRow.appendChild(preview);
+  if (canEditCore) {
+    const fileInput = h("input", { type: "file", accept: "image/*" });
+    fileInput.addEventListener("change", async () => {
+      if (!fileInput.files?.[0]) return;
+      const { compressImageToBase64, IMAGE_PRESETS } = await import("../image-utils.js");
+      const result = await compressImageToBase64(fileInput.files[0], IMAGE_PRESETS.portrait);
+      patch({ portraitBase64: result.dataUrl });
+    });
+    portraitRow.appendChild(fileInput);
+  }
+  portraitCard.appendChild(portraitRow);
+  wrap.appendChild(portraitCard);
+
   // Appearance
   const appearance = character.appearance || {};
   const apCard = h("div", { class: "card" });
@@ -47,6 +67,14 @@ export function renderDescriptionTab(ctx) {
   bioArea.disabled = !canEditCore;
   bioArea.addEventListener("change", () => patch({ backstory: bioArea.value }));
   bioCard.appendChild(bioLabel); bioCard.appendChild(bioArea);
+
+  const personalityLabel = h("label", {}, "Personality traits, ideals, bonds, flaws");
+  const personalityArea = h("textarea", {});
+  personalityArea.value = character.personality || "";
+  personalityArea.disabled = !canEditCore;
+  personalityArea.placeholder = "e.g. Gruff but loyal. Believes every debt must be repaid, one way or another.";
+  personalityArea.addEventListener("change", () => patch({ personality: personalityArea.value }));
+  bioCard.appendChild(personalityLabel); bioCard.appendChild(personalityArea);
 
   const notesLabel = h("label", {}, "Player notes");
   const notesArea = h("textarea", {});

@@ -27,7 +27,11 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
   let activeTab = "core";
 
   const isOwner = character.ownerUid === opts.viewerUid;
-  const canEditCore = isOwner && !opts.readOnly;
+  // DMs get full edit access to every character in their campaign (per the
+  // table's house rules — roll for players, fix mistakes, adjust on the fly).
+  // Deleting a character or leaving/joining a campaign stays owner-only (see
+  // the sidebar's kebab menu) so a DM can't remove someone else's character.
+  const canEditCore = (isOwner || opts.isDm) && !opts.readOnly;
   const canEditVitals = (isOwner || opts.isDm) && !opts.readOnly;
   const canManageXp = (isOwner || opts.isDm) && !opts.readOnly;
 
@@ -69,6 +73,7 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
     opts.onRoll?.({ sides: 20, count: 1, modifier: atkBonus, label: `${item.name} \u2014 Attack Roll`, mode: currentAdvMode() });
     opts.onRoll?.({ sides: parsed.sides, count: parsed.count, modifier: dmgBonus + parsed.modifier, mode: "normal", label: `${item.name} \u2014 Damage (${wd.damageType})` });
     consumeAmmoFor(item);
+    opts.onAction?.("action");
   }
 
   async function sendToParty(item) {
@@ -218,15 +223,19 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
       return `${c?.name || e.classId} ${e.level}${e.subclassId ? ` (${e.subclassId})` : ""}`;
     }).join(" / ");
     const header = h("div", { class: "card parchment area-header" });
+    const metaBits = [sp?.name, classLabel, bg?.name, character.alignment].filter(Boolean).join(" \u2022 ");
     header.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
-        <div>
-          <h2 style="margin-bottom:2px;">${escapeHtml(character.name)}</h2>
-          <div class="meta" style="color:#5c4f33;">Level ${level} ${sp?.name || ""} \u2022 ${classLabel} \u2022 ${bg?.name || ""} \u2022 ${character.alignment || ""}</div>
-          ${campaignName ? `<div class="meta" style="color:#5c4f33; margin-top:4px;">Campaign: ${escapeHtml(campaignName)}</div>` : ""}
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div class="portrait-preview lg" style="flex-shrink:0;">${character.portraitBase64 ? `<img src="${character.portraitBase64}">` : `<span>${escapeHtml((character.name || "?")[0].toUpperCase())}</span>`}</div>
+          <div>
+            <h2 style="margin-bottom:2px;">${escapeHtml(character.name)} ${character.isNpc ? '<span class="badge rune">NPC</span>' : ""}</h2>
+            <div class="meta" style="color:#5c4f33;">Level ${level}${metaBits ? " \u2022 " + metaBits : ""}</div>
+            ${campaignName ? `<div class="meta" style="color:#5c4f33; margin-top:4px;">Campaign: ${escapeHtml(campaignName)}</div>` : ""}
+          </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center;">
-          ${canEditCore ? `<label style="margin:0; color:#5c4f33;">Level <input type="number" min="1" max="20" value="${entries[0]?.level || 1}" style="width:56px; display:inline-block; margin:0 0 0 6px;" id="level-input"></label>` : ""}
+          ${canEditCore && entries.length ? `<label style="margin:0; color:#5c4f33;">Level <input type="number" min="1" max="20" value="${entries[0]?.level || 1}" style="width:56px; display:inline-block; margin:0 0 0 6px;" id="level-input"></label>` : ""}
           ${canEditCore ? `<button class="btn sm" id="insp-btn">${character.inspiration ? "\u2728 Inspired" : "Heroic Inspiration"}</button>` : ""}
         </div>
       </div>

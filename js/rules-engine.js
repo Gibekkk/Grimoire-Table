@@ -313,3 +313,16 @@ export function maxResourceUses(resource, character, classLevel) {
     default: return 1;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Cover (PHB 2024 p.19606): applied as an AC adjustment when a token overlaps
+// a cover-flagged map component. Total Cover blocks targeting entirely rather
+// than granting a bonus, so it isn't modeled as an AC number.
+// ---------------------------------------------------------------------------
+export const COVER_AC_BONUS = { half: 2, threeQuarters: 5, total: null };
+export const COVER_LABELS = { half: "Half Cover", threeQuarters: "Three-Quarters Cover", total: "Total Cover" };
+
+export const ACTION_ECONOMY_TYPES = ["action", "bonusAction", "reaction", "movement"];
+
+// One grid square = 5 ft (PHB 2024 standard).
+export const FEET_PER_GRID = 5;

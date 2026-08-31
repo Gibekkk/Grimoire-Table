@@ -131,7 +131,7 @@ const localDb = {
     },
     async listMine(uidVal) {
       const chars = readTable("characters");
-      return Object.values(chars).filter(c => c.ownerUid === uidVal)
+      return Object.values(chars).filter(c => c.ownerUid === uidVal && !c.isNpc)
         .sort((a, b) => b.createdAt - a.createdAt);
     },
     subscribe(id, cb) {
@@ -139,7 +139,13 @@ const localDb = {
     },
     subscribeCampaignParty(campaignId, cb) {
       return subscribeTable("characters", () => {
-        const chars = Object.values(readTable("characters")).filter(c => c.campaignId === campaignId);
+        const chars = Object.values(readTable("characters")).filter(c => c.campaignId === campaignId && !c.isNpc);
+        cb(chars);
+      });
+    },
+    subscribeCampaignNpcs(campaignId, cb) {
+      return subscribeTable("characters", () => {
+        const chars = Object.values(readTable("characters")).filter(c => c.campaignId === campaignId && c.isNpc);
         cb(chars);
       });
     }
@@ -231,6 +237,163 @@ const localDb = {
     },
     subscribe(campaignId, cb) {
       return subscribeTable("notes", () => cb(readTable("notes")[campaignId] || []));
+    }
+  },
+
+  maps: {
+    async create(campaignId, data) {
+      const maps = readTable("maps");
+      maps[campaignId] = maps[campaignId] || {};
+      const id = uid("map");
+      maps[campaignId][id] = { id, createdAt: Date.now(), ...data };
+      writeTable("maps", maps);
+      return id;
+    },
+    async update(campaignId, mapId, patch) {
+      const maps = readTable("maps");
+      if (!maps[campaignId]?.[mapId]) return;
+      Object.assign(maps[campaignId][mapId], patch);
+      writeTable("maps", maps);
+    },
+    async remove(campaignId, mapId) {
+      const maps = readTable("maps");
+      if (maps[campaignId]) delete maps[campaignId][mapId];
+      writeTable("maps", maps);
+      const tokens = readTable("tokens");
+      delete tokens[`${campaignId}:${mapId}`];
+      writeTable("tokens", tokens);
+    },
+    async get(campaignId, mapId) {
+      const maps = readTable("maps");
+      return maps[campaignId]?.[mapId] || null;
+    },
+    async listAll(campaignId) {
+      const maps = readTable("maps");
+      return Object.values(maps[campaignId] || {}).sort((a, b) => a.createdAt - b.createdAt);
+    },
+    subscribeList(campaignId, cb) {
+      return subscribeTable("maps", () => cb(Object.values(readTable("maps")[campaignId] || {}).sort((a, b) => a.createdAt - b.createdAt)));
+    },
+    subscribe(campaignId, mapId, cb) {
+      return subscribeTable("maps", () => cb(readTable("maps")[campaignId]?.[mapId] || null));
+    }
+  },
+
+  tokens: {
+    async add(campaignId, mapId, token) {
+      const tokens = readTable("tokens");
+      const key = `${campaignId}:${mapId}`;
+      tokens[key] = tokens[key] || [];
+      const id = uid("tok");
+      tokens[key].push({ id, createdAt: Date.now(), ...token });
+      writeTable("tokens", tokens);
+      return id;
+    },
+    async update(campaignId, mapId, tokenId, patch) {
+      const tokens = readTable("tokens");
+      const key = `${campaignId}:${mapId}`;
+      const found = (tokens[key] || []).find(t => t.id === tokenId);
+      if (found) Object.assign(found, patch);
+      writeTable("tokens", tokens);
+    },
+    async remove(campaignId, mapId, tokenId) {
+      const tokens = readTable("tokens");
+      const key = `${campaignId}:${mapId}`;
+      tokens[key] = (tokens[key] || []).filter(t => t.id !== tokenId);
+      writeTable("tokens", tokens);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("tokens", () => cb(readTable("tokens")[key] || []));
+    },
+    async moveToMap(campaignId, fromMapId, toMapId, token, spawn) {
+      await this.remove(campaignId, fromMapId, token.id);
+      const { id, createdAt, ...rest } = token;
+      return this.add(campaignId, toMapId, { ...rest, x: spawn?.x ?? 2, y: spawn?.y ?? 2 });
+    }
+  },
+
+  componentFolders: {
+    async add(campaignId, data) {
+      const folders = readTable("componentFolders");
+      folders[campaignId] = folders[campaignId] || [];
+      const id = uid("folder");
+      folders[campaignId].push({ id, createdAt: Date.now(), ...data });
+      writeTable("componentFolders", folders);
+      return id;
+    },
+    async remove(campaignId, folderId) {
+      const folders = readTable("componentFolders");
+      folders[campaignId] = (folders[campaignId] || []).filter(f => f.id !== folderId);
+      writeTable("componentFolders", folders);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("componentFolders", () => cb(readTable("componentFolders")[campaignId] || []));
+    }
+  },
+
+  componentLibrary: {
+    async add(campaignId, data) {
+      const lib = readTable("componentLibrary");
+      lib[campaignId] = lib[campaignId] || [];
+      const id = uid("comp");
+      lib[campaignId].push({ id, createdAt: Date.now(), ...data });
+      writeTable("componentLibrary", lib);
+      return id;
+    },
+    async update(campaignId, componentId, patch) {
+      const lib = readTable("componentLibrary");
+      const found = (lib[campaignId] || []).find(c => c.id === componentId);
+      if (found) Object.assign(found, patch);
+      writeTable("componentLibrary", lib);
+    },
+    async remove(campaignId, componentId) {
+      const lib = readTable("componentLibrary");
+      lib[campaignId] = (lib[campaignId] || []).filter(c => c.id !== componentId);
+      writeTable("componentLibrary", lib);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("componentLibrary", () => cb(readTable("componentLibrary")[campaignId] || []));
+    }
+  },
+
+  relationships: {
+    async add(campaignId, data) {
+      const rel = readTable("relationships");
+      rel[campaignId] = rel[campaignId] || [];
+      const id = uid("rel");
+      rel[campaignId].push({ id, createdAt: Date.now(), ...data });
+      writeTable("relationships", rel);
+      return id;
+    },
+    async update(campaignId, relId, patch) {
+      const rel = readTable("relationships");
+      const found = (rel[campaignId] || []).find(r => r.id === relId);
+      if (found) Object.assign(found, patch);
+      writeTable("relationships", rel);
+    },
+    async remove(campaignId, relId) {
+      const rel = readTable("relationships");
+      rel[campaignId] = (rel[campaignId] || []).filter(r => r.id !== relId);
+      writeTable("relationships", rel);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("relationships", () => cb(readTable("relationships")[campaignId] || []));
+    }
+  },
+
+  combat: {
+    async get(campaignId) {
+      const combat = readTable("combat");
+      return combat[campaignId] || null;
+    },
+    async set(campaignId, data) {
+      const combat = readTable("combat");
+      combat[campaignId] = { ...combat[campaignId], ...data };
+      writeTable("combat", combat);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("combat", () => cb(readTable("combat")[campaignId] || null));
     }
   }
 };
@@ -334,7 +497,8 @@ const firestoreDb = {
       const { db, fx } = await initFirebase();
       const q = fx.query(fx.collection(db, "characters"), fx.where("ownerUid", "==", uidVal));
       const snap = await fx.getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isNpc)
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     },
     subscribe(id, cb) {
       let unsub = () => {};
@@ -349,7 +513,15 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isNpc)));
+      });
+      return () => unsub();
+    },
+    subscribeCampaignNpcs(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.isNpc)));
       });
       return () => unsub();
     }
@@ -440,6 +612,167 @@ const firestoreDb = {
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "notes"), fx.orderBy("createdAt", "asc"));
         unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+      });
+      return () => unsub();
+    }
+  },
+
+  maps: {
+    async create(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "maps"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(campaignId, mapId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), patch);
+    },
+    async remove(campaignId, mapId) {
+      const { db, fx } = await initFirebase();
+      const tokSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"));
+      await Promise.all(tokSnap.docs.map(d => fx.deleteDoc(d.ref)));
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId));
+    },
+    async get(campaignId, mapId) {
+      const { db, fx } = await initFirebase();
+      const snap = await fx.getDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    },
+    async listAll(campaignId) {
+      const { db, fx } = await initFirebase();
+      const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps"), fx.orderBy("createdAt", "asc"));
+      const snap = await fx.getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+    subscribeList(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+      });
+      return () => unsub();
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId), (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null));
+      });
+      return () => unsub();
+    }
+  },
+
+  tokens: {
+    async add(campaignId, mapId, token) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"));
+      await fx.setDoc(ref, { ...token, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(campaignId, mapId, tokenId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "tokens", tokenId), patch);
+    },
+    async remove(campaignId, mapId, tokenId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "tokens", tokenId));
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+      });
+      return () => unsub();
+    },
+    async moveToMap(campaignId, fromMapId, toMapId, token, spawn) {
+      await this.remove(campaignId, fromMapId, token.id);
+      const { id, createdAt, ...rest } = token;
+      return this.add(campaignId, toMapId, { ...rest, x: spawn?.x ?? 2, y: spawn?.y ?? 2 });
+    }
+  },
+
+  componentFolders: {
+    async add(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "componentFolders"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async remove(campaignId, folderId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "componentFolders", folderId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentFolders"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+      });
+      return () => unsub();
+    }
+  },
+
+  componentLibrary: {
+    async add(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "componentLibrary"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(campaignId, componentId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "componentLibrary", componentId), patch);
+    },
+    async remove(campaignId, componentId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "componentLibrary", componentId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentLibrary"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+      });
+      return () => unsub();
+    }
+  },
+
+  relationships: {
+    async add(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "relationships"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(campaignId, relId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "relationships", relId), patch);
+    },
+    async remove(campaignId, relId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "relationships", relId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "relationships"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+      });
+      return () => unsub();
+    }
+  },
+
+  combat: {
+    async get(campaignId) {
+      const { db, fx } = await initFirebase();
+      const snap = await fx.getDoc(fx.doc(db, "campaigns", campaignId, "combat", "state"));
+      return snap.exists() ? snap.data() : null;
+    },
+    async set(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "combat", "state"), data, { merge: true });
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "combat", "state"), (snap) => cb(snap.exists() ? snap.data() : null));
       });
       return () => unsub();
     }

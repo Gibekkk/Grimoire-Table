@@ -31,7 +31,7 @@ jobs:
           mkdir -p dist
           rsync -a --exclude='.git' --exclude='.github' --exclude='dist' \
             --exclude='obfuscator.config.json' --exclude='README.md' \
-            --exclude='firestore.rules' ./ dist/
+            --exclude='firestore.rules' --exclude='scripts' ./ dist/
 
       - name: Obfuscate JS in place
         run: |

@@ -6,6 +6,12 @@ import { mountTablePanel } from "./campaign/table-panel.js";
 import { mountPartyPanel } from "./campaign/party-panel.js";
 import { mountDmNotesPanel } from "./campaign/dm-notes-panel.js";
 import { mountPartyInventoryPanel } from "./campaign/party-inventory-panel.js";
+import { mountNpcPanel } from "./campaign/npc-panel.js";
+import { mountSocialPanel } from "./campaign/social-panel.js";
+import { mountCombatPanel } from "./campaign/combat-panel.js";
+import { mountMapWorkshopPanel } from "./campaign/map-workshop-panel.js";
+import { mountVttPanel } from "./campaign/vtt-panel.js";
+import { mountInitiativeModal } from "./campaign/initiative-modal.js";
 
 export async function renderCampaign(container, params) {
   const user = getCurrentUser();
@@ -49,24 +55,44 @@ export async function renderCampaign(container, params) {
   const tabDefs = [
     { id: "table", label: "Game Table" },
     { id: "party", label: "Party" },
+    { id: "combat", label: "Combat" },
+    { id: "vtt", label: "VTT" },
     { id: "loot", label: "Party Loot" }
   ];
-  if (isDm) tabDefs.push({ id: "notes", label: "DM Notes" });
+  if (isDm) tabDefs.push({ id: "npcs", label: "NPCs" }, { id: "social", label: "Social" }, { id: "workshop", label: "Map Workshop" }, { id: "notes", label: "DM Notes" });
   const panelHost = h("div", {});
 
   let activeUnmount = null;
   let advMode = "normal";
 
+  function sharedOnRoll(spec) {
+    import("../dice/roll-logic.js").then(({ computeRoll }) => {
+      const result = computeRoll({ ...spec, mode: advMode !== "normal" ? advMode : spec.mode });
+      db.log.add(campaign.id, { type: "roll", uid: user.uid, displayName: user.displayName, label: spec.label, result });
+    });
+  }
+
   function activateTab(tabId) {
     [...tabs.children].forEach(t => t.classList.toggle("active", t.dataset.id === tabId));
     activeUnmount?.();
     panelHost.innerHTML = "";
+    const ctx = { campaignId: campaign.id, user, isDm, getAdvMode: () => advMode, onRoll: sharedOnRoll };
     if (tabId === "table") {
       activeUnmount = mountTablePanel(panelHost, { campaignId: campaign.id, user, activeCharacterName: () => null, getActiveModifiers: () => ({}) });
     } else if (tabId === "party") {
-      activeUnmount = mountPartyPanel(panelHost, { campaignId: campaign.id, user, isDm, getAdvMode: () => advMode });
+      activeUnmount = mountPartyPanel(panelHost, ctx);
+    } else if (tabId === "combat") {
+      activeUnmount = mountCombatPanel(panelHost, { ...ctx, campaignLog: (entry) => db.log.add(campaign.id, entry) });
+    } else if (tabId === "vtt") {
+      mountVttPanel(panelHost, ctx).then(u => { activeUnmount = u; });
     } else if (tabId === "loot") {
       activeUnmount = mountPartyInventoryPanel(panelHost, { campaignId: campaign.id, user });
+    } else if (tabId === "npcs") {
+      mountNpcPanel(panelHost, ctx).then(u => { activeUnmount = u; });
+    } else if (tabId === "social") {
+      activeUnmount = mountSocialPanel(panelHost, ctx);
+    } else if (tabId === "workshop") {
+      activeUnmount = mountMapWorkshopPanel(panelHost, ctx);
     } else if (tabId === "notes") {
       activeUnmount = mountDmNotesPanel(panelHost, { campaignId: campaign.id });
     }
@@ -85,5 +111,9 @@ export async function renderCampaign(container, params) {
 
   activateTab("table");
 
-  return () => activeUnmount?.();
+  // Lives for the whole campaign view, independent of the active tab, so a
+  // DM's initiative roll request reaches a player no matter what they're looking at.
+  const unsubModal = mountInitiativeModal(campaign.id, user, (entry) => db.log.add(campaign.id, entry));
+
+  return () => { activeUnmount?.(); unsubModal(); };
 }

@@ -25,6 +25,7 @@ export async function renderCharacterCreator(container) {
     equipmentChoice: "A",
     alignment: ruleset.alignments[4],
     name: "",
+    portraitBase64: null,
     backstory: ""
   };
 
@@ -338,6 +339,22 @@ export async function renderCharacterCreator(container) {
   // ---------------- Step 6: Details ----------------
   function renderDetailsStep(root) {
     const card = h("div", { class: "card" });
+
+    const portraitLabel = h("label", {}, "Portrait (optional)");
+    const portraitRow = h("div", { style: "display:flex; align-items:center; gap:14px; margin-bottom:14px;" });
+    const preview = h("div", { class: "portrait-preview" });
+    preview.innerHTML = state.portraitBase64 ? `<img src="${state.portraitBase64}">` : `<span>${(state.name || "?")[0].toUpperCase()}</span>`;
+    const fileInput = h("input", { type: "file", accept: "image/*" });
+    fileInput.addEventListener("change", async () => {
+      if (!fileInput.files?.[0]) return;
+      const { compressImageToBase64, IMAGE_PRESETS } = await import("../image-utils.js");
+      const result = await compressImageToBase64(fileInput.files[0], IMAGE_PRESETS.portrait);
+      state.portraitBase64 = result.dataUrl;
+      preview.innerHTML = `<img src="${result.dataUrl}">`;
+    });
+    portraitRow.appendChild(preview); portraitRow.appendChild(fileInput);
+    card.appendChild(portraitLabel); card.appendChild(portraitRow);
+
     const nameLabel = h("label", {}, "Character name");
     const nameInput = h("input", { type: "text", value: state.name });
     nameInput.addEventListener("input", () => { state.name = nameInput.value; });
@@ -391,6 +408,7 @@ export async function renderCharacterCreator(container) {
       ownerUid: user.uid,
       ownerName: user.displayName,
       name: state.name.trim(),
+      portraitBase64: state.portraitBase64 || null,
       classId: state.classId,
       classes: [{ classId: state.classId, level: 1, subclassId: null }],
       speciesId: state.speciesId,

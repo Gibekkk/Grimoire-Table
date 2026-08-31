@@ -32,6 +32,33 @@ service cloud.firestore {
       match /notes/{noteId} {
         allow read, write: if isDm(campaignId);
       }
+
+      match /maps/{mapId} {
+        allow read: if isMember(campaignId);
+        allow write: if isDm(campaignId);
+
+        match /tokens/{tokenId} {
+          function tokenOwnerUid() {
+            return get(/databases/$(database)/documents/characters/$(resource.data.refId)).data.ownerUid;
+          }
+          allow read: if isMember(campaignId);
+          allow create, delete: if isDm(campaignId);
+          // A player may move only their own PC's token; the DM may move any token.
+          allow update: if isDm(campaignId) || (isMember(campaignId) && resource.data.kind == "pc" && tokenOwnerUid() == request.auth.uid);
+        }
+      }
+
+      match /componentFolders/{folderId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
+      match /componentLibrary/{componentId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
+      match /relationships/{relId} { allow read, write: if isDm(campaignId); }
+
+      match /combat/{docId} {
+        // Starter rule: any member can update (players toggle their own action
+        // economy and roll their own initiative). Tighten with per-field
+        // validation later if a player misusing this becomes a real problem.
+        allow read: if isMember(campaignId);
+        allow write: if isMember(campaignId);
+      }
     }
 
     match /characters/{characterId} {

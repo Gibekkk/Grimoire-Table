@@ -406,3 +406,56 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
 .weight-bar-track { height: 8px; border-radius: 5px; background: var(--ink); border: 1px solid var(--line); overflow: hidden; margin: 6px 0; }
 .weight-bar-fill { height: 100%; background: linear-gradient(90deg, var(--rune), var(--gold)); }
 .weight-bar-fill.over { background: linear-gradient(90deg, var(--blood), var(--blood-bright)); }
+
+/* ---------- Portrait avatars ---------- */
+.portrait-preview {
+  width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  background: var(--ink-raised); border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); color: var(--gold-bright); font-size: 1.1rem;
+}
+.portrait-preview img { width: 100%; height: 100%; object-fit: cover; }
+.portrait-preview.sm { width: 30px; height: 30px; font-size: 0.85rem; border-width: 1px; }
+.portrait-preview.lg { width: 84px; height: 84px; font-size: 2rem; }
+
+/* ---------- Modal overlay (initiative roll request, etc.) ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(8,8,12,0.72); z-index: 500;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: modalFadeIn .15s ease;
+}
+@keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-box {
+  background: var(--ink-soft); border: 1px solid var(--gold); border-radius: 12px;
+  padding: 26px; max-width: 380px; width: 100%; box-shadow: var(--shadow); text-align: center;
+}
+.modal-box p { color: var(--text); }
+
+/* ---------- VTT layout ---------- */
+.vtt-shell { display: flex; height: 72vh; min-height: 480px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.vtt-sidebar {
+  width: 280px; flex-shrink: 0; background: var(--ink-soft); border-right: 1px solid var(--line);
+  padding: 14px; overflow-y: auto; display: flex; flex-direction: column;
+}
+.vtt-stage { flex: 1; position: relative; display: flex; flex-direction: column; min-width: 0; }
+.vtt-toolbar {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  padding: 8px 10px; background: var(--ink-raised); border-bottom: 1px solid var(--line);
+}
+.vtt-canvas-host { flex: 1; position: relative; background: #0c0d14; overflow: hidden; }
+.vtt-canvas-host canvas { display: block; cursor: grab; }
+.vtt-fab {
+  position: absolute; bottom: 20px; right: 20px; width: 52px; height: 52px; border-radius: 50%;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold)); color: #201404; border: none;
+  font-size: 1.6rem; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,0.4); z-index: 10;
+  transition: transform .1s ease;
+}
+.vtt-fab:hover { transform: scale(1.06); }
+.vtt-token-popup {
+  position: absolute; top: 16px; right: 16px; background: var(--ink-raised); border: 1px solid var(--gold);
+  border-radius: 10px; padding: 14px; width: 220px; box-shadow: var(--shadow); z-index: 20;
+}
+.vtt-token-popup h4 { margin: 0 0 6px; color: var(--gold-bright); }
+@media (max-width: 900px) {
+  .vtt-shell { flex-direction: column; height: auto; }
+  .vtt-sidebar { width: auto; max-height: 260px; }
+}
