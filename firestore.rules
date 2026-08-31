@@ -25,6 +25,10 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      match /partyInventory/{itemId} {
+        allow read, write: if isMember(campaignId);
+      }
+
       match /notes/{noteId} {
         allow read, write: if isDm(campaignId);
       }
@@ -41,6 +45,27 @@ service cloud.firestore {
         (resource.data.campaignId != null && isDm(resource.data.campaignId))
       );
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /inventory/{itemId} {
+        function character() { return get(/databases/$(database)/documents/characters/$(characterId)).data; }
+        allow read: if signedIn() && (
+          character().ownerUid == request.auth.uid ||
+          (character().campaignId != null && isMember(character().campaignId))
+        );
+        allow write: if signedIn() && character().ownerUid == request.auth.uid;
+      }
     }
+
+    // Rulebook reference data (species/classes/backgrounds/skills/feats/equipment).
+    // Public read so the app works for signed-in players; write only via the
+    // Admin SDK import script (scripts/import-rules-data.js), never the browser.
+    match /rules_species/{id}      { allow read: if signedIn(); allow write: if false; }
+    match /rules_classes/{id}      { allow read: if signedIn(); allow write: if false; }
+    match /rules_backgrounds/{id}  { allow read: if signedIn(); allow write: if false; }
+    match /rules_skills/{id}       { allow read: if signedIn(); allow write: if false; }
+    match /rules_feats/{id}        { allow read: if signedIn(); allow write: if false; }
+    match /rules_spells/{id}       { allow read: if signedIn(); allow write: if false; }
+    match /rules_class_features/{id} { allow read: if signedIn(); allow write: if false; }
+    match /rules_meta/{id}         { allow read: if signedIn(); allow write: if false; }
   }
 }

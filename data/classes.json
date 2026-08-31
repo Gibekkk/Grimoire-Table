@@ -1,122 +1,1015 @@
 [
   {
-    "id": "barbarian", "name": "Barbarian", "primaryAbility": ["str"], "hitDie": 12,
-    "savingThrows": ["str", "con"],
-    "skillChoices": { "count": 2, "options": ["animalHandling", "athletics", "intimidation", "nature", "perception", "survival"] },
-    "armorTraining": ["light", "medium", "shield"], "weaponTraining": ["simple", "martial"],
-    "subclassLevel": 3, "subclassLabel": "Barbarian Path",
-    "subclasses": ["Path of the Berserker", "Path of the Wild Heart", "Path of the World Tree", "Path of the Zealot"],
+    "id": "barbarian",
+    "name": "Barbarian",
+    "primaryAbility": [
+      "str"
+    ],
+    "hitDie": 12,
+    "savingThrows": [
+      "str",
+      "con"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "animalHandling",
+        "athletics",
+        "intimidation",
+        "nature",
+        "perception",
+        "survival"
+      ]
+    },
+    "armorTraining": [
+      "light",
+      "medium",
+      "shield"
+    ],
+    "weaponTraining": [
+      "simple",
+      "martial"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Barbarian Path",
+    "subclasses": [
+      "Path of the Berserker",
+      "Path of the Wild Heart",
+      "Path of the World Tree",
+      "Path of the Zealot"
+    ],
     "spellcasting": null,
-    "startingEquipment": ["Greataxe, 4 Handaxes, Explorer's Pack, and 9 GP", "75 GP"]
+    "startingEquipment": [
+      "Greataxe, 4 Handaxes, Explorer's Pack, and 9 GP",
+      "75 GP"
+    ],
+    "weaponMasteryCount": 2,
+    "multiclassPrereq": [
+      "str"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "weapons": [
+        "simple",
+        "martial"
+      ]
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "greataxe",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "handaxe",
+          "category": "weapon",
+          "quantity": 4
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      9,
+      75
+    ]
   },
   {
-    "id": "bard", "name": "Bard", "primaryAbility": ["cha"], "hitDie": 8,
-    "savingThrows": ["dex", "cha"],
-    "skillChoices": { "count": 3, "options": ["acrobatics", "animalHandling", "arcana", "athletics", "deception", "history", "insight", "intimidation", "investigation", "medicine", "nature", "perception", "performance", "persuasion", "religion", "sleightOfHand", "stealth", "survival"] },
-    "armorTraining": ["light"], "weaponTraining": ["simple"],
-    "subclassLevel": 3, "subclassLabel": "Bard College",
-    "subclasses": ["College of Dance", "College of Glamour", "College of Lore", "College of Valor"],
-    "spellcasting": { "ability": "cha", "type": "known" },
-    "startingEquipment": ["Leather Armor, 2 Daggers, Musical Instrument, Entertainer's Pack, and 19 GP", "90 GP"]
+    "id": "bard",
+    "name": "Bard",
+    "primaryAbility": [
+      "cha"
+    ],
+    "hitDie": 8,
+    "savingThrows": [
+      "dex",
+      "cha"
+    ],
+    "skillChoices": {
+      "count": 3,
+      "options": [
+        "acrobatics",
+        "animalHandling",
+        "arcana",
+        "athletics",
+        "deception",
+        "history",
+        "insight",
+        "intimidation",
+        "investigation",
+        "medicine",
+        "nature",
+        "perception",
+        "performance",
+        "persuasion",
+        "religion",
+        "sleightOfHand",
+        "stealth",
+        "survival"
+      ]
+    },
+    "armorTraining": [
+      "light"
+    ],
+    "weaponTraining": [
+      "simple"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Bard College",
+    "subclasses": [
+      "College of Dance",
+      "College of Glamour",
+      "College of Lore",
+      "College of Valor"
+    ],
+    "spellcasting": {
+      "ability": "cha",
+      "type": "known"
+    },
+    "startingEquipment": [
+      "Leather Armor, 2 Daggers, Musical Instrument, Entertainer's Pack, and 19 GP",
+      "90 GP"
+    ],
+    "weaponMasteryCount": 0,
+    "multiclassPrereq": [
+      "cha"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light"
+      ],
+      "weapons": []
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "leather-armor",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "dagger",
+          "category": "weapon",
+          "quantity": 2
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      19,
+      90
+    ]
   },
   {
-    "id": "cleric", "name": "Cleric", "primaryAbility": ["wis"], "hitDie": 8,
-    "savingThrows": ["wis", "cha"],
-    "skillChoices": { "count": 2, "options": ["history", "insight", "medicine", "persuasion", "religion"] },
-    "armorTraining": ["light", "medium", "shield"], "weaponTraining": ["simple"],
-    "subclassLevel": 3, "subclassLabel": "Divine Domain",
-    "subclasses": ["Life Domain", "Light Domain", "Trickery Domain", "War Domain"],
-    "spellcasting": { "ability": "wis", "type": "prepared" },
-    "startingEquipment": ["Chain Shirt, Shield, Mace, Holy Symbol, Priest's Pack, and 7 GP", "110 GP"]
+    "id": "cleric",
+    "name": "Cleric",
+    "primaryAbility": [
+      "wis"
+    ],
+    "hitDie": 8,
+    "savingThrows": [
+      "wis",
+      "cha"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "history",
+        "insight",
+        "medicine",
+        "persuasion",
+        "religion"
+      ]
+    },
+    "armorTraining": [
+      "light",
+      "medium",
+      "shield"
+    ],
+    "weaponTraining": [
+      "simple"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Divine Domain",
+    "subclasses": [
+      "Life Domain",
+      "Light Domain",
+      "Trickery Domain",
+      "War Domain"
+    ],
+    "spellcasting": {
+      "ability": "wis",
+      "type": "prepared"
+    },
+    "startingEquipment": [
+      "Chain Shirt, Shield, Mace, Holy Symbol, Priest's Pack, and 7 GP",
+      "110 GP"
+    ],
+    "weaponMasteryCount": 0,
+    "multiclassPrereq": [
+      "wis"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "weapons": []
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "chain-shirt",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "shield",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "mace",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "holy-symbol",
+          "category": "gear",
+          "quantity": 1
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      7,
+      110
+    ]
   },
   {
-    "id": "druid", "name": "Druid", "primaryAbility": ["wis"], "hitDie": 8,
-    "savingThrows": ["int", "wis"],
-    "skillChoices": { "count": 2, "options": ["arcana", "animalHandling", "insight", "medicine", "nature", "perception", "religion", "survival"] },
-    "armorTraining": ["light", "medium", "shield"], "weaponTraining": ["simple"],
-    "subclassLevel": 3, "subclassLabel": "Druid Circle",
-    "subclasses": ["Circle of the Land", "Circle of the Moon", "Circle of the Sea", "Circle of the Stars"],
-    "spellcasting": { "ability": "wis", "type": "prepared" },
-    "startingEquipment": ["Leather Armor, Sickle, Druidic Focus, Explorer's Pack, and 9 GP", "50 GP"]
+    "id": "druid",
+    "name": "Druid",
+    "primaryAbility": [
+      "wis"
+    ],
+    "hitDie": 8,
+    "savingThrows": [
+      "int",
+      "wis"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "arcana",
+        "animalHandling",
+        "insight",
+        "medicine",
+        "nature",
+        "perception",
+        "religion",
+        "survival"
+      ]
+    },
+    "armorTraining": [
+      "light",
+      "medium",
+      "shield"
+    ],
+    "weaponTraining": [
+      "simple"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Druid Circle",
+    "subclasses": [
+      "Circle of the Land",
+      "Circle of the Moon",
+      "Circle of the Sea",
+      "Circle of the Stars"
+    ],
+    "spellcasting": {
+      "ability": "wis",
+      "type": "prepared"
+    },
+    "startingEquipment": [
+      "Leather Armor, Sickle, Druidic Focus, Explorer's Pack, and 9 GP",
+      "50 GP"
+    ],
+    "weaponMasteryCount": 0,
+    "multiclassPrereq": [
+      "wis"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "weapons": []
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "leather-armor",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "sickle",
+          "category": "weapon",
+          "quantity": 1
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      9,
+      50
+    ]
   },
   {
-    "id": "fighter", "name": "Fighter", "primaryAbility": ["str", "dex"], "hitDie": 10,
-    "savingThrows": ["str", "con"],
-    "skillChoices": { "count": 2, "options": ["acrobatics", "animalHandling", "athletics", "history", "insight", "intimidation", "persuasion", "perception", "survival"] },
-    "armorTraining": ["light", "medium", "heavy", "shield"], "weaponTraining": ["simple", "martial"],
-    "subclassLevel": 3, "subclassLabel": "Fighter Archetype",
-    "subclasses": ["Battle Master", "Champion", "Eldritch Knight", "Psi Warrior"],
+    "id": "fighter",
+    "name": "Fighter",
+    "primaryAbility": [
+      "str",
+      "dex"
+    ],
+    "hitDie": 10,
+    "savingThrows": [
+      "str",
+      "con"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "acrobatics",
+        "animalHandling",
+        "athletics",
+        "history",
+        "insight",
+        "intimidation",
+        "persuasion",
+        "perception",
+        "survival"
+      ]
+    },
+    "armorTraining": [
+      "light",
+      "medium",
+      "heavy",
+      "shield"
+    ],
+    "weaponTraining": [
+      "simple",
+      "martial"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Fighter Archetype",
+    "subclasses": [
+      "Battle Master",
+      "Champion",
+      "Eldritch Knight",
+      "Psi Warrior"
+    ],
     "spellcasting": null,
-    "startingEquipment": ["Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer's Pack, and 4 GP", "155 GP"]
+    "startingEquipment": [
+      "Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer's Pack, and 4 GP",
+      "155 GP"
+    ],
+    "weaponMasteryCount": 3,
+    "multiclassPrereq": [
+      "str",
+      "dex"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "weapons": [
+        "simple",
+        "martial"
+      ]
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "chain-mail",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "greatsword",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "flail",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "javelin",
+          "category": "weapon",
+          "quantity": 8
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      4,
+      155
+    ]
   },
   {
-    "id": "monk", "name": "Monk", "primaryAbility": ["dex", "wis"], "hitDie": 8,
-    "savingThrows": ["str", "dex"],
-    "skillChoices": { "count": 2, "options": ["acrobatics", "athletics", "history", "insight", "religion", "stealth"] },
-    "armorTraining": [], "weaponTraining": ["simple", "martialLight"],
-    "subclassLevel": 3, "subclassLabel": "Monastic Tradition",
-    "subclasses": ["Warrior of Mercy", "Warrior of Shadow", "Warrior of the Elements", "Warrior of the Open Hand"],
+    "id": "monk",
+    "name": "Monk",
+    "primaryAbility": [
+      "dex",
+      "wis"
+    ],
+    "hitDie": 8,
+    "savingThrows": [
+      "str",
+      "dex"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "acrobatics",
+        "athletics",
+        "history",
+        "insight",
+        "religion",
+        "stealth"
+      ]
+    },
+    "armorTraining": [],
+    "weaponTraining": [
+      "simple",
+      "martialLight"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Monastic Tradition",
+    "subclasses": [
+      "Warrior of Mercy",
+      "Warrior of Shadow",
+      "Warrior of the Elements",
+      "Warrior of the Open Hand"
+    ],
     "spellcasting": null,
-    "startingEquipment": ["Spear, 5 Daggers, Artisan's Tools or Musical Instrument, and 11 GP", "50 GP"]
+    "startingEquipment": [
+      "Spear, 5 Daggers, Artisan's Tools or Musical Instrument, and 11 GP",
+      "50 GP"
+    ],
+    "weaponMasteryCount": 2,
+    "multiclassPrereq": [
+      "dex",
+      "wis"
+    ],
+    "multiclassProficiencies": {
+      "armor": [],
+      "weapons": []
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "spear",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "dagger",
+          "category": "weapon",
+          "quantity": 5
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      11,
+      50
+    ]
   },
   {
-    "id": "paladin", "name": "Paladin", "primaryAbility": ["str", "cha"], "hitDie": 10,
-    "savingThrows": ["wis", "cha"],
-    "skillChoices": { "count": 2, "options": ["athletics", "insight", "intimidation", "medicine", "persuasion", "religion"] },
-    "armorTraining": ["light", "medium", "heavy", "shield"], "weaponTraining": ["simple", "martial"],
-    "subclassLevel": 3, "subclassLabel": "Sacred Oath",
-    "subclasses": ["Oath of Devotion", "Oath of Glory", "Oath of the Ancients", "Oath of Vengeance"],
-    "spellcasting": { "ability": "cha", "type": "prepared" },
-    "startingEquipment": ["Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest's Pack, and 9 GP", "150 GP"]
+    "id": "paladin",
+    "name": "Paladin",
+    "primaryAbility": [
+      "str",
+      "cha"
+    ],
+    "hitDie": 10,
+    "savingThrows": [
+      "wis",
+      "cha"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "athletics",
+        "insight",
+        "intimidation",
+        "medicine",
+        "persuasion",
+        "religion"
+      ]
+    },
+    "armorTraining": [
+      "light",
+      "medium",
+      "heavy",
+      "shield"
+    ],
+    "weaponTraining": [
+      "simple",
+      "martial"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Sacred Oath",
+    "subclasses": [
+      "Oath of Devotion",
+      "Oath of Glory",
+      "Oath of the Ancients",
+      "Oath of Vengeance"
+    ],
+    "spellcasting": {
+      "ability": "cha",
+      "type": "prepared"
+    },
+    "startingEquipment": [
+      "Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest's Pack, and 9 GP",
+      "150 GP"
+    ],
+    "weaponMasteryCount": 2,
+    "multiclassPrereq": [
+      "str",
+      "cha"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "weapons": [
+        "simple",
+        "martial"
+      ]
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "chain-mail",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "shield",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "longsword",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "javelin",
+          "category": "weapon",
+          "quantity": 6
+        },
+        {
+          "catalogId": "holy-symbol",
+          "category": "gear",
+          "quantity": 1
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      9,
+      150
+    ]
   },
   {
-    "id": "ranger", "name": "Ranger", "primaryAbility": ["dex", "wis"], "hitDie": 10,
-    "savingThrows": ["str", "dex"],
-    "skillChoices": { "count": 3, "options": ["animalHandling", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"] },
-    "armorTraining": ["light", "medium", "shield"], "weaponTraining": ["simple", "martial"],
-    "subclassLevel": 3, "subclassLabel": "Ranger Archetype",
-    "subclasses": ["Beast Master", "Fey Wanderer", "Gloom Stalker", "Hunter"],
-    "spellcasting": { "ability": "wis", "type": "prepared" },
-    "startingEquipment": ["Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Druidic Focus, Explorer's Pack, and 7 GP", "150 GP"]
+    "id": "ranger",
+    "name": "Ranger",
+    "primaryAbility": [
+      "dex",
+      "wis"
+    ],
+    "hitDie": 10,
+    "savingThrows": [
+      "str",
+      "dex"
+    ],
+    "skillChoices": {
+      "count": 3,
+      "options": [
+        "animalHandling",
+        "athletics",
+        "insight",
+        "investigation",
+        "nature",
+        "perception",
+        "stealth",
+        "survival"
+      ]
+    },
+    "armorTraining": [
+      "light",
+      "medium",
+      "shield"
+    ],
+    "weaponTraining": [
+      "simple",
+      "martial"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Ranger Archetype",
+    "subclasses": [
+      "Beast Master",
+      "Fey Wanderer",
+      "Gloom Stalker",
+      "Hunter"
+    ],
+    "spellcasting": {
+      "ability": "wis",
+      "type": "prepared"
+    },
+    "startingEquipment": [
+      "Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Druidic Focus, Explorer's Pack, and 7 GP",
+      "150 GP"
+    ],
+    "weaponMasteryCount": 2,
+    "multiclassPrereq": [
+      "dex",
+      "wis"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "weapons": [
+        "simple",
+        "martial"
+      ]
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "studded-leather-armor",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "scimitar",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "shortsword",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "longbow",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "arrows-20",
+          "category": "ammo",
+          "quantity": 1
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      7,
+      150
+    ]
   },
   {
-    "id": "rogue", "name": "Rogue", "primaryAbility": ["dex"], "hitDie": 8,
-    "savingThrows": ["dex", "int"],
-    "skillChoices": { "count": 4, "options": ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "persuasion", "sleightOfHand", "stealth"] },
-    "armorTraining": ["light"], "weaponTraining": ["simple", "martialFinesse"],
-    "subclassLevel": 3, "subclassLabel": "Roguish Archetype",
-    "subclasses": ["Arcane Trickster", "Assassin", "Soulknife", "Thief"],
+    "id": "rogue",
+    "name": "Rogue",
+    "primaryAbility": [
+      "dex"
+    ],
+    "hitDie": 8,
+    "savingThrows": [
+      "dex",
+      "int"
+    ],
+    "skillChoices": {
+      "count": 4,
+      "options": [
+        "acrobatics",
+        "athletics",
+        "deception",
+        "insight",
+        "intimidation",
+        "investigation",
+        "perception",
+        "persuasion",
+        "sleightOfHand",
+        "stealth"
+      ]
+    },
+    "armorTraining": [
+      "light"
+    ],
+    "weaponTraining": [
+      "simple",
+      "martialFinesse"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Roguish Archetype",
+    "subclasses": [
+      "Arcane Trickster",
+      "Assassin",
+      "Soulknife",
+      "Thief"
+    ],
     "spellcasting": null,
-    "startingEquipment": ["Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Thieves' Tools, Burglar's Pack, and 8 GP", "100 GP"]
+    "startingEquipment": [
+      "Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Thieves' Tools, Burglar's Pack, and 8 GP",
+      "100 GP"
+    ],
+    "weaponMasteryCount": 2,
+    "multiclassPrereq": [
+      "dex"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "martialFinesse"
+      ]
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "leather-armor",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "dagger",
+          "category": "weapon",
+          "quantity": 2
+        },
+        {
+          "catalogId": "shortsword",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "shortbow",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "arrows-20",
+          "category": "ammo",
+          "quantity": 1
+        },
+        {
+          "catalogId": "thieves-tools",
+          "category": "gear",
+          "quantity": 1
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      8,
+      100
+    ]
   },
   {
-    "id": "sorcerer", "name": "Sorcerer", "primaryAbility": ["cha"], "hitDie": 6,
-    "savingThrows": ["con", "cha"],
-    "skillChoices": { "count": 2, "options": ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"] },
-    "armorTraining": [], "weaponTraining": ["simple"],
-    "subclassLevel": 3, "subclassLabel": "Sorcerous Origin",
-    "subclasses": ["Aberrant Sorcery", "Clockwork Sorcery", "Draconic Sorcery", "Wild Magic Sorcery"],
-    "spellcasting": { "ability": "cha", "type": "known" },
-    "startingEquipment": ["Spear, 2 Daggers, Arcane Focus, Dungeoneer's Pack, and 28 GP", "50 GP"]
+    "id": "sorcerer",
+    "name": "Sorcerer",
+    "primaryAbility": [
+      "cha"
+    ],
+    "hitDie": 6,
+    "savingThrows": [
+      "con",
+      "cha"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "arcana",
+        "deception",
+        "insight",
+        "intimidation",
+        "persuasion",
+        "religion"
+      ]
+    },
+    "armorTraining": [],
+    "weaponTraining": [
+      "simple"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Sorcerous Origin",
+    "subclasses": [
+      "Aberrant Sorcery",
+      "Clockwork Sorcery",
+      "Draconic Sorcery",
+      "Wild Magic Sorcery"
+    ],
+    "spellcasting": {
+      "ability": "cha",
+      "type": "known"
+    },
+    "startingEquipment": [
+      "Spear, 2 Daggers, Arcane Focus, Dungeoneer's Pack, and 28 GP",
+      "50 GP"
+    ],
+    "weaponMasteryCount": 0,
+    "multiclassPrereq": [
+      "cha"
+    ],
+    "multiclassProficiencies": {
+      "armor": [],
+      "weapons": []
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "spear",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "dagger",
+          "category": "weapon",
+          "quantity": 2
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      28,
+      50
+    ]
   },
   {
-    "id": "warlock", "name": "Warlock", "primaryAbility": ["cha"], "hitDie": 8,
-    "savingThrows": ["wis", "cha"],
-    "skillChoices": { "count": 2, "options": ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"] },
-    "armorTraining": ["light"], "weaponTraining": ["simple"],
-    "subclassLevel": 3, "subclassLabel": "Otherworldly Patron",
-    "subclasses": ["Archfey Patron", "Celestial Patron", "Fiend Patron", "Great Old One Patron"],
-    "spellcasting": { "ability": "cha", "type": "known" },
-    "startingEquipment": ["Leather Armor, Sickle, 2 Daggers, Arcane Focus, Book, Scholar's Pack, and 15 GP", "100 GP"]
+    "id": "warlock",
+    "name": "Warlock",
+    "primaryAbility": [
+      "cha"
+    ],
+    "hitDie": 8,
+    "savingThrows": [
+      "wis",
+      "cha"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "arcana",
+        "deception",
+        "history",
+        "intimidation",
+        "investigation",
+        "nature",
+        "religion"
+      ]
+    },
+    "armorTraining": [
+      "light"
+    ],
+    "weaponTraining": [
+      "simple"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Otherworldly Patron",
+    "subclasses": [
+      "Archfey Patron",
+      "Celestial Patron",
+      "Fiend Patron",
+      "Great Old One Patron"
+    ],
+    "spellcasting": {
+      "ability": "cha",
+      "type": "known"
+    },
+    "startingEquipment": [
+      "Leather Armor, Sickle, 2 Daggers, Arcane Focus, Book, Scholar's Pack, and 15 GP",
+      "100 GP"
+    ],
+    "weaponMasteryCount": 0,
+    "multiclassPrereq": [
+      "cha"
+    ],
+    "multiclassProficiencies": {
+      "armor": [
+        "light"
+      ],
+      "weapons": []
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "leather-armor",
+          "category": "armor",
+          "quantity": 1
+        },
+        {
+          "catalogId": "sickle",
+          "category": "weapon",
+          "quantity": 1
+        },
+        {
+          "catalogId": "dagger",
+          "category": "weapon",
+          "quantity": 2
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      15,
+      100
+    ]
   },
   {
-    "id": "wizard", "name": "Wizard", "primaryAbility": ["int"], "hitDie": 6,
-    "savingThrows": ["int", "wis"],
-    "skillChoices": { "count": 2, "options": ["arcana", "history", "insight", "investigation", "medicine", "nature", "religion"] },
-    "armorTraining": [], "weaponTraining": ["simple"],
-    "subclassLevel": 3, "subclassLabel": "Arcane Tradition",
-    "subclasses": ["Abjurer", "Diviner", "Evoker", "Illusionist"],
-    "spellcasting": { "ability": "int", "type": "prepared" },
-    "startingEquipment": ["2 Daggers, Arcane Focus, Robe, Spellbook, Scholar's Pack, and 5 GP", "55 GP"]
+    "id": "wizard",
+    "name": "Wizard",
+    "primaryAbility": [
+      "int"
+    ],
+    "hitDie": 6,
+    "savingThrows": [
+      "int",
+      "wis"
+    ],
+    "skillChoices": {
+      "count": 2,
+      "options": [
+        "arcana",
+        "history",
+        "insight",
+        "investigation",
+        "medicine",
+        "nature",
+        "religion"
+      ]
+    },
+    "armorTraining": [],
+    "weaponTraining": [
+      "simple"
+    ],
+    "subclassLevel": 3,
+    "subclassLabel": "Arcane Tradition",
+    "subclasses": [
+      "Abjurer",
+      "Diviner",
+      "Evoker",
+      "Illusionist"
+    ],
+    "spellcasting": {
+      "ability": "int",
+      "type": "prepared"
+    },
+    "startingEquipment": [
+      "2 Daggers, Arcane Focus, Robe, Spellbook, Scholar's Pack, and 5 GP",
+      "55 GP"
+    ],
+    "weaponMasteryCount": 0,
+    "multiclassPrereq": [
+      "int"
+    ],
+    "multiclassProficiencies": {
+      "armor": [],
+      "weapons": []
+    },
+    "startingEquipmentItems": [
+      [
+        {
+          "catalogId": "dagger",
+          "category": "weapon",
+          "quantity": 2
+        }
+      ],
+      []
+    ],
+    "startingGold": [
+      5,
+      55
+    ]
   }
 ]

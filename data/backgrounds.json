@@ -1,18 +1,258 @@
 [
-  { "id": "acolyte", "name": "Acolyte", "abilityScores": ["int", "wis", "cha"], "feat": "Magic Initiate (Cleric)", "skills": ["insight", "religion"], "tool": "Calligrapher's Supplies" },
-  { "id": "artisan", "name": "Artisan", "abilityScores": ["str", "dex", "int"], "feat": "Crafter", "skills": ["investigation", "persuasion"], "tool": "Artisan's Tools (choice)" },
-  { "id": "charlatan", "name": "Charlatan", "abilityScores": ["dex", "con", "cha"], "feat": "Skilled", "skills": ["deception", "sleightOfHand"], "tool": "Forgery Kit" },
-  { "id": "criminal", "name": "Criminal", "abilityScores": ["dex", "con", "int"], "feat": "Alert", "skills": ["sleightOfHand", "stealth"], "tool": "Thieves' Tools" },
-  { "id": "entertainer", "name": "Entertainer", "abilityScores": ["str", "dex", "cha"], "feat": "Musician", "skills": ["acrobatics", "performance"], "tool": "Musical Instrument (choice)" },
-  { "id": "farmer", "name": "Farmer", "abilityScores": ["str", "con", "wis"], "feat": "Tough", "skills": ["animalHandling", "nature"], "tool": "Carpenter's Tools" },
-  { "id": "guard", "name": "Guard", "abilityScores": ["str", "int", "wis"], "feat": "Alert", "skills": ["athletics", "perception"], "tool": "Gaming Set (choice)" },
-  { "id": "guide", "name": "Guide", "abilityScores": ["dex", "con", "wis"], "feat": "Magic Initiate (Druid)", "skills": ["stealth", "survival"], "tool": "Cartographer's Tools" },
-  { "id": "hermit", "name": "Hermit", "abilityScores": ["con", "wis", "cha"], "feat": "Healer", "skills": ["medicine", "religion"], "tool": "Herbalism Kit" },
-  { "id": "merchant", "name": "Merchant", "abilityScores": ["con", "int", "cha"], "feat": "Lucky", "skills": ["animalHandling", "persuasion"], "tool": "Navigator's Tools" },
-  { "id": "noble", "name": "Noble", "abilityScores": ["str", "int", "cha"], "feat": "Skilled", "skills": ["history", "persuasion"], "tool": "Gaming Set (choice)" },
-  { "id": "sage", "name": "Sage", "abilityScores": ["con", "int", "wis"], "feat": "Magic Initiate (Wizard)", "skills": ["arcana", "history"], "tool": "Calligrapher's Supplies" },
-  { "id": "sailor", "name": "Sailor", "abilityScores": ["str", "dex", "wis"], "feat": "Tavern Brawler", "skills": ["acrobatics", "perception"], "tool": "Navigator's Tools" },
-  { "id": "scribe", "name": "Scribe", "abilityScores": ["dex", "int", "wis"], "feat": "Skilled", "skills": ["investigation", "perception"], "tool": "Calligrapher's Supplies" },
-  { "id": "soldier", "name": "Soldier", "abilityScores": ["str", "dex", "con"], "feat": "Savage Attacker", "skills": ["athletics", "intimidation"], "tool": "Gaming Set (choice)" },
-  { "id": "wayfarer", "name": "Wayfarer", "abilityScores": ["dex", "wis", "cha"], "feat": "Lucky", "skills": ["insight", "stealth"], "tool": "Thieves' Tools" }
+  {
+    "id": "acolyte",
+    "name": "Acolyte",
+    "abilityScores": [
+      "int",
+      "wis",
+      "cha"
+    ],
+    "feat": "Magic Initiate (Cleric)",
+    "skills": [
+      "insight",
+      "religion"
+    ],
+    "tool": "Calligrapher's Supplies",
+    "featId": "magic-initiate-cleric"
+  },
+  {
+    "id": "artisan",
+    "name": "Artisan",
+    "abilityScores": [
+      "str",
+      "dex",
+      "int"
+    ],
+    "feat": "Crafter",
+    "skills": [
+      "investigation",
+      "persuasion"
+    ],
+    "tool": "Artisan's Tools (choice)",
+    "featId": "crafter"
+  },
+  {
+    "id": "charlatan",
+    "name": "Charlatan",
+    "abilityScores": [
+      "dex",
+      "con",
+      "cha"
+    ],
+    "feat": "Skilled",
+    "skills": [
+      "deception",
+      "sleightOfHand"
+    ],
+    "tool": "Forgery Kit",
+    "featId": "skilled"
+  },
+  {
+    "id": "criminal",
+    "name": "Criminal",
+    "abilityScores": [
+      "dex",
+      "con",
+      "int"
+    ],
+    "feat": "Alert",
+    "skills": [
+      "sleightOfHand",
+      "stealth"
+    ],
+    "tool": "Thieves' Tools",
+    "featId": "alert"
+  },
+  {
+    "id": "entertainer",
+    "name": "Entertainer",
+    "abilityScores": [
+      "str",
+      "dex",
+      "cha"
+    ],
+    "feat": "Musician",
+    "skills": [
+      "acrobatics",
+      "performance"
+    ],
+    "tool": "Musical Instrument (choice)",
+    "featId": "musician"
+  },
+  {
+    "id": "farmer",
+    "name": "Farmer",
+    "abilityScores": [
+      "str",
+      "con",
+      "wis"
+    ],
+    "feat": "Tough",
+    "skills": [
+      "animalHandling",
+      "nature"
+    ],
+    "tool": "Carpenter's Tools",
+    "featId": "tough"
+  },
+  {
+    "id": "guard",
+    "name": "Guard",
+    "abilityScores": [
+      "str",
+      "int",
+      "wis"
+    ],
+    "feat": "Alert",
+    "skills": [
+      "athletics",
+      "perception"
+    ],
+    "tool": "Gaming Set (choice)",
+    "featId": "alert"
+  },
+  {
+    "id": "guide",
+    "name": "Guide",
+    "abilityScores": [
+      "dex",
+      "con",
+      "wis"
+    ],
+    "feat": "Magic Initiate (Druid)",
+    "skills": [
+      "stealth",
+      "survival"
+    ],
+    "tool": "Cartographer's Tools",
+    "featId": "magic-initiate-druid"
+  },
+  {
+    "id": "hermit",
+    "name": "Hermit",
+    "abilityScores": [
+      "con",
+      "wis",
+      "cha"
+    ],
+    "feat": "Healer",
+    "skills": [
+      "medicine",
+      "religion"
+    ],
+    "tool": "Herbalism Kit",
+    "featId": "healer"
+  },
+  {
+    "id": "merchant",
+    "name": "Merchant",
+    "abilityScores": [
+      "con",
+      "int",
+      "cha"
+    ],
+    "feat": "Lucky",
+    "skills": [
+      "animalHandling",
+      "persuasion"
+    ],
+    "tool": "Navigator's Tools",
+    "featId": "lucky"
+  },
+  {
+    "id": "noble",
+    "name": "Noble",
+    "abilityScores": [
+      "str",
+      "int",
+      "cha"
+    ],
+    "feat": "Skilled",
+    "skills": [
+      "history",
+      "persuasion"
+    ],
+    "tool": "Gaming Set (choice)",
+    "featId": "skilled"
+  },
+  {
+    "id": "sage",
+    "name": "Sage",
+    "abilityScores": [
+      "con",
+      "int",
+      "wis"
+    ],
+    "feat": "Magic Initiate (Wizard)",
+    "skills": [
+      "arcana",
+      "history"
+    ],
+    "tool": "Calligrapher's Supplies",
+    "featId": "magic-initiate-wizard"
+  },
+  {
+    "id": "sailor",
+    "name": "Sailor",
+    "abilityScores": [
+      "str",
+      "dex",
+      "wis"
+    ],
+    "feat": "Tavern Brawler",
+    "skills": [
+      "acrobatics",
+      "perception"
+    ],
+    "tool": "Navigator's Tools",
+    "featId": "tavern-brawler"
+  },
+  {
+    "id": "scribe",
+    "name": "Scribe",
+    "abilityScores": [
+      "dex",
+      "int",
+      "wis"
+    ],
+    "feat": "Skilled",
+    "skills": [
+      "investigation",
+      "perception"
+    ],
+    "tool": "Calligrapher's Supplies",
+    "featId": "skilled"
+  },
+  {
+    "id": "soldier",
+    "name": "Soldier",
+    "abilityScores": [
+      "str",
+      "dex",
+      "con"
+    ],
+    "feat": "Savage Attacker",
+    "skills": [
+      "athletics",
+      "intimidation"
+    ],
+    "tool": "Gaming Set (choice)",
+    "featId": "savage-attacker"
+  },
+  {
+    "id": "wayfarer",
+    "name": "Wayfarer",
+    "abilityScores": [
+      "dex",
+      "wis",
+      "cha"
+    ],
+    "feat": "Lucky",
+    "skills": [
+      "insight",
+      "stealth"
+    ],
+    "tool": "Thieves' Tools",
+    "featId": "lucky"
+  }
 ]

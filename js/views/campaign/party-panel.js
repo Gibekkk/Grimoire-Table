@@ -2,7 +2,7 @@ import { db } from "../../db.js";
 import { mountCharacterSheet } from "../../character-sheet.js";
 import { h } from "../../util.js";
 
-export function mountPartyPanel(container, { campaignId, getAdvMode }) {
+export function mountPartyPanel(container, { campaignId, user, isDm, getAdvMode, onRoll }) {
   const listCard = h("div", { class: "card" });
   listCard.appendChild(h("h3", {}, "Party"));
   const tabs = h("div", { class: "tabs" });
@@ -21,12 +21,15 @@ export function mountPartyPanel(container, { campaignId, getAdvMode }) {
     sheetUnsub?.();
     sheetHost.innerHTML = "";
     mountCharacterSheet(sheetHost, id, {
-      onRoll: (spec) => {
-        import("../../dice/roll-logic.js").then(({ computeRoll, formatBreakdown }) => {
+      viewerUid: user.uid,
+      isDm,
+      getAdvMode,
+      onRoll: onRoll || ((spec) => {
+        import("../../dice/roll-logic.js").then(({ computeRoll }) => {
           const result = computeRoll({ ...spec, mode: getAdvMode?.() || spec.mode });
-          db.log.add(campaignId, { type: "roll", uid: "sheet", displayName: "Sheet Roll", label: spec.label, result });
+          db.log.add(campaignId, { type: "roll", uid: user.uid, displayName: user.displayName, label: spec.label, result });
         });
-      }
+      })
     }).then(u => { sheetUnsub = u; });
   }
 

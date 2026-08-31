@@ -392,28 +392,75 @@ export async function renderCharacterCreator(container) {
       ownerName: user.displayName,
       name: state.name.trim(),
       classId: state.classId,
+      classes: [{ classId: state.classId, level: 1, subclassId: null }],
       speciesId: state.speciesId,
       backgroundId: state.backgroundId,
       alignment: state.alignment,
       backstory: state.backstory,
+      appearance: { height: "", weight: "", eyes: "", hair: "", faction: "" },
       level: 1,
+      xp: 0,
       abilityScores: finalScores,
+      abilityOverrides: {},
+      skillOverrides: {},
+      savingThrowOverrides: {},
       skillProficiencies: [...bg.skills, ...state.skillChoices],
       skillExpertise: [],
       savingThrowProficiencies: cls.savingThrows,
       equipmentChoice: state.equipmentChoice,
-      equippedArmor: null,
+      weaponMasteries: [],
+      featChoices: {},
       hp: { current: null, max: null, temp: 0 },
-      hitDiceSpent: 0,
+      hitDiceUsed: 0,
+      acAdjustments: [],
       inspiration: false,
+      currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+      resourcesUsed: {},
+      spellsPrepared: [],
+      spellSlotsUsed: {},
+      pactSlotsUsed: 0,
       campaignId: null,
       notes: ""
     };
     try {
       const id = await db.characters.create(character);
+      await grantStartingEquipment(id, cls, state.equipmentChoice);
       toast("Character created!");
       navigate(`/character/${id}`);
     } catch (e) { toast(e.message, "error"); }
+  }
+
+  async function grantStartingEquipment(characterId, cls, choice) {
+    const idx = choice === "B" ? 1 : 0;
+    const items = cls.startingEquipmentItems?.[idx] || [];
+    for (const spec of items) {
+      if (spec.category === "weapon") {
+        const entry = findById(ruleset.equipment.weapons, spec.catalogId);
+        if (!entry) continue;
+        await db.inventory.add(characterId, {
+          type: "weapon", name: entry.name, quantity: spec.quantity, equipped: false, isCustom: false, catalogId: entry.id,
+          weightLb: parseFloat(entry.weight) || 0, valueGp: 0,
+          weaponData: { damageDice: entry.damageDice, damageType: entry.damageType, ability: entry.ability, ranged: entry.ranged, ammoType: entry.ammoType, properties: entry.properties, proficient: true, attackBonus: 0, damageBonus: 0 }
+        });
+      } else if (spec.category === "armor") {
+        const entry = findById(ruleset.equipment.armor, spec.catalogId);
+        if (!entry) continue;
+        await db.inventory.add(characterId, {
+          type: "armor", name: entry.name, quantity: spec.quantity, equipped: false, isCustom: false, catalogId: entry.id, valueGp: 0,
+          armorData: { armorType: entry.armorType, baseAC: entry.baseAC, dexBonus: entry.dexBonus, strengthRequirement: entry.strengthRequirement, stealthDisadvantage: entry.stealthDisadvantage }
+        });
+      } else if (spec.category === "ammo") {
+        const entry = findById(ruleset.equipment.ammo, spec.catalogId);
+        if (!entry) continue;
+        await db.inventory.add(characterId, { type: "ammo", name: entry.name, quantity: entry.quantity * spec.quantity, ammoType: entry.ammoType, isCustom: false, valueGp: 0 });
+      } else if (spec.category === "gear") {
+        const entry = findById(ruleset.equipment.gear, spec.catalogId);
+        if (!entry) continue;
+        await db.inventory.add(characterId, { type: "gear", name: entry.name, quantity: spec.quantity, isCustom: false, isContainer: !!entry.isContainer, valueGp: 0 });
+      }
+    }
+    const gold = cls.startingGold?.[idx] || 0;
+    if (gold > 0) await db.characters.update(characterId, { currency: { cp: 0, sp: 0, ep: 0, gp: gold, pp: 0 } });
   }
 
   renderAll();

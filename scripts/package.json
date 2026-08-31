@@ -1,0 +1,13 @@
+{
+  "name": "grimoire-table-import-scripts",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "One-off scripts to seed Firestore with rulebook data. Not part of the deployed site.",
+  "scripts": {
+    "import": "node import-rules-data.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}

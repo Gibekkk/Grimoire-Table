@@ -5,6 +5,7 @@ import { navigate } from "../router.js";
 import { mountTablePanel } from "./campaign/table-panel.js";
 import { mountPartyPanel } from "./campaign/party-panel.js";
 import { mountDmNotesPanel } from "./campaign/dm-notes-panel.js";
+import { mountPartyInventoryPanel } from "./campaign/party-inventory-panel.js";
 
 export async function renderCampaign(container, params) {
   const user = getCurrentUser();
@@ -47,7 +48,8 @@ export async function renderCampaign(container, params) {
   const tabs = h("div", { class: "tabs" });
   const tabDefs = [
     { id: "table", label: "Game Table" },
-    { id: "party", label: "Party" }
+    { id: "party", label: "Party" },
+    { id: "loot", label: "Party Loot" }
   ];
   if (isDm) tabDefs.push({ id: "notes", label: "DM Notes" });
   const panelHost = h("div", {});
@@ -62,7 +64,9 @@ export async function renderCampaign(container, params) {
     if (tabId === "table") {
       activeUnmount = mountTablePanel(panelHost, { campaignId: campaign.id, user, activeCharacterName: () => null, getActiveModifiers: () => ({}) });
     } else if (tabId === "party") {
-      activeUnmount = mountPartyPanel(panelHost, { campaignId: campaign.id, getAdvMode: () => advMode });
+      activeUnmount = mountPartyPanel(panelHost, { campaignId: campaign.id, user, isDm, getAdvMode: () => advMode });
+    } else if (tabId === "loot") {
+      activeUnmount = mountPartyInventoryPanel(panelHost, { campaignId: campaign.id, user });
     } else if (tabId === "notes") {
       activeUnmount = mountDmNotesPanel(panelHost, { campaignId: campaign.id });
     }

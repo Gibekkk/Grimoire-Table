@@ -1,9 +1,11 @@
 import { mountCharacterSheet } from "../character-sheet.js";
 import { navigate } from "../router.js";
-import { h } from "../util.js";
+import { h, toast } from "../util.js";
+import { getCurrentUser } from "../auth.js";
+import { db } from "../db.js";
 
 export async function renderCharacterSheetPage(container, params) {
-  const wrap = h("div", { class: "main narrow" });
+  const wrap = h("div", { class: "main" });
   const backBtn = h("button", { class: "btn ghost sm" }, "\u2190 Dashboard");
   backBtn.addEventListener("click", () => navigate("/dashboard"));
   wrap.appendChild(backBtn);
@@ -11,16 +13,25 @@ export async function renderCharacterSheetPage(container, params) {
   wrap.appendChild(sheetHost);
   container.appendChild(wrap);
 
+  const user = getCurrentUser();
+  const character = await db.characters.get(params.id);
+  if (!character) {
+    sheetHost.innerHTML = `<div class="empty-state"><h3>Character not found</h3></div>`;
+    return () => {};
+  }
+  let isDm = false;
+  if (character.campaignId) {
+    const campaign = await db.campaigns.get(character.campaignId);
+    isDm = campaign?.dmUid === user.uid;
+  }
+
   const unsub = await mountCharacterSheet(sheetHost, params.id, {
-    showManageActions: true,
-    onDelete: () => navigate("/dashboard"),
+    viewerUid: user.uid,
+    isDm,
     onRoll: (spec) => {
-      // Standalone page: quick client-side roll toast, no shared log.
       import("../dice/roll-logic.js").then(({ computeRoll, formatBreakdown }) => {
         const result = computeRoll(spec);
-        import("../util.js").then(({ toast }) => {
-          toast(`${spec.label}: ${result.total} ${formatBreakdown(result)}`);
-        });
+        toast(`${spec.label}: ${result.total} ${formatBreakdown(result)}`);
       });
     }
   });

@@ -1,91 +1,301 @@
 [
   {
-    "id": "aasimar", "name": "Aasimar", "size": ["Medium", "Small"], "speed": 30,
+    "id": "aasimar",
+    "name": "Aasimar",
+    "size": [
+      "Medium",
+      "Small"
+    ],
+    "speed": 30,
     "traits": [
-      "Celestial Resistance \u2014 resistance to Necrotic and Radiant damage",
-      "Darkvision 60 ft.",
-      "Healing Hands \u2014 touch a creature to heal it (Proficiency Bonus in d4s), once per Long Rest",
-      "Light Bearer \u2014 knows the Light cantrip",
-      "Celestial Revelation (level 3) \u2014 transform to gain wings, radiant aura, or a necrotic shroud"
+      {
+        "name": "Celestial Resistance",
+        "description": "resistance to Necrotic and Radiant damage",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Darkvision 60 ft.",
+        "description": "",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Healing Hands",
+        "description": "touch a creature to heal it (Proficiency Bonus in d4s), once per Long Rest",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Light Bearer",
+        "description": "knows the Light cantrip",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Celestial Revelation",
+        "description": "transform to gain wings, radiant aura, or a necrotic shroud",
+        "unlockLevel": 3
+      }
     ]
   },
   {
-    "id": "dragonborn", "name": "Dragonborn", "size": ["Medium"], "speed": 30,
+    "id": "dragonborn",
+    "name": "Dragonborn",
+    "size": [
+      "Medium"
+    ],
+    "speed": 30,
     "traits": [
-      "Draconic Ancestry \u2014 choose a dragon type that sets damage type and Breath Weapon shape",
-      "Breath Weapon \u2014 replaces an action, area damage equal to your ancestry's type, uses scale with level",
-      "Damage Resistance to your ancestry's damage type",
-      "Darkvision 60 ft.",
-      "Draconic Flight (level 5) \u2014 sprout wings and fly for 10 minutes, once per Long Rest"
+      {
+        "name": "Draconic Ancestry",
+        "description": "choose a dragon type that sets damage type and Breath Weapon shape",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Breath Weapon",
+        "description": "replaces an action, area damage equal to your ancestry's type, uses scale with level",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Damage Resistance to your ancestry's damage type",
+        "description": "",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Darkvision 60 ft.",
+        "description": "",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Draconic Flight",
+        "description": "sprout wings and fly for 10 minutes, once per Long Rest",
+        "unlockLevel": 5
+      }
     ]
   },
   {
-    "id": "dwarf", "name": "Dwarf", "size": ["Medium"], "speed": 30,
+    "id": "dwarf",
+    "name": "Dwarf",
+    "size": [
+      "Medium"
+    ],
+    "speed": 30,
     "traits": [
-      "Darkvision 120 ft.",
-      "Dwarven Resilience \u2014 resistance to Poison damage, advantage on saves vs. the Poisoned condition",
-      "Dwarven Toughness \u2014 extra hit point per character level",
-      "Stonecunning \u2014 Expertise on Intelligence (History) checks about stonework, tremorsense 60 ft. through stone when casting Stonecunning"
+      {
+        "name": "Darkvision 120 ft.",
+        "description": "",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Dwarven Resilience",
+        "description": "resistance to Poison damage, advantage on saves vs. the Poisoned condition",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Dwarven Toughness",
+        "description": "extra hit point per character level",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Stonecunning",
+        "description": "Expertise on Intelligence (History) checks about stonework, tremorsense 60 ft. through stone when casting Stonecunning",
+        "unlockLevel": 1
+      }
     ]
   },
   {
-    "id": "elf", "name": "Elf", "size": ["Medium", "Small"], "speed": 30,
+    "id": "elf",
+    "name": "Elf",
+    "size": [
+      "Medium",
+      "Small"
+    ],
+    "speed": 30,
     "traits": [
-      "Darkvision 60 ft.",
-      "Fey Ancestry \u2014 advantage on saves vs. the Charmed condition, immune to magical sleep",
-      "Keen Senses \u2014 proficiency in Insight, Perception, or Survival",
-      "Trance \u2014 needs no sleep, 4-hour meditation instead",
-      "Elven Lineage \u2014 choose Drow, High Elf, or Wood Elf for a bonus cantrip that scales with level"
+      {
+        "name": "Darkvision 60 ft.",
+        "description": "",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Fey Ancestry",
+        "description": "advantage on saves vs. the Charmed condition, immune to magical sleep",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Keen Senses",
+        "description": "proficiency in Insight, Perception, or Survival",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Trance",
+        "description": "needs no sleep, 4-hour meditation instead",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Elven Lineage",
+        "description": "choose Drow, High Elf, or Wood Elf for a bonus cantrip that scales with level",
+        "unlockLevel": 1
+      }
     ]
   },
   {
-    "id": "gnome", "name": "Gnome", "size": ["Small"], "speed": 30,
+    "id": "gnome",
+    "name": "Gnome",
+    "size": [
+      "Small"
+    ],
+    "speed": 30,
     "traits": [
-      "Darkvision 60 ft.",
-      "Gnomish Cunning \u2014 advantage on Intelligence, Wisdom, and Charisma saving throws against magic",
-      "Gnomish Lineage \u2014 choose Forest Gnome (Minor Illusion + Speak with Animals) or Rock Gnome (Mage Hand with Tinker variant)"
+      {
+        "name": "Darkvision 60 ft.",
+        "description": "",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Gnomish Cunning",
+        "description": "advantage on Intelligence, Wisdom, and Charisma saving throws against magic",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Gnomish Lineage",
+        "description": "choose Forest Gnome (Minor Illusion + Speak with Animals) or Rock Gnome (Mage Hand with Tinker variant)",
+        "unlockLevel": 1
+      }
     ]
   },
   {
-    "id": "goliath", "name": "Goliath", "size": ["Medium"], "speed": 35,
+    "id": "goliath",
+    "name": "Goliath",
+    "size": [
+      "Medium"
+    ],
+    "speed": 35,
     "traits": [
-      "Giant Ancestry \u2014 choose a benefit (Cloud's Jaunt, Fire's Burn, Frost's Chill, Hill's Tumble, Stone's Endurance, or Storm's Thunder), usable Proficiency Bonus times per Long Rest",
-      "Large Form (level 5) \u2014 become Large for 10 minutes, once per Long Rest",
-      "Powerful Build \u2014 advantage on checks to end the Grappled condition, counts as one size larger for carrying capacity"
+      {
+        "name": "Giant Ancestry",
+        "description": "choose a benefit (Cloud's Jaunt, Fire's Burn, Frost's Chill, Hill's Tumble, Stone's Endurance, or Storm's Thunder), usable Proficiency Bonus times per Long Rest",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Large Form",
+        "description": "become Large for 10 minutes, once per Long Rest",
+        "unlockLevel": 5
+      },
+      {
+        "name": "Powerful Build",
+        "description": "advantage on checks to end the Grappled condition, counts as one size larger for carrying capacity",
+        "unlockLevel": 1
+      }
     ]
   },
   {
-    "id": "halfling", "name": "Halfling", "size": ["Small"], "speed": 30,
+    "id": "halfling",
+    "name": "Halfling",
+    "size": [
+      "Small"
+    ],
+    "speed": 30,
     "traits": [
-      "Brave \u2014 advantage on saving throws against the Frightened condition",
-      "Halfling Nimbleness \u2014 can move through the space of any creature Medium or larger",
-      "Luck \u2014 reroll a 1 on a d20 Test",
-      "Naturally Stealthy \u2014 can hide behind a creature at least one size larger"
+      {
+        "name": "Brave",
+        "description": "advantage on saving throws against the Frightened condition",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Halfling Nimbleness",
+        "description": "can move through the space of any creature Medium or larger",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Luck",
+        "description": "reroll a 1 on a d20 Test",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Naturally Stealthy",
+        "description": "can hide behind a creature at least one size larger",
+        "unlockLevel": 1
+      }
     ]
   },
   {
-    "id": "human", "name": "Human", "size": ["Medium", "Small"], "speed": 30,
+    "id": "human",
+    "name": "Human",
+    "size": [
+      "Medium",
+      "Small"
+    ],
+    "speed": 30,
     "traits": [
-      "Resourceful \u2014 gain Heroic Inspiration whenever you finish a Long Rest",
-      "Skillful \u2014 proficiency in one skill of your choice",
-      "Versatile \u2014 gain an Origin feat of your choice"
+      {
+        "name": "Resourceful",
+        "description": "gain Heroic Inspiration whenever you finish a Long Rest",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Skillful",
+        "description": "proficiency in one skill of your choice",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Versatile",
+        "description": "gain an Origin feat of your choice",
+        "unlockLevel": 1
+      }
     ]
   },
   {
-    "id": "orc", "name": "Orc", "size": ["Medium"], "speed": 30,
+    "id": "orc",
+    "name": "Orc",
+    "size": [
+      "Medium"
+    ],
+    "speed": 30,
     "traits": [
-      "Adrenaline Rush \u2014 Dash as a Bonus Action and gain temporary hit points, Proficiency Bonus uses per Long Rest",
-      "Darkvision 120 ft.",
-      "Relentless Endurance \u2014 drop to 1 HP instead of 0 once per Long Rest"
+      {
+        "name": "Adrenaline Rush",
+        "description": "Dash as a Bonus Action and gain temporary hit points, Proficiency Bonus uses per Long Rest",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Darkvision 120 ft.",
+        "description": "",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Relentless Endurance",
+        "description": "drop to 1 HP instead of 0 once per Long Rest",
+        "unlockLevel": 1
+      }
     ]
   },
   {
-    "id": "tiefling", "name": "Tiefling", "size": ["Medium", "Small"], "speed": 30,
+    "id": "tiefling",
+    "name": "Tiefling",
+    "size": [
+      "Medium",
+      "Small"
+    ],
+    "speed": 30,
     "traits": [
-      "Darkvision 60 ft.",
-      "Fiendish Legacy \u2014 choose Abyssal, Chthonic, or Infernal legacy for a scaling bonus spell",
-      "Otherworldly Presence \u2014 knows the Thaumaturgy cantrip",
-      "Resistance to the damage type matching your fiendish legacy"
+      {
+        "name": "Darkvision 60 ft.",
+        "description": "",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Fiendish Legacy",
+        "description": "choose Abyssal, Chthonic, or Infernal legacy for a scaling bonus spell",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Otherworldly Presence",
+        "description": "knows the Thaumaturgy cantrip",
+        "unlockLevel": 1
+      },
+      {
+        "name": "Resistance to the damage type matching your fiendish legacy",
+        "description": "",
+        "unlockLevel": 1
+      }
     ]
   }
 ]

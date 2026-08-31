@@ -61,14 +61,32 @@ export function mountTablePanel(container, { campaignId, user, activeCharacterNa
   modRow.appendChild(advWrap);
   controlsCard.appendChild(modRow);
 
+  // Custom roll builder: pick die type + how many, reusing the modifier and Adv/Dis above.
+  const customCard = h("div", { style: "margin-top:14px;" });
+  customCard.appendChild(h("label", {}, "Custom Roll"));
+  const customRow = h("div", { class: "field-row" });
+  const customCountInput = h("input", { type: "number", value: "1", min: "1", max: "20", style: "max-width:70px;" });
+  const customDieSelect = h("select", { style: "max-width:90px;" });
+  [4, 6, 8, 10, 12, 20, 100].forEach(s => customDieSelect.appendChild(h("option", { value: s }, `d${s}`)));
+  const customRollBtn = h("button", { class: "btn primary" }, "Roll Custom");
+  customRollBtn.addEventListener("click", () => {
+    const sides = parseInt(customDieSelect.value, 10);
+    const count = Math.max(1, Math.min(20, parseInt(customCountInput.value, 10) || 1));
+    if (sides === 100) { doRoll({ isPercentile: true, modifier: customModifier, mode: "normal", label: `${count > 1 ? count + "x " : ""}d100` }); return; }
+    doRoll({ sides, count, modifier: customModifier, mode: advMode, label: `${count}d${sides}` });
+  });
+  customRow.appendChild(customCountInput); customRow.appendChild(customDieSelect); customRow.appendChild(customRollBtn);
+  customCard.appendChild(customRow);
+  controlsCard.appendChild(customCard);
+
   const notationRow = h("div", { class: "field-row" });
-  const notationInput = h("input", { type: "text", placeholder: "Custom, e.g. 2d6+3" });
-  const notationBtn = h("button", { class: "btn primary" }, "Roll");
+  const notationInput = h("input", { type: "text", placeholder: "Or type notation, e.g. 2d6+3" });
+  const notationBtn = h("button", { class: "btn" }, "Roll");
   notationBtn.addEventListener("click", () => {
     import("../../dice/roll-logic.js").then(({ parseNotation }) => {
       const parsed = parseNotation(notationInput.value);
       if (!parsed) { import("../../util.js").then(({ toast }) => toast("Format like 2d6+3", "error")); return; }
-      doRoll({ ...parsed, mode: "normal", label: notationInput.value });
+      doRoll({ ...parsed, mode: advMode, label: notationInput.value });
     });
   });
   notationRow.appendChild(notationInput); notationRow.appendChild(notationBtn);

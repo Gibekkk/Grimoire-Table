@@ -1,6 +1,7 @@
 import { onAuthChange, getCurrentUser, isDemoMode, signOutUser } from "./auth.js";
 import { initRouter, registerRoute, navigate } from "./router.js";
-import { h } from "./util.js";
+import { h, showContextMenu, toast } from "./util.js";
+import { db } from "./db.js";
 
 import { renderLogin } from "./views/login-view.js";
 import { renderDashboard } from "./views/dashboard-view.js";
@@ -9,7 +10,6 @@ import { renderCharacterSheetPage } from "./views/character-sheet-view.js";
 import { renderCampaign } from "./views/campaign-view.js";
 
 const appRoot = document.getElementById("app");
-let shellBuilt = false;
 
 const NAV_ITEMS = [
   { path: "/dashboard", label: "Dashboard", icon: iconHome() },
@@ -23,8 +23,10 @@ function iconPlus() {
   return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>`;
 }
 function iconD20() {
-  return `<svg class="d20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l9 5.2v9.6L12 22l-9-5.2V7.2L12 2z"/><path d="M12 2v20M3 7.2l9 5 9-5M3 16.8l9-4.6 9 4.6M12 12.2V2"/></svg>`;
+  return `<svg class="d20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l9 5.2v9.6L12 22l-9-5.2V7.2L12 2z"/><path d="M12 2v20M3 7.2l9 5 9-5M3 16.8l9-4.6 9 4.6M21 7.2l-9 5M21 16.8l-9-4.6"/></svg>`;
 }
+
+let charListEl = null;
 
 function buildShell() {
   appRoot.innerHTML = "";
@@ -38,6 +40,11 @@ function buildShell() {
     nav.appendChild(link);
   });
   sidebar.appendChild(nav);
+
+  sidebar.appendChild(h("div", { class: "section-label" }, "Your Characters"));
+  charListEl = h("div", {});
+  sidebar.appendChild(charListEl);
+
   sidebar.appendChild(h("div", { class: "spacer" }));
 
   const user = getCurrentUser();
@@ -62,17 +69,76 @@ function buildShell() {
   const shell = h("div", { class: "shell" }, [sidebar, main]);
   appRoot.appendChild(shell);
 
-  window.addEventListener("hashchange", updateActiveNav);
+  window.addEventListener("hashchange", () => { updateActiveNav(); refreshSidebarCharacters(); });
   updateActiveNav();
+  refreshSidebarCharacters();
 
   return view;
 }
 
 function updateActiveNav() {
   const path = (location.hash || "#/dashboard").slice(1);
-  document.querySelectorAll(".nav-link").forEach(a => {
-    a.classList.toggle("active", a.getAttribute("href") === `#${path}` || (path.startsWith("/character/") && path !== "/character/new" && a.getAttribute("href") === "#/dashboard"));
+  document.querySelectorAll(".nav-link, .char-link").forEach(a => {
+    a.classList.toggle("active", a.getAttribute("href") === `#${path}`);
   });
+}
+
+async function refreshSidebarCharacters() {
+  if (!charListEl) return;
+  const user = getCurrentUser();
+  if (!user) return;
+  const characters = await db.characters.listMine(user.uid);
+  charListEl.innerHTML = "";
+  if (characters.length === 0) {
+    charListEl.appendChild(h("div", { class: "char-link", style: "opacity:0.6; cursor:default;" }, "No characters yet"));
+  } else {
+    characters.forEach(c => {
+      const row = h("div", { class: "char-row" });
+      const link = h("a", { class: "char-link", href: `#/character/${c.id}` });
+      link.innerHTML = `<span>${c.campaignId ? '<span class="campaign-dot" title="In a campaign"></span> ' : ""}${c.name}</span><span class="lvl">Lv${c.level || 1}</span>`;
+      row.appendChild(link);
+      const kebab = h("button", { class: "char-kebab", title: "Manage character" }, "\u22ee");
+      kebab.addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const rect = kebab.getBoundingClientRect();
+        showContextMenu(rect.right, rect.top, buildCharacterMenu(c));
+      });
+      row.appendChild(kebab);
+      charListEl.appendChild(row);
+    });
+  }
+  updateActiveNav();
+}
+
+function buildCharacterMenu(c) {
+  const items = [];
+  if (c.campaignId) {
+    items.push({ label: "Quit Campaign", action: async () => { await db.characters.update(c.id, { campaignId: null }); toast(`${c.name} left the campaign`); refreshSidebarCharacters(); } });
+  } else {
+    items.push({
+      label: "Join Campaign\u2026", action: async () => {
+        const code = prompt("Campaign invite code:");
+        if (!code) return;
+        try {
+          const campId = await db.campaigns.join(code.trim(), c.ownerUid, c.ownerName);
+          await db.characters.update(c.id, { campaignId: campId });
+          toast(`${c.name} joined the campaign`);
+          refreshSidebarCharacters();
+        } catch (e) { toast(e.message, "error"); }
+      }
+    });
+  }
+  items.push("---");
+  items.push({
+    label: "Delete Character", danger: true, action: async () => {
+      if (!confirm(`Delete ${c.name}? This can't be undone.`)) return;
+      await db.characters.remove(c.id);
+      toast(`${c.name} deleted`);
+      if (location.hash === `#/character/${c.id}`) navigate("/dashboard");
+      refreshSidebarCharacters();
+    }
+  });
+  return items;
 }
 
 function registerAllRoutes() {
@@ -89,9 +155,8 @@ onAuthChange((user) => {
     const view = buildShell();
     if (!routesRegistered) { registerAllRoutes(); routesRegistered = true; }
     initRouter(view);
-    shellBuilt = true;
   } else {
-    shellBuilt = false;
+    charListEl = null;
     appRoot.innerHTML = "";
     renderLogin(appRoot);
   }

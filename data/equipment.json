@@ -1,0 +1,891 @@
+{
+  "weapons": [
+    {
+      "id": "club",
+      "name": "Club",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d4",
+      "damageType": "bludgeoning",
+      "properties": [
+        "Light"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Slow",
+      "weight": "2 lb.",
+      "cost": "1 SP"
+    },
+    {
+      "id": "dagger",
+      "name": "Dagger",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d4",
+      "damageType": "piercing",
+      "properties": [
+        "Finesse",
+        "Light",
+        "Thrown (20/60)"
+      ],
+      "ability": "finesse",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Nick",
+      "weight": "1 lb.",
+      "cost": "2 GP"
+    },
+    {
+      "id": "greatclub",
+      "name": "Greatclub",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d8",
+      "damageType": "bludgeoning",
+      "properties": [
+        "Two-Handed"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Push",
+      "weight": "10 lb.",
+      "cost": "2 SP"
+    },
+    {
+      "id": "handaxe",
+      "name": "Handaxe",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d6",
+      "damageType": "slashing",
+      "properties": [
+        "Light",
+        "Thrown (20/60)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Vex",
+      "weight": "2 lb.",
+      "cost": "5 GP"
+    },
+    {
+      "id": "javelin",
+      "name": "Javelin",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d6",
+      "damageType": "piercing",
+      "properties": [
+        "Thrown (30/120)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Slow",
+      "weight": "2 lb.",
+      "cost": "5 SP"
+    },
+    {
+      "id": "light-hammer",
+      "name": "Light Hammer",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d4",
+      "damageType": "bludgeoning",
+      "properties": [
+        "Light",
+        "Thrown (20/60)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Nick",
+      "weight": "2 lb.",
+      "cost": "2 GP"
+    },
+    {
+      "id": "mace",
+      "name": "Mace",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d6",
+      "damageType": "bludgeoning",
+      "properties": [],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Sap",
+      "weight": "4 lb.",
+      "cost": "5 GP"
+    },
+    {
+      "id": "quarterstaff",
+      "name": "Quarterstaff",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d6",
+      "damageType": "bludgeoning",
+      "properties": [
+        "Versatile (1d8)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Topple",
+      "weight": "4 lb.",
+      "cost": "2 SP"
+    },
+    {
+      "id": "sickle",
+      "name": "Sickle",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d4",
+      "damageType": "slashing",
+      "properties": [
+        "Light"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Nick",
+      "weight": "2 lb.",
+      "cost": "1 GP"
+    },
+    {
+      "id": "spear",
+      "name": "Spear",
+      "weaponType": "simpleMelee",
+      "damageDice": "1d6",
+      "damageType": "piercing",
+      "properties": [
+        "Thrown (20/60)",
+        "Versatile (1d8)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Sap",
+      "weight": "3 lb.",
+      "cost": "1 GP"
+    },
+    {
+      "id": "dart",
+      "name": "Dart",
+      "weaponType": "simpleRanged",
+      "damageDice": "1d4",
+      "damageType": "piercing",
+      "properties": [
+        "Finesse",
+        "Thrown (20/60)"
+      ],
+      "ability": "finesse",
+      "ranged": true,
+      "ammoType": null,
+      "mastery": "Vex",
+      "weight": "1/4 lb.",
+      "cost": "5 CP"
+    },
+    {
+      "id": "light-crossbow",
+      "name": "Light Crossbow",
+      "weaponType": "simpleRanged",
+      "damageDice": "1d8",
+      "damageType": "piercing",
+      "properties": [
+        "Ammunition (80/320)",
+        "Loading",
+        "Two-Handed"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "bolt",
+      "mastery": "Slow",
+      "weight": "5 lb.",
+      "cost": "25 GP"
+    },
+    {
+      "id": "shortbow",
+      "name": "Shortbow",
+      "weaponType": "simpleRanged",
+      "damageDice": "1d6",
+      "damageType": "piercing",
+      "properties": [
+        "Ammunition (80/320)",
+        "Two-Handed"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "arrow",
+      "mastery": "Vex",
+      "weight": "2 lb.",
+      "cost": "25 GP"
+    },
+    {
+      "id": "sling",
+      "name": "Sling",
+      "weaponType": "simpleRanged",
+      "damageDice": "1d4",
+      "damageType": "bludgeoning",
+      "properties": [
+        "Ammunition (30/120)"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "bullet",
+      "mastery": "Slow",
+      "weight": "—",
+      "cost": "1 SP"
+    },
+    {
+      "id": "battleaxe",
+      "name": "Battleaxe",
+      "weaponType": "martialMelee",
+      "damageDice": "1d8",
+      "damageType": "slashing",
+      "properties": [
+        "Versatile (1d10)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Topple",
+      "weight": "4 lb.",
+      "cost": "10 GP"
+    },
+    {
+      "id": "flail",
+      "name": "Flail",
+      "weaponType": "martialMelee",
+      "damageDice": "1d8",
+      "damageType": "bludgeoning",
+      "properties": [],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Sap",
+      "weight": "2 lb.",
+      "cost": "10 GP"
+    },
+    {
+      "id": "glaive",
+      "name": "Glaive",
+      "weaponType": "martialMelee",
+      "damageDice": "1d10",
+      "damageType": "slashing",
+      "properties": [
+        "Heavy",
+        "Reach",
+        "Two-Handed"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Graze",
+      "weight": "6 lb.",
+      "cost": "20 GP"
+    },
+    {
+      "id": "greataxe",
+      "name": "Greataxe",
+      "weaponType": "martialMelee",
+      "damageDice": "1d12",
+      "damageType": "slashing",
+      "properties": [
+        "Heavy",
+        "Two-Handed"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Cleave",
+      "weight": "7 lb.",
+      "cost": "30 GP"
+    },
+    {
+      "id": "greatsword",
+      "name": "Greatsword",
+      "weaponType": "martialMelee",
+      "damageDice": "2d6",
+      "damageType": "slashing",
+      "properties": [
+        "Heavy",
+        "Two-Handed"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Graze",
+      "weight": "6 lb.",
+      "cost": "50 GP"
+    },
+    {
+      "id": "halberd",
+      "name": "Halberd",
+      "weaponType": "martialMelee",
+      "damageDice": "1d10",
+      "damageType": "slashing",
+      "properties": [
+        "Heavy",
+        "Reach",
+        "Two-Handed"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Cleave",
+      "weight": "6 lb.",
+      "cost": "20 GP"
+    },
+    {
+      "id": "lance",
+      "name": "Lance",
+      "weaponType": "martialMelee",
+      "damageDice": "1d10",
+      "damageType": "piercing",
+      "properties": [
+        "Heavy",
+        "Reach",
+        "Two-Handed (unless mounted)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Topple",
+      "weight": "6 lb.",
+      "cost": "10 GP"
+    },
+    {
+      "id": "longsword",
+      "name": "Longsword",
+      "weaponType": "martialMelee",
+      "damageDice": "1d8",
+      "damageType": "slashing",
+      "properties": [
+        "Versatile (1d10)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Sap",
+      "weight": "3 lb.",
+      "cost": "15 GP"
+    },
+    {
+      "id": "maul",
+      "name": "Maul",
+      "weaponType": "martialMelee",
+      "damageDice": "2d6",
+      "damageType": "bludgeoning",
+      "properties": [
+        "Heavy",
+        "Two-Handed"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Topple",
+      "weight": "10 lb.",
+      "cost": "10 GP"
+    },
+    {
+      "id": "morningstar",
+      "name": "Morningstar",
+      "weaponType": "martialMelee",
+      "damageDice": "1d8",
+      "damageType": "piercing",
+      "properties": [],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Sap",
+      "weight": "4 lb.",
+      "cost": "15 GP"
+    },
+    {
+      "id": "pike",
+      "name": "Pike",
+      "weaponType": "martialMelee",
+      "damageDice": "1d10",
+      "damageType": "piercing",
+      "properties": [
+        "Heavy",
+        "Reach",
+        "Two-Handed"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Push",
+      "weight": "18 lb.",
+      "cost": "5 GP"
+    },
+    {
+      "id": "rapier",
+      "name": "Rapier",
+      "weaponType": "martialMelee",
+      "damageDice": "1d8",
+      "damageType": "piercing",
+      "properties": [
+        "Finesse"
+      ],
+      "ability": "finesse",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Vex",
+      "weight": "2 lb.",
+      "cost": "25 GP"
+    },
+    {
+      "id": "scimitar",
+      "name": "Scimitar",
+      "weaponType": "martialMelee",
+      "damageDice": "1d6",
+      "damageType": "slashing",
+      "properties": [
+        "Finesse",
+        "Light"
+      ],
+      "ability": "finesse",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Nick",
+      "weight": "3 lb.",
+      "cost": "25 GP"
+    },
+    {
+      "id": "shortsword",
+      "name": "Shortsword",
+      "weaponType": "martialMelee",
+      "damageDice": "1d6",
+      "damageType": "piercing",
+      "properties": [
+        "Finesse",
+        "Light"
+      ],
+      "ability": "finesse",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Vex",
+      "weight": "2 lb.",
+      "cost": "10 GP"
+    },
+    {
+      "id": "trident",
+      "name": "Trident",
+      "weaponType": "martialMelee",
+      "damageDice": "1d8",
+      "damageType": "piercing",
+      "properties": [
+        "Thrown (20/60)",
+        "Versatile (1d10)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Topple",
+      "weight": "4 lb.",
+      "cost": "5 GP"
+    },
+    {
+      "id": "warhammer",
+      "name": "Warhammer",
+      "weaponType": "martialMelee",
+      "damageDice": "1d8",
+      "damageType": "bludgeoning",
+      "properties": [
+        "Versatile (1d10)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Push",
+      "weight": "5 lb.",
+      "cost": "15 GP"
+    },
+    {
+      "id": "war-pick",
+      "name": "War Pick",
+      "weaponType": "martialMelee",
+      "damageDice": "1d8",
+      "damageType": "piercing",
+      "properties": [
+        "Versatile (1d10)"
+      ],
+      "ability": "str",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Sap",
+      "weight": "2 lb.",
+      "cost": "5 GP"
+    },
+    {
+      "id": "whip",
+      "name": "Whip",
+      "weaponType": "martialMelee",
+      "damageDice": "1d4",
+      "damageType": "slashing",
+      "properties": [
+        "Finesse",
+        "Reach"
+      ],
+      "ability": "finesse",
+      "ranged": false,
+      "ammoType": null,
+      "mastery": "Slow",
+      "weight": "3 lb.",
+      "cost": "2 GP"
+    },
+    {
+      "id": "blowgun",
+      "name": "Blowgun",
+      "weaponType": "martialRanged",
+      "damageDice": "1d1",
+      "damageType": "piercing",
+      "properties": [
+        "Ammunition (25/100)",
+        "Loading"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "needle",
+      "mastery": "Vex",
+      "weight": "1 lb.",
+      "cost": "10 GP"
+    },
+    {
+      "id": "hand-crossbow",
+      "name": "Hand Crossbow",
+      "weaponType": "martialRanged",
+      "damageDice": "1d6",
+      "damageType": "piercing",
+      "properties": [
+        "Ammunition (30/120)",
+        "Light",
+        "Loading"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "bolt",
+      "mastery": "Vex",
+      "weight": "3 lb.",
+      "cost": "75 GP"
+    },
+    {
+      "id": "heavy-crossbow",
+      "name": "Heavy Crossbow",
+      "weaponType": "martialRanged",
+      "damageDice": "1d10",
+      "damageType": "piercing",
+      "properties": [
+        "Ammunition (100/400)",
+        "Heavy",
+        "Loading",
+        "Two-Handed"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "bolt",
+      "mastery": "Push",
+      "weight": "18 lb.",
+      "cost": "50 GP"
+    },
+    {
+      "id": "longbow",
+      "name": "Longbow",
+      "weaponType": "martialRanged",
+      "damageDice": "1d8",
+      "damageType": "piercing",
+      "properties": [
+        "Ammunition (150/600)",
+        "Heavy",
+        "Two-Handed"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "arrow",
+      "mastery": "Slow",
+      "weight": "2 lb.",
+      "cost": "50 GP"
+    },
+    {
+      "id": "musket",
+      "name": "Musket",
+      "weaponType": "martialRanged",
+      "damageDice": "1d12",
+      "damageType": "piercing",
+      "properties": [
+        "Ammunition (40/120)",
+        "Loading",
+        "Two-Handed"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "bullet",
+      "mastery": "Slow",
+      "weight": "10 lb.",
+      "cost": "500 GP"
+    },
+    {
+      "id": "pistol",
+      "name": "Pistol",
+      "weaponType": "martialRanged",
+      "damageDice": "1d10",
+      "damageType": "piercing",
+      "properties": [
+        "Ammunition (30/90)",
+        "Loading"
+      ],
+      "ability": "dex",
+      "ranged": true,
+      "ammoType": "bullet",
+      "mastery": "Vex",
+      "weight": "3 lb.",
+      "cost": "250 GP"
+    }
+  ],
+  "armor": [
+    {
+      "id": "padded-armor",
+      "name": "Padded Armor",
+      "armorType": "light",
+      "baseAC": 11,
+      "dexBonus": "full",
+      "strengthRequirement": null,
+      "stealthDisadvantage": true,
+      "weight": "8 lb.",
+      "cost": "5 GP"
+    },
+    {
+      "id": "leather-armor",
+      "name": "Leather Armor",
+      "armorType": "light",
+      "baseAC": 11,
+      "dexBonus": "full",
+      "strengthRequirement": null,
+      "stealthDisadvantage": false,
+      "weight": "10 lb.",
+      "cost": "10 GP"
+    },
+    {
+      "id": "studded-leather-armor",
+      "name": "Studded Leather Armor",
+      "armorType": "light",
+      "baseAC": 12,
+      "dexBonus": "full",
+      "strengthRequirement": null,
+      "stealthDisadvantage": false,
+      "weight": "13 lb.",
+      "cost": "45 GP"
+    },
+    {
+      "id": "hide-armor",
+      "name": "Hide Armor",
+      "armorType": "medium",
+      "baseAC": 12,
+      "dexBonus": "max2",
+      "strengthRequirement": null,
+      "stealthDisadvantage": false,
+      "weight": "12 lb.",
+      "cost": "10 GP"
+    },
+    {
+      "id": "chain-shirt",
+      "name": "Chain Shirt",
+      "armorType": "medium",
+      "baseAC": 13,
+      "dexBonus": "max2",
+      "strengthRequirement": null,
+      "stealthDisadvantage": false,
+      "weight": "20 lb.",
+      "cost": "50 GP"
+    },
+    {
+      "id": "scale-mail",
+      "name": "Scale Mail",
+      "armorType": "medium",
+      "baseAC": 14,
+      "dexBonus": "max2",
+      "strengthRequirement": null,
+      "stealthDisadvantage": true,
+      "weight": "45 lb.",
+      "cost": "50 GP"
+    },
+    {
+      "id": "breastplate",
+      "name": "Breastplate",
+      "armorType": "medium",
+      "baseAC": 14,
+      "dexBonus": "max2",
+      "strengthRequirement": null,
+      "stealthDisadvantage": false,
+      "weight": "20 lb.",
+      "cost": "400 GP"
+    },
+    {
+      "id": "half-plate-armor",
+      "name": "Half Plate Armor",
+      "armorType": "medium",
+      "baseAC": 15,
+      "dexBonus": "max2",
+      "strengthRequirement": null,
+      "stealthDisadvantage": true,
+      "weight": "40 lb.",
+      "cost": "750 GP"
+    },
+    {
+      "id": "ring-mail",
+      "name": "Ring Mail",
+      "armorType": "heavy",
+      "baseAC": 14,
+      "dexBonus": "none",
+      "strengthRequirement": null,
+      "stealthDisadvantage": true,
+      "weight": "40 lb.",
+      "cost": "30 GP"
+    },
+    {
+      "id": "chain-mail",
+      "name": "Chain Mail",
+      "armorType": "heavy",
+      "baseAC": 16,
+      "dexBonus": "none",
+      "strengthRequirement": 13,
+      "stealthDisadvantage": true,
+      "weight": "55 lb.",
+      "cost": "75 GP"
+    },
+    {
+      "id": "splint-armor",
+      "name": "Splint Armor",
+      "armorType": "heavy",
+      "baseAC": 17,
+      "dexBonus": "none",
+      "strengthRequirement": 15,
+      "stealthDisadvantage": true,
+      "weight": "60 lb.",
+      "cost": "200 GP"
+    },
+    {
+      "id": "plate-armor",
+      "name": "Plate Armor",
+      "armorType": "heavy",
+      "baseAC": 18,
+      "dexBonus": "none",
+      "strengthRequirement": 15,
+      "stealthDisadvantage": true,
+      "weight": "65 lb.",
+      "cost": "1500 GP"
+    },
+    {
+      "id": "shield",
+      "name": "Shield",
+      "armorType": "shield",
+      "baseAC": 2,
+      "dexBonus": "none",
+      "strengthRequirement": null,
+      "stealthDisadvantage": false,
+      "weight": "6 lb.",
+      "cost": "10 GP"
+    }
+  ],
+  "ammo": [
+    {
+      "id": "arrows-20",
+      "name": "Arrows (20)",
+      "ammoType": "arrow",
+      "quantity": 20,
+      "weight": "1 lb.",
+      "cost": "1 GP"
+    },
+    {
+      "id": "crossbow-bolts-20",
+      "name": "Crossbow Bolts (20)",
+      "ammoType": "bolt",
+      "quantity": 20,
+      "weight": "1.5 lb.",
+      "cost": "1 GP"
+    },
+    {
+      "id": "sling-bullets-20",
+      "name": "Sling Bullets (20)",
+      "ammoType": "bullet",
+      "quantity": 20,
+      "weight": "1.5 lb.",
+      "cost": "4 CP"
+    },
+    {
+      "id": "blowgun-needles-50",
+      "name": "Blowgun Needles (50)",
+      "ammoType": "needle",
+      "quantity": 50,
+      "weight": "1 lb.",
+      "cost": "1 GP"
+    },
+    {
+      "id": "firearm-bullets-10",
+      "name": "Firearm Bullets (10)",
+      "ammoType": "bullet",
+      "quantity": 10,
+      "weight": "2 lb.",
+      "cost": "3 GP"
+    }
+  ],
+  "gear": [
+    {
+      "id": "backpack",
+      "name": "Backpack",
+      "weight": "5 lb.",
+      "cost": "2 GP",
+      "isContainer": true
+    },
+    {
+      "id": "bedroll",
+      "name": "Bedroll",
+      "weight": "4 lb.",
+      "cost": "1 GP"
+    },
+    {
+      "id": "rope-hempen-50",
+      "name": "Rope, Hempen (50 ft.)",
+      "weight": "10 lb.",
+      "cost": "1 GP"
+    },
+    {
+      "id": "torch",
+      "name": "Torch",
+      "weight": "1 lb.",
+      "cost": "1 CP"
+    },
+    {
+      "id": "rations-1day",
+      "name": "Rations (1 day)",
+      "weight": "2 lb.",
+      "cost": "5 SP"
+    },
+    {
+      "id": "waterskin",
+      "name": "Waterskin",
+      "weight": "5 lb.",
+      "cost": "2 GP"
+    },
+    {
+      "id": "thieves-tools",
+      "name": "Thieves' Tools",
+      "weight": "1 lb.",
+      "cost": "25 GP"
+    },
+    {
+      "id": "healers-kit",
+      "name": "Healer's Kit",
+      "weight": "3 lb.",
+      "cost": "5 GP"
+    },
+    {
+      "id": "component-pouch",
+      "name": "Component Pouch",
+      "weight": "2 lb.",
+      "cost": "25 GP"
+    },
+    {
+      "id": "holy-symbol",
+      "name": "Holy Symbol",
+      "weight": "1 lb.",
+      "cost": "5 GP"
+    }
+  ]
+}

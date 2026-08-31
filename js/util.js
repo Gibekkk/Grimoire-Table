@@ -41,3 +41,40 @@ export function timeAgo(ts) {
   if (hr < 24) return `${hr}h ago`;
   return `${Math.floor(hr / 24)}d ago`;
 }
+
+// Small popup menu, positioned at a point. items: [{ label, action, danger? }] or "---" for a divider.
+export function showContextMenu(x, y, items) {
+  document.querySelector(".ctx-menu")?.remove();
+  const menu = document.createElement("div");
+  menu.className = "ctx-menu";
+  items.forEach(item => {
+    if (item === "---") { menu.appendChild(h("div", { class: "ctx-menu-divider" })); return; }
+    const btn = h("button", { class: item.danger ? "danger" : "" }, item.label);
+    btn.addEventListener("click", () => { item.action(); menu.remove(); });
+    menu.appendChild(btn);
+  });
+  document.body.appendChild(menu);
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const rect = menu.getBoundingClientRect();
+  menu.style.left = `${Math.min(x, vw - rect.width - 8)}px`;
+  menu.style.top = `${Math.min(y, vh - rect.height - 8)}px`;
+  requestAnimationFrame(() => menu.classList.add("show"));
+  const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("mousedown", close); } };
+  setTimeout(() => document.addEventListener("mousedown", close), 0);
+}
+
+// Attaches left-click = normal roll, right-click = a menu offering Advantage/Disadvantage
+// (and an optional custom action list, e.g. "Set Override…"). Used on every d20 roll target.
+export function attachRollMenu(el, { onRoll, extraItems } = {}) {
+  el.style.cursor = "pointer";
+  el.addEventListener("click", () => onRoll?.("normal"));
+  el.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY, [
+      { label: "Roll Normal", action: () => onRoll?.("normal") },
+      { label: "Roll Advantage", action: () => onRoll?.("advantage") },
+      { label: "Roll Disadvantage", action: () => onRoll?.("disadvantage") },
+      ...(extraItems?.length ? ["---", ...extraItems] : [])
+    ]);
+  });
+}
