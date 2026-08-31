@@ -137,7 +137,6 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
     await applyLevelChange(entries[0]?.classId, newEntries, oldTotal, newTotal, patchData);
     patch(patchData);
   }
-  }
 
   // ---------------- Rest ----------------
   function doLongRest() {
