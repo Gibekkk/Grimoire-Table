@@ -49,6 +49,7 @@ export function showContextMenu(x, y, items) {
   menu.className = "ctx-menu";
   items.forEach(item => {
     if (item === "---") { menu.appendChild(h("div", { class: "ctx-menu-divider" })); return; }
+    if (item.header) { menu.appendChild(h("div", { class: "ctx-menu-header" }, item.header)); return; }
     const btn = h("button", { class: item.danger ? "danger" : "" }, item.label);
     btn.addEventListener("click", () => { item.action(); menu.remove(); });
     menu.appendChild(btn);

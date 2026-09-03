@@ -70,6 +70,13 @@ export class VttCanvas {
     img.src = base64;
   }
 
+  // Skips decoding entirely when the caller already has a loaded Image
+  // (e.g. a per-mapId cache) — instant map switching instead of a reload flicker.
+  setBackgroundImage(img) {
+    this.bgImage = img || null;
+    if (img) this._fitToView();
+  }
+
   setTokens(tokens) { this.tokens = tokens; }
   setGridPx(px) { this.gridPx = px || 70; }
   setTool(tool) { this.tool = tool; this.shape = null; this.ruler = null; }

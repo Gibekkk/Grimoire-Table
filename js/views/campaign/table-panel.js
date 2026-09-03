@@ -1,25 +1,18 @@
 import { db } from "../../db.js";
 import { h, escapeHtml, timeAgo } from "../../util.js";
-import { computeRoll, formatBreakdown } from "../../dice/roll-logic.js";
-import { DiceTray } from "../../dice/dice-tray.js";
+import { computeRoll, formatBreakdown, parseNotation } from "../../dice/roll-logic.js";
 
 const DIE_TYPES = [4, 6, 8, 10, 12, 20, 100];
 
-export function mountTablePanel(container, { campaignId, user, activeCharacterName, getActiveModifiers }) {
+// The 3D animation + notification for every roll now live in roll-overlay.js,
+// mounted once per campaign so they show up regardless of which tab is active.
+// This panel only needs the controls to start a roll and the text history.
+export function mountTablePanel(container, { campaignId, user, activeCharacterName }) {
   let advMode = "normal"; // normal | advantage | disadvantage
   let customModifier = 0;
-  let selectedCount = 1;
 
   const wrap = h("div", { class: "two-col" });
-
-  // ---- Left: dice tray + controls ----
   const left = h("div", {});
-  const trayWrap = h("div", { class: "dice-tray-wrap", style: "height: 320px;" });
-  const badge = h("div", { class: "dice-result-badge" });
-  trayWrap.appendChild(badge);
-  left.appendChild(trayWrap);
-
-  const tray = new DiceTray(trayWrap);
 
   const controlsCard = h("div", { class: "card" });
   controlsCard.appendChild(h("h3", {}, "Roll Dice"));
@@ -61,13 +54,12 @@ export function mountTablePanel(container, { campaignId, user, activeCharacterNa
   modRow.appendChild(advWrap);
   controlsCard.appendChild(modRow);
 
-  // Custom roll builder: pick die type + how many, reusing the modifier and Adv/Dis above.
   const customCard = h("div", { style: "margin-top:14px;" });
   customCard.appendChild(h("label", {}, "Custom Roll"));
   const customRow = h("div", { class: "field-row" });
   const customCountInput = h("input", { type: "number", value: "1", min: "1", max: "20", style: "max-width:70px;" });
   const customDieSelect = h("select", { style: "max-width:90px;" });
-  [4, 6, 8, 10, 12, 20, 100].forEach(s => customDieSelect.appendChild(h("option", { value: s }, `d${s}`)));
+  DIE_TYPES.forEach(s => customDieSelect.appendChild(h("option", { value: s }, `d${s}`)));
   const customRollBtn = h("button", { class: "btn primary" }, "Roll Custom");
   customRollBtn.addEventListener("click", () => {
     const sides = parseInt(customDieSelect.value, 10);
@@ -83,18 +75,17 @@ export function mountTablePanel(container, { campaignId, user, activeCharacterNa
   const notationInput = h("input", { type: "text", placeholder: "Or type notation, e.g. 2d6+3" });
   const notationBtn = h("button", { class: "btn" }, "Roll");
   notationBtn.addEventListener("click", () => {
-    import("../../dice/roll-logic.js").then(({ parseNotation }) => {
-      const parsed = parseNotation(notationInput.value);
-      if (!parsed) { import("../../util.js").then(({ toast }) => toast("Format like 2d6+3", "error")); return; }
-      doRoll({ ...parsed, mode: advMode, label: notationInput.value });
-    });
+    const parsed = parseNotation(notationInput.value);
+    if (!parsed) { import("../../util.js").then(({ toast }) => toast("Format like 2d6+3", "error")); return; }
+    doRoll({ ...parsed, mode: advMode, label: notationInput.value });
   });
   notationRow.appendChild(notationInput); notationRow.appendChild(notationBtn);
   controlsCard.appendChild(notationRow);
+  controlsCard.appendChild(h("p", { class: "hint", style: "margin-top:10px;" }, "Every roll shows for the whole table as an overlay \u2014 check any tab."));
 
   left.appendChild(controlsCard);
 
-  // ---- Right: log ----
+  // ---- Right: text log (history you can scroll back through) ----
   const right = h("div", { class: "card log-panel" });
   right.appendChild(h("h3", {}, "Game Log"));
   const logScroll = h("div", { class: "log-scroll" });
@@ -125,8 +116,6 @@ export function mountTablePanel(container, { campaignId, user, activeCharacterNa
     });
   }
 
-  const seenIds = new Set();
-  let isInitialLoad = true;
   const unsubLog = db.log.subscribe(campaignId, (entries) => {
     logScroll.innerHTML = "";
     entries.forEach(entry => {
@@ -138,25 +127,9 @@ export function mountTablePanel(container, { campaignId, user, activeCharacterNa
         el.innerHTML = `<span class="time">${timeLabel}</span><div class="who">${escapeHtml(entry.displayName)}</div><div>${escapeHtml(entry.text)}</div>`;
       }
       logScroll.appendChild(el);
-
-      if (entry.type === "roll" && !seenIds.has(entry.id) && !isInitialLoad) {
-        playRollVisual(entry);
-      }
-      seenIds.add(entry.id);
     });
     logScroll.scrollTop = logScroll.scrollHeight;
-    isInitialLoad = false;
   });
 
-  async function playRollVisual(entry) {
-    const r = entry.result;
-    const diceList = r.isPercentile ? [{ sides: 10, count: 2 }] : [{ sides: r.sides, count: r.rawRolls.length }];
-    badge.classList.remove("show");
-    await tray.roll(diceList, r.seed);
-    badge.innerHTML = `${r.total}<span class="breakdown">${formatBreakdown(r)}</span>`;
-    badge.classList.add("show");
-    setTimeout(() => badge.classList.remove("show"), 3200);
-  }
-
-  return () => { unsubLog(); tray.dispose(); };
+  return () => { unsubLog(); };
 }

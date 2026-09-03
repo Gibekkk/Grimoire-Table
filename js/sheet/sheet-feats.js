@@ -19,6 +19,14 @@ export function renderFeatsTab(ctx) {
   // ---- Origin feat ----
   const featCard = h("div", { class: "card" });
   featCard.appendChild(h("h3", {}, "Origin Feat"));
+  if (character.isNpc && canEditCore) {
+    const bgSelect = h("select", {});
+    bgSelect.appendChild(h("option", { value: "" }, "\u2014 No background \u2014"));
+    ruleset.backgrounds.forEach(b => bgSelect.appendChild(h("option", { value: b.id, selected: character.backgroundId === b.id ? "selected" : null }, b.name)));
+    bgSelect.addEventListener("change", () => patch({ backgroundId: bgSelect.value || null }));
+    featCard.appendChild(h("label", {}, "Background (sets the origin feat below)"));
+    featCard.appendChild(bgSelect);
+  }
   if (feat) {
     featCard.appendChild(lockedCard(feat.name, feat.summary, true));
     if (feat.id === "skilled") {
@@ -53,6 +61,13 @@ export function renderFeatsTab(ctx) {
   // ---- Species traits ----
   const spCard = h("div", { class: "card" });
   spCard.appendChild(h("h3", {}, `${sp?.name || "Species"} Traits`));
+  if (character.isNpc && canEditCore) {
+    const spSelect = h("select", {});
+    spSelect.appendChild(h("option", { value: "" }, "\u2014 No species set \u2014"));
+    ruleset.species.forEach(s => spSelect.appendChild(h("option", { value: s.id, selected: character.speciesId === s.id ? "selected" : null }, s.name)));
+    spSelect.addEventListener("change", () => patch({ speciesId: spSelect.value || null }));
+    spCard.appendChild(spSelect);
+  }
   (sp?.traits || []).forEach(t => {
     const unlocked = level >= (t.unlockLevel || 1);
     spCard.appendChild(lockedCard(t.name, t.description || "", unlocked, unlocked ? "" : `<span class="badge">Lv ${t.unlockLevel}</span>`));
@@ -72,8 +87,10 @@ export function renderFeatsTab(ctx) {
       clsCard.appendChild(lockedCard(f.name, f.description, unlocked, unlocked ? (f.toggleable ? '<span class="badge rune">Actions tab</span>' : "") : `<span class="badge">Lv ${f.level}</span>`));
     });
 
-    // Subclass selection
-    if (entry.level >= cls.subclassLevel) {
+    // Subclass selection — NPCs can set a subclass regardless of level (a DM
+    // building a one-off "Level 1 goblin shaman" shouldn't need to level them
+    // up to 3 first just to tag a subclass for flavor/reference).
+    if (entry.level >= cls.subclassLevel || character.isNpc) {
       clsCard.appendChild(h("hr", { class: "divider" }));
       clsCard.appendChild(h("label", {}, cls.subclassLabel));
       const sel = h("select", {});

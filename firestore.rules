@@ -22,7 +22,8 @@ service cloud.firestore {
 
       match /log/{entryId} {
         allow read, create: if isMember(campaignId);
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isDm(campaignId); // needed so a DM can cascade-delete the campaign
       }
 
       match /partyInventory/{itemId} {
@@ -93,6 +94,7 @@ service cloud.firestore {
     match /rules_feats/{id}        { allow read: if signedIn(); allow write: if false; }
     match /rules_spells/{id}       { allow read: if signedIn(); allow write: if false; }
     match /rules_class_features/{id} { allow read: if signedIn(); allow write: if false; }
+    match /rules_monsters/{id}       { allow read: if signedIn(); allow write: if false; }
     match /rules_meta/{id}         { allow read: if signedIn(); allow write: if false; }
   }
 }

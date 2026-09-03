@@ -11,12 +11,13 @@ async function loadJson(name) {
 }
 
 async function loadLocalRuleset() {
-  const [species, classes, backgrounds, skills, alignments, feats, equipment, spells, classFeatures] = await Promise.all([
+  const [species, classes, backgrounds, skills, alignments, feats, equipment, spells, classFeatures, monsters] = await Promise.all([
     loadJson("species.json"), loadJson("classes.json"), loadJson("backgrounds.json"),
     loadJson("skills.json"), loadJson("alignments.json"), loadJson("feats.json"),
-    loadJson("equipment.json"), loadJson("spells.json"), loadJson("class-features.json")
+    loadJson("equipment.json"), loadJson("spells.json"), loadJson("class-features.json"),
+    loadJson("monsters.json")
   ]);
-  return { species, classes, backgrounds, skills, alignments, feats, equipment, spells, classFeatures };
+  return { species, classes, backgrounds, skills, alignments, feats, equipment, spells, classFeatures, monsters };
 }
 
 async function loadFirestoreCollection(fx, db, name) {
@@ -49,7 +50,7 @@ function unwrapStartingEquipmentItems(classes) {
 
 async function loadFirestoreRuleset() {
   const { db, fx } = await initFirebase();
-  const [species, rawClasses, backgrounds, skills, feats, spells, classFeatures, alignmentsDoc, equipmentDoc] = await Promise.all([
+  const [species, rawClasses, backgrounds, skills, feats, spells, classFeatures, monsters, alignmentsDoc, equipmentDoc] = await Promise.all([
     loadFirestoreCollection(fx, db, "rules_species"),
     loadFirestoreCollection(fx, db, "rules_classes"),
     loadFirestoreCollection(fx, db, "rules_backgrounds"),
@@ -57,6 +58,7 @@ async function loadFirestoreRuleset() {
     loadFirestoreCollection(fx, db, "rules_feats"),
     loadFirestoreCollection(fx, db, "rules_spells"),
     loadFirestoreCollection(fx, db, "rules_class_features"),
+    loadFirestoreCollection(fx, db, "rules_monsters"),
     loadFirestoreDoc(fx, db, "rules_meta", "alignments", { list: [] }),
     loadFirestoreDoc(fx, db, "rules_meta", "equipment", { weapons: [], armor: [], ammo: [], gear: [] })
   ]);
@@ -65,7 +67,7 @@ async function loadFirestoreRuleset() {
     return loadLocalRuleset();
   }
   const classes = unwrapStartingEquipmentItems(rawClasses);
-  return { species, classes, backgrounds, skills, alignments: alignmentsDoc.list, feats, equipment: equipmentDoc, spells, classFeatures };
+  return { species, classes, backgrounds, skills, alignments: alignmentsDoc.list, feats, equipment: equipmentDoc, spells, classFeatures, monsters };
 }
 
 export async function loadRuleset() {

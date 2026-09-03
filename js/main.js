@@ -27,6 +27,7 @@ function iconD20() {
 }
 
 let charListEl = null;
+let campaignListEl = null;
 
 function buildShell() {
   appRoot.innerHTML = "";
@@ -40,6 +41,10 @@ function buildShell() {
     nav.appendChild(link);
   });
   sidebar.appendChild(nav);
+
+  sidebar.appendChild(h("div", { class: "section-label" }, "Your Campaigns"));
+  campaignListEl = h("div", {});
+  sidebar.appendChild(campaignListEl);
 
   sidebar.appendChild(h("div", { class: "section-label" }, "Your Characters"));
   charListEl = h("div", {});
@@ -69,18 +74,68 @@ function buildShell() {
   const shell = h("div", { class: "shell" }, [sidebar, main]);
   appRoot.appendChild(shell);
 
-  window.addEventListener("hashchange", () => { updateActiveNav(); refreshSidebarCharacters(); });
+  window.addEventListener("hashchange", () => { updateActiveNav(); refreshSidebarCharacters(); refreshSidebarCampaigns(); });
   updateActiveNav();
   refreshSidebarCharacters();
+  refreshSidebarCampaigns();
 
   return view;
 }
 
 function updateActiveNav() {
   const path = (location.hash || "#/dashboard").slice(1);
-  document.querySelectorAll(".nav-link, .char-link").forEach(a => {
+  document.querySelectorAll(".nav-link, .char-link, .campaign-link").forEach(a => {
     a.classList.toggle("active", a.getAttribute("href") === `#${path}`);
   });
+}
+
+async function refreshSidebarCampaigns() {
+  if (!campaignListEl) return;
+  const user = getCurrentUser();
+  if (!user) return;
+  const campaigns = await db.campaigns.listMine(user.uid);
+  campaignListEl.innerHTML = "";
+  if (campaigns.length === 0) {
+    campaignListEl.appendChild(h("div", { class: "char-link", style: "opacity:0.6; cursor:default;" }, "No campaigns yet"));
+  } else {
+    campaigns.forEach(c => {
+      const isDm = c.dmUid === user.uid;
+      const row = h("div", { class: "char-row" });
+      const link = h("a", { class: "campaign-link char-link", href: `#/campaign/${c.id}` });
+      link.innerHTML = `<span>${c.name}</span>${isDm ? '<span class="lvl">DM</span>' : ""}`;
+      row.appendChild(link);
+      const kebab = h("button", { class: "char-kebab", title: "Manage campaign" }, "\u22ee");
+      kebab.addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const rect = kebab.getBoundingClientRect();
+        showContextMenu(rect.right, rect.top, buildCampaignMenu(c, isDm));
+      });
+      row.appendChild(kebab);
+      campaignListEl.appendChild(row);
+    });
+  }
+  updateActiveNav();
+}
+
+function buildCampaignMenu(c, isDm) {
+  const items = [{ label: "Open", action: () => navigate(`/campaign/${c.id}`) }];
+  items.push({
+    label: "Copy Invite Code", action: () => { navigator.clipboard?.writeText(c.inviteCode); toast("Invite code copied"); }
+  });
+  if (isDm) {
+    items.push("---");
+    items.push({
+      label: "Delete Campaign", danger: true, action: async () => {
+        if (!confirm(`Delete "${c.name}"? This removes all maps, NPCs, logs, and notes. Player characters are unlinked, not deleted. This can't be undone.`)) return;
+        await db.campaigns.remove(c.id);
+        toast(`${c.name} deleted`);
+        if (location.hash === `#/campaign/${c.id}`) navigate("/dashboard");
+        refreshSidebarCampaigns();
+        refreshSidebarCharacters();
+      }
+    });
+  }
+  return items;
 }
 
 async function refreshSidebarCharacters() {

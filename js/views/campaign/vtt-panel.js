@@ -5,6 +5,12 @@ import { mountCharacterSheet } from "../../character-sheet.js";
 import { COVER_AC_BONUS, COVER_LABELS, estimateArmorClass } from "../../rules-engine.js";
 import { navigate } from "../../router.js";
 
+// Module-level (not per-mount) so a background image, once decoded, stays
+// cached for the rest of the browser session — switching maps back and forth
+// no longer re-decodes/reloads it. Keyed by the base64 string itself, so a
+// re-uploaded background for the same map naturally invalidates the old entry.
+const bgImageCache = new Map();
+
 export async function mountVttPanel(container, { campaignId, user, isDm, getAdvMode, onRoll }) {
   const shell = h("div", { class: "vtt-shell" });
   const sidebar = h("div", { class: "vtt-sidebar" });
@@ -66,23 +72,48 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   }
 
   // ---------------- FAB (DM adds tokens) ----------------
-  const fab = h("button", { class: "vtt-fab" }, "+");
-  fab.title = "Add to map";
-  if (isDm) stage.appendChild(fab);
-  fab.addEventListener("click", async () => {
-    const [party, npcs, library] = await Promise.all([
+  const fabCharacters = h("button", { class: "vtt-fab" }, "\u{1F464}");
+  fabCharacters.title = "Add a character or NPC token";
+  const fabComponents = h("button", { class: "vtt-fab vtt-fab-secondary" }, "\u25a2");
+  fabComponents.title = "Add a component token";
+  if (isDm) { stage.appendChild(fabCharacters); stage.appendChild(fabComponents); }
+
+  fabCharacters.addEventListener("click", async () => {
+    const [party, npcs] = await Promise.all([
       new Promise(res => { const u = db.characters.subscribeCampaignParty(campaignId, (p) => { res(p); u(); }); }),
-      new Promise(res => { const u = db.characters.subscribeCampaignNpcs(campaignId, (n) => { res(n); u(); }); }),
-      new Promise(res => { const u = db.componentLibrary.subscribe(campaignId, (l) => { res(l); u(); }); })
+      new Promise(res => { const u = db.characters.subscribeCampaignNpcs(campaignId, (n) => { res(n); u(); }); })
     ]);
-    const items = [
-      ...party.map(c => ({ label: `${c.name} (PC)`, action: () => addToken({ kind: "pc", refId: c.id, name: c.name, imageBase64: c.portraitBase64 || null, x: 2, y: 2, w: 1, h: 1 }) })),
-      ...npcs.map(c => ({ label: `${c.name} (NPC)`, action: () => addToken({ kind: "npc", refId: c.id, name: c.name, imageBase64: c.portraitBase64 || null, x: 2, y: 2, w: 1, h: 1 }) })),
-      "---",
-      ...library.map(c => ({ label: `${c.name} (component)`, action: () => addToken({ kind: "component", refId: c.id, name: c.name, imageBase64: c.imageBase64 || null, x: 2, y: 2, w: c.defaultW || 1, h: c.defaultH || 1, isCover: c.isCover || false, coverType: c.coverType || "half" }) }))
-    ];
-    const rect = fab.getBoundingClientRect();
-    showContextMenu(rect.left, rect.top - 10, items.length ? items : [{ label: "Nothing to add yet \u2014 create characters or components first", action: () => {} }]);
+    const items = [];
+    items.push({ header: "Player Characters" });
+    if (party.length === 0) items.push({ label: "No player characters in this campaign yet", action: () => {} });
+    party.forEach(c => items.push({ label: c.name, action: () => addToken({ kind: "pc", refId: c.id, name: c.name, imageBase64: c.portraitBase64 || null, x: 2, y: 2, w: 1, h: 1 }) }));
+    items.push("---");
+    items.push({ header: "NPCs" });
+    if (npcs.length === 0) items.push({ label: "No NPCs yet \u2014 create one in the NPCs tab", action: () => {} });
+    npcs.forEach(c => items.push({ label: c.name, action: () => addToken({ kind: "npc", refId: c.id, name: c.name, imageBase64: c.portraitBase64 || null, x: 2, y: 2, w: 1, h: 1 }) }));
+    const rect = fabCharacters.getBoundingClientRect();
+    showContextMenu(rect.left, rect.top - 10, items);
+  });
+
+  fabComponents.addEventListener("click", async () => {
+    const [library, folders] = await Promise.all([
+      new Promise(res => { const u = db.componentLibrary.subscribe(campaignId, (l) => { res(l); u(); }); }),
+      new Promise(res => { const u = db.componentFolders.subscribe(campaignId, (f) => { res(f); u(); }); })
+    ]);
+    const items = [];
+    if (library.length === 0) {
+      items.push({ label: "No components yet \u2014 create one in Map Workshop", action: () => {} });
+    } else {
+      const grouped = {};
+      library.forEach(c => { const key = c.folderId || "__none__"; grouped[key] = grouped[key] || []; grouped[key].push(c); });
+      Object.entries(grouped).forEach(([folderId, comps], i) => {
+        if (i > 0) items.push("---");
+        items.push({ header: folders.find(f => f.id === folderId)?.name || "No Folder" });
+        comps.forEach(c => items.push({ label: c.name, action: () => addToken({ kind: "component", refId: c.id, name: c.name, imageBase64: c.imageBase64 || null, x: 2, y: 2, w: c.defaultW || 1, h: c.defaultH || 1, isCover: c.isCover || false, coverType: c.coverType || "half" }) }));
+      });
+    }
+    const rect = fabComponents.getBoundingClientRect();
+    showContextMenu(rect.left, rect.top - 10, items);
   });
 
   async function addToken(token) {
@@ -187,7 +218,16 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     unsubTokens?.(); unsubMap?.();
     currentMap = allMaps.find(m => m.id === mapId) || null;
     if (!currentMap) return;
-    canvas.setBackground(currentMap.backgroundBase64);
+    const bg = currentMap.backgroundBase64;
+    if (!bg) {
+      canvas.setBackgroundImage(null);
+    } else if (bgImageCache.has(bg)) {
+      canvas.setBackgroundImage(bgImageCache.get(bg));
+    } else {
+      const img = new Image();
+      img.onload = () => { bgImageCache.set(bg, img); canvas.setBackgroundImage(img); };
+      img.src = bg;
+    }
     canvas.setGridPx(currentMap.gridPx);
     unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; canvas.setTokens(tokens); });
     buildToolbar();

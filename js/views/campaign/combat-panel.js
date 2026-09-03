@@ -9,6 +9,9 @@ function portraitOrInitial(entity) {
   return entity.portraitBase64 ? `<img src="${entity.portraitBase64}">` : `<span>${escapeHtml((entity.name || "?")[0].toUpperCase())}</span>`;
 }
 
+// combat.combatants array order IS the turn order — there's no separate
+// "display sort," so what you see is exactly what End Turn walks through.
+// Sort-by-Initiative and the Up/Down controls both just rewrite this array.
 export function mountCombatPanel(container, { campaignId, user, isDm, campaignLog }) {
   let party = [], npcs = [], combat = null;
   const wrap = h("div", {});
@@ -39,7 +42,7 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
       }));
       if (combatants.length === 0) { toast("Select at least one combatant", "error"); return; }
       await db.combat.set(campaignId, { active: true, round: 1, currentTurnIndex: 0, combatants, pendingRollRequest: null });
-      toast("Combat started \u2014 roll initiative for everyone below.");
+      toast("Combat started \u2014 roll initiative below, then reorder or Sort by Initiative before the first turn if you like.");
     });
     setupCard.appendChild(startBtn);
     return setupCard;
@@ -63,20 +66,53 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
     toast(`Waiting for ${c.name}'s player to roll\u2026`);
   }
 
+  function setInitiativeManually(index, value) {
+    const combatants = [...combat.combatants];
+    combatants[index] = { ...combatants[index], initiative: value === "" ? null : parseInt(value, 10) };
+    db.combat.set(campaignId, { combatants });
+  }
+
+  // Swaps two adjacent combatants and keeps currentTurnIndex pointing at the
+  // same combatant it pointed at before the swap (not the same array slot).
+  function moveCombatant(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= combat.combatants.length) return;
+    const combatants = [...combat.combatants];
+    [combatants[index], combatants[target]] = [combatants[target], combatants[index]];
+    let currentTurnIndex = combat.currentTurnIndex;
+    if (currentTurnIndex === index) currentTurnIndex = target;
+    else if (currentTurnIndex === target) currentTurnIndex = index;
+    db.combat.set(campaignId, { combatants, currentTurnIndex });
+  }
+
+  function sortByInitiative() {
+    const currentId = combat.combatants[combat.currentTurnIndex]?.id;
+    const combatants = [...combat.combatants].sort((a, b) => (b.initiative ?? -999) - (a.initiative ?? -999));
+    const currentTurnIndex = Math.max(0, combatants.findIndex(c => c.id === currentId));
+    db.combat.set(campaignId, { combatants, currentTurnIndex });
+    toast("Reordered by Initiative");
+  }
+
   function renderTurnOrder() {
-    const sorted = [...combat.combatants].map((c, i) => ({ ...c, _idx: i })).sort((a, b) => (b.initiative ?? -999) - (a.initiative ?? -999));
     const card = h("div", { class: "card" });
-    const headerRow = h("div", { style: "display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;" });
+    const headerRow = h("div", { style: "display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;" });
     headerRow.innerHTML = `<h3 style="margin:0;">Round ${combat.round}</h3>`;
     if (isDm) {
+      const btnGroup = h("div", { style: "display:flex; gap:8px;" });
+      const sortBtn = h("button", { class: "btn sm" }, "Sort by Initiative");
+      sortBtn.addEventListener("click", sortByInitiative);
       const endBtn = h("button", { class: "btn sm danger" }, "End Combat");
       endBtn.addEventListener("click", () => db.combat.set(campaignId, { active: false }));
-      headerRow.appendChild(endBtn);
+      btnGroup.appendChild(sortBtn); btnGroup.appendChild(endBtn);
+      headerRow.appendChild(btnGroup);
     }
     card.appendChild(headerRow);
+    if (isDm) card.appendChild(h("p", { class: "hint" }, "Drag isn't needed \u2014 use \u25b2/\u25bc to reorder, or Sort by Initiative once everyone's rolled."));
 
-    sorted.forEach((c) => {
-      const isCurrent = c._idx === combat.currentTurnIndex;
+    combat.combatants.forEach((c, idx) => {
+      const isCurrent = idx === combat.currentTurnIndex;
+      // DM overrides anyone's initiative; a player overrides only their own PC's.
+      const canEditInitiative = isDm || (c.type === "pc" && c.ownerUid === user.uid);
       const row = h("div", { class: "inventory-item", style: isCurrent ? "border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset;" : "" });
       row.innerHTML = `
         <div class="row1">
@@ -84,25 +120,47 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
             <div class="portrait-preview sm">${portraitOrInitial(c)}</div>
             <div>
               <div class="item-name">${isCurrent ? "\u25b6 " : ""}${escapeHtml(c.name)} ${c.type === "npc" ? '<span class="badge rune">NPC</span>' : ""}</div>
-              <div class="item-meta">Initiative: ${c.initiative != null ? c.initiative : "pending"}</div>
             </div>
           </div>
         </div>
       `;
-      if (isDm && c.initiative == null) {
-        const actions = h("div", { class: "row-actions" });
-        const btn = h("button", { class: "btn sm" }, c.type === "npc" ? "Roll for NPC" : "Request Player Roll");
-        btn.addEventListener("click", () => c.type === "npc" ? rollForNpc(c._idx) : requestPcRoll(c._idx));
-        actions.appendChild(btn);
-        row.appendChild(actions);
+      const initRow = h("div", { class: "row-actions", style: "align-items:center;" });
+      if (isDm) {
+        const upBtn = h("button", { class: "icon-btn" }, "\u25b2");
+        upBtn.title = "Move earlier in turn order";
+        upBtn.disabled = idx === 0;
+        upBtn.addEventListener("click", () => moveCombatant(idx, -1));
+        const downBtn = h("button", { class: "icon-btn" }, "\u25bc");
+        downBtn.title = "Move later in turn order";
+        downBtn.disabled = idx === combat.combatants.length - 1;
+        downBtn.addEventListener("click", () => moveCombatant(idx, 1));
+        initRow.appendChild(upBtn); initRow.appendChild(downBtn);
       }
+      if (canEditInitiative) {
+        const initInput = h("input", { type: "number", value: c.initiative != null ? String(c.initiative) : "", placeholder: "\u2014", style: "width:64px; margin:0;" });
+        initInput.title = "Set or overwrite this Initiative value directly";
+        initInput.addEventListener("change", () => setInitiativeManually(idx, initInput.value));
+        initRow.appendChild(initInput);
+      } else {
+        initRow.appendChild(h("span", { class: "badge" }, `Init: ${c.initiative != null ? c.initiative : "pending"}`));
+      }
+      if (isDm && c.initiative == null) {
+        const btn = h("button", { class: "btn sm" }, c.type === "npc" ? "Roll for NPC" : "Request Player Roll");
+        btn.addEventListener("click", () => c.type === "npc" ? rollForNpc(idx) : requestPcRoll(idx));
+        initRow.appendChild(btn);
+      } else if (isDm && c.type === "npc") {
+        const btn = h("button", { class: "btn sm ghost" }, "Reroll");
+        btn.addEventListener("click", () => rollForNpc(idx));
+        initRow.appendChild(btn);
+      }
+      row.querySelector(".row1").appendChild(initRow);
       if (isCurrent) {
         const canControl = isDm || c.ownerUid === user.uid;
         const actionRow = h("div", { class: "row-actions", style: "margin-top:8px; width:100%;" });
         ACTION_ECONOMY_TYPES.forEach(type => {
           const used = c[`${type}Used`];
           const btn = h("button", { class: `btn sm ${used ? "" : "primary"}` }, `${ACTION_LABELS[type]}: ${used ? "Used" : "Available"}`);
-          if (canControl) btn.addEventListener("click", () => toggleAction(c._idx, type));
+          if (canControl) btn.addEventListener("click", () => toggleAction(idx, type));
           else btn.disabled = true;
           actionRow.appendChild(btn);
         });

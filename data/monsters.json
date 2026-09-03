@@ -1,0 +1,99 @@
+[
+  {
+    "id": "kobold-warrior", "name": "Kobold Warrior", "source": "Monster Manual 2025 (p.185, OCR-verified)",
+    "size": "Small", "creatureType": "Dragon", "alignment": "Neutral",
+    "ac": 14, "hpFormula": "3d6-3", "hpAverage": 7, "speed": "30 ft.",
+    "abilityScores": { "str": 7, "dex": 15, "con": 9, "int": 8, "wis": 7, "cha": 8 },
+    "senses": "Darkvision 60 ft.", "passivePerception": 8, "languages": "Common, Draconic",
+    "cr": "1/8", "xp": 25, "pb": 2,
+    "traits": [
+      { "name": "Pack Tactics", "description": "Advantage on an attack roll against a creature if at least one of the kobold's allies is within 5 feet of the creature and the ally doesn't have the Incapacitated condition." },
+      { "name": "Sunlight Sensitivity", "description": "While in sunlight, the kobold has Disadvantage on ability checks and attack rolls." }
+    ],
+    "actions": [
+      { "name": "Dagger", "range": "reach 5 ft. or range 20/60 ft.", "attackBonus": 4, "damageDice": "1d4", "damageBonus": 2, "damageType": "piercing" }
+    ]
+  },
+  {
+    "id": "winged-kobold", "name": "Winged Kobold", "source": "Monster Manual 2025 (p.185, OCR-verified)",
+    "size": "Small", "creatureType": "Dragon", "alignment": "Neutral",
+    "ac": 15, "hpFormula": "4d6-4", "hpAverage": 10, "speed": "30 ft., Fly 30 ft.",
+    "abilityScores": { "str": 7, "dex": 16, "con": 9, "int": 8, "wis": 7, "cha": 8 },
+    "senses": "Darkvision 60 ft.", "passivePerception": 8, "languages": "Common, Draconic",
+    "cr": "1/4", "xp": 50, "pb": 2,
+    "traits": [
+      { "name": "Pack Tactics", "description": "Advantage on an attack roll against a creature if at least one of the kobold's allies is within 5 feet of the creature and the ally doesn't have the Incapacitated condition." },
+      { "name": "Sunlight Sensitivity", "description": "While in sunlight, the kobold has Disadvantage on ability checks and attack rolls." }
+    ],
+    "actions": [
+      { "name": "Dragon-Tooth Blade", "range": "reach 5 ft.", "attackBonus": 5, "damageDice": "1d6", "damageBonus": 3, "damageType": "piercing" },
+      { "name": "Chromatic Spittle", "range": "range 30 ft.", "attackBonus": 5, "damageDice": "1d6", "damageBonus": 3, "damageType": "acid, cold, fire, lightning, or poison (kobold's choice)" }
+    ]
+  },
+  {
+    "id": "goblin-boss", "name": "Goblin Boss", "source": "Monster Manual 2025 (p.149, OCR-verified)",
+    "size": "Small", "creatureType": "Fey (Goblinoid)", "alignment": "Chaotic Neutral",
+    "ac": 17, "hpFormula": "6d6", "hpAverage": 21, "speed": "30 ft.",
+    "abilityScores": { "str": 10, "dex": 15, "con": 10, "int": 10, "wis": 8, "cha": 10 },
+    "skills": "Stealth +5", "gear": "Chain Shirt, Scimitar, Shield, Shortbow",
+    "senses": "Darkvision 60 ft.", "passivePerception": 9, "languages": "Common, Goblin",
+    "cr": "1", "xp": 200, "pb": 2,
+    "traits": [],
+    "actions": [
+      { "name": "Scimitar", "range": "reach 5 ft.", "attackBonus": 4, "damageDice": "1d6", "damageBonus": 2, "damageType": "slashing", "note": "Plus 2 (1d4) Slashing damage if the attack roll had Advantage." },
+      { "name": "Shortbow", "range": "range 80/320 ft.", "attackBonus": 4, "damageDice": "1d6", "damageBonus": 2, "damageType": "piercing", "note": "Plus 2 (1d4) Piercing damage if the attack roll had Advantage. Multiattack: two attacks, Scimitar or Shortbow in any combination." }
+    ],
+    "bonusActions": [{ "name": "Nimble Escape", "description": "The goblin takes the Disengage or Hide action." }],
+    "reactions": [{ "name": "Redirect Attack", "description": "Trigger: a creature the goblin can see makes an attack roll against it. The goblin chooses an adjacent Small or Medium ally, who becomes the target instead." }]
+  },
+  {
+    "id": "goblin-hexer", "name": "Goblin Hexer", "source": "Monster Manual 2025 (p.149, OCR-verified)",
+    "size": "Small", "creatureType": "Fey (Goblinoid)", "alignment": "Chaotic Neutral",
+    "ac": 13, "hpFormula": "10d6+10", "hpAverage": 45, "speed": "30 ft.",
+    "abilityScores": { "str": 8, "dex": 16, "con": 12, "int": 16, "wis": 10, "cha": 10 },
+    "skills": "Sleight of Hand +5, Stealth +7",
+    "senses": "Darkvision 60 ft.", "passivePerception": 10, "languages": "Common, Goblin",
+    "cr": "3", "xp": 700, "pb": 2,
+    "spellcasting": { "ability": "int", "saveDc": 13, "atWill": ["Minor Illusion"], "perDay1": ["Blindness/Deafness", "Faerie Fire", "Grease"] },
+    "traits": [],
+    "actions": [
+      { "name": "Hex Stick", "range": "reach 5 ft. or range 60 ft.", "attackBonus": 5, "damageDice": "2d8", "damageBonus": 3, "damageType": "psychic", "note": "Multiattack: two Hex Stick attacks; can replace one with Spellcasting." }
+    ],
+    "reactions": [{ "name": "Jinx", "description": "Trigger: a creature the goblin can see hits it with an attack roll. Response \u2014 Wisdom Saving Throw (DC 13) for the triggering creature: on a failure, the attack misses instead." }]
+  },
+  {
+    "id": "skeleton", "name": "Skeleton", "source": "Standard D&D baseline stat block (supplied from established rules knowledge \u2014 OCR text for this entry wasn't reliably legible)",
+    "size": "Medium", "creatureType": "Undead", "alignment": "Lawful Evil",
+    "ac": 13, "hpFormula": "2d8+2", "hpAverage": 11, "speed": "30 ft.",
+    "abilityScores": { "str": 10, "dex": 14, "con": 15, "int": 6, "wis": 8, "cha": 5 },
+    "vulnerabilities": "Bludgeoning", "immunities": "Poison; Exhaustion, Poisoned",
+    "senses": "Darkvision 60 ft.", "passivePerception": 9, "languages": "understands the languages it knew in life but can't speak",
+    "cr": "1/4", "xp": 50, "pb": 2,
+    "traits": [],
+    "actions": [
+      { "name": "Shortsword", "range": "reach 5 ft.", "attackBonus": 4, "damageDice": "1d6", "damageBonus": 2, "damageType": "piercing" },
+      { "name": "Shortbow", "range": "range 80/320 ft.", "attackBonus": 4, "damageDice": "1d6", "damageBonus": 2, "damageType": "piercing" }
+    ]
+  },
+  {
+    "id": "zombie", "name": "Zombie", "source": "Standard D&D baseline stat block (supplied from established rules knowledge \u2014 OCR text for this entry wasn't reliably legible)",
+    "size": "Medium", "creatureType": "Undead", "alignment": "Neutral Evil",
+    "ac": 8, "hpFormula": "3d8+9", "hpAverage": 22, "speed": "20 ft.",
+    "abilityScores": { "str": 13, "dex": 6, "con": 16, "int": 3, "wis": 6, "cha": 5 },
+    "immunities": "Poison; Poisoned",
+    "senses": "Darkvision 60 ft.", "passivePerception": 8, "languages": "understands the languages it knew in life but can't speak",
+    "cr": "1/4", "xp": 50, "pb": 2,
+    "traits": [{ "name": "Undead Fortitude", "description": "If damage reduces the zombie to 0 HP, it makes a Constitution save (DC 5 + damage taken) unless the damage is Radiant or from a critical hit. On a success, it drops to 1 HP instead." }],
+    "actions": [{ "name": "Slam", "range": "reach 5 ft.", "attackBonus": 3, "damageDice": "1d6", "damageBonus": 1, "damageType": "bludgeoning" }]
+  },
+  {
+    "id": "giant-rat", "name": "Giant Rat", "source": "Standard D&D baseline stat block (supplied from established rules knowledge \u2014 OCR text for this entry wasn't reliably legible)",
+    "size": "Small", "creatureType": "Beast", "alignment": "Unaligned",
+    "ac": 12, "hpFormula": "2d6", "hpAverage": 7, "speed": "30 ft.",
+    "abilityScores": { "str": 7, "dex": 15, "con": 11, "int": 2, "wis": 10, "cha": 4 },
+    "senses": "Darkvision 60 ft.", "passivePerception": 10, "languages": "\u2014",
+    "cr": "1/8", "xp": 25, "pb": 2,
+    "traits": [{ "name": "Pack Tactics", "description": "Advantage on an attack roll against a creature if at least one of the rat's allies is within 5 feet of the creature and the ally doesn't have the Incapacitated condition." }],
+    "actions": [{ "name": "Bite", "range": "reach 5 ft.", "attackBonus": 4, "damageDice": "1d4", "damageBonus": 2, "damageType": "piercing" }]
+  }
+]

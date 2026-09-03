@@ -104,6 +104,32 @@ const localDb = {
       Object.assign(campaigns[id], patch);
       writeTable("campaigns", campaigns);
     },
+    async remove(campaignId) {
+      const campaigns = readTable("campaigns");
+      delete campaigns[campaignId];
+      writeTable("campaigns", campaigns);
+
+      ["logs", "notes", "partyInventory", "relationships", "maps", "componentFolders", "componentLibrary", "combat"].forEach(name => {
+        const t = readTable(name);
+        if (campaignId in t) { delete t[campaignId]; writeTable(name, t); }
+      });
+
+      const tokens = readTable("tokens");
+      let tokensChanged = false;
+      Object.keys(tokens).forEach(key => { if (key.startsWith(`${campaignId}:`)) { delete tokens[key]; tokensChanged = true; } });
+      if (tokensChanged) writeTable("tokens", tokens);
+
+      const chars = readTable("characters");
+      let charsChanged = false;
+      Object.values(chars).forEach(c => {
+        if (c.campaignId === campaignId) {
+          charsChanged = true;
+          if (c.isNpc) delete chars[c.id];
+          else { c.campaignId = null; c.currentMapId = null; }
+        }
+      });
+      if (charsChanged) writeTable("characters", chars);
+    },
     subscribe(id, cb) {
       return subscribeTable("campaigns", () => cb(readTable("campaigns")[id] || null));
     }
@@ -461,6 +487,35 @@ const firestoreDb = {
     async update(id, patch) {
       const { db, fx } = await initFirebase();
       await fx.updateDoc(fx.doc(db, "campaigns", id), patch);
+    },
+    async remove(campaignId) {
+      const { db, fx } = await initFirebase();
+
+      async function deleteAllDocs(...pathSegments) {
+        const snap = await fx.getDocs(fx.collection(db, ...pathSegments));
+        await Promise.all(snap.docs.map(d => fx.deleteDoc(d.ref)));
+      }
+
+      const mapsSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps"));
+      for (const mapDoc of mapsSnap.docs) {
+        await deleteAllDocs("campaigns", campaignId, "maps", mapDoc.id, "tokens");
+        await fx.deleteDoc(mapDoc.ref);
+      }
+      await deleteAllDocs("campaigns", campaignId, "log");
+      await deleteAllDocs("campaigns", campaignId, "notes");
+      await deleteAllDocs("campaigns", campaignId, "partyInventory");
+      await deleteAllDocs("campaigns", campaignId, "relationships");
+      await deleteAllDocs("campaigns", campaignId, "componentFolders");
+      await deleteAllDocs("campaigns", campaignId, "componentLibrary");
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "combat", "state")).catch(() => {});
+
+      const charsSnap = await fx.getDocs(fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId)));
+      await Promise.all(charsSnap.docs.map(d => {
+        const data = d.data();
+        return data.isNpc ? fx.deleteDoc(d.ref) : fx.updateDoc(d.ref, { campaignId: null, currentMapId: null });
+      }));
+
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId));
     },
     subscribe(id, cb) {
       let unsub = () => {};

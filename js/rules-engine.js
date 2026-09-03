@@ -149,6 +149,9 @@ export function weaponAbilityModifier(character, weapon) {
 }
 
 export function weaponAttackBonus(character, weapon, item) {
+  // Monster/NPC actions carry their printed attack bonus directly, since it
+  // doesn't cleanly decompose into ability mod + proficiency the way a PC's does.
+  if (weapon.flatAttackBonus != null) return weapon.flatAttackBonus;
   const abilMod = weaponAbilityModifier(character, weapon);
   const proficient = item?.proficient !== false; // assume proficient unless flagged otherwise
   const pb = proficient ? proficiencyBonus(totalLevel(character)) : 0;
@@ -157,6 +160,7 @@ export function weaponAttackBonus(character, weapon, item) {
 }
 
 export function weaponDamageBonus(character, weapon, item) {
+  if (weapon.flatDamageBonus != null) return weapon.flatDamageBonus;
   return weaponAbilityModifier(character, weapon) + (item?.damageBonus || 0);
 }
 

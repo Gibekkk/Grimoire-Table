@@ -12,6 +12,7 @@ import { mountCombatPanel } from "./campaign/combat-panel.js";
 import { mountMapWorkshopPanel } from "./campaign/map-workshop-panel.js";
 import { mountVttPanel } from "./campaign/vtt-panel.js";
 import { mountInitiativeModal } from "./campaign/initiative-modal.js";
+import { mountRollOverlay } from "./campaign/roll-overlay.js";
 
 export async function renderCampaign(container, params) {
   const user = getCurrentUser();
@@ -111,9 +112,11 @@ export async function renderCampaign(container, params) {
 
   activateTab("table");
 
-  // Lives for the whole campaign view, independent of the active tab, so a
-  // DM's initiative roll request reaches a player no matter what they're looking at.
+  // Live for the whole campaign view, independent of the active tab: a DM's
+  // initiative request reaches a player anywhere in the app, and every roll
+  // shows as an overlay + notification for the whole table.
   const unsubModal = mountInitiativeModal(campaign.id, user, (entry) => db.log.add(campaign.id, entry));
+  const unsubRollOverlay = mountRollOverlay(campaign.id);
 
-  return () => { activeUnmount?.(); unsubModal(); };
+  return () => { activeUnmount?.(); unsubModal(); unsubRollOverlay(); };
 }

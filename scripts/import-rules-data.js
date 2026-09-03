@@ -92,7 +92,7 @@ async function main() {
 
   console.log(`Seeding Firestore project "${serviceAccount.project_id}"...\n`);
 
-  const [species, classes, backgrounds, skills, feats, spells, classFeatures, alignments, equipment] = await Promise.all([
+  const [species, classes, backgrounds, skills, feats, spells, classFeatures, monsters, alignments, equipment] = await Promise.all([
     loadJson("species.json"),
     loadJson("classes.json"),
     loadJson("backgrounds.json"),
@@ -100,6 +100,7 @@ async function main() {
     loadJson("feats.json"),
     loadJson("spells.json"),
     loadJson("class-features.json"),
+    loadJson("monsters.json"),
     loadJson("alignments.json"),
     loadJson("equipment.json")
   ]);
@@ -111,6 +112,7 @@ async function main() {
   await seedCollection(db, "rules_feats", feats);
   await seedCollection(db, "rules_spells", spells);
   await seedCollection(db, "rules_class_features", classFeatures);
+  await seedCollection(db, "rules_monsters", monsters);
   await seedSingleDoc(db, "rules_meta", "alignments", { list: alignments });
   await seedSingleDoc(db, "rules_meta", "equipment", equipment);
 
