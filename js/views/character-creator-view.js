@@ -132,7 +132,7 @@ export async function renderCharacterCreator(container) {
       card.innerHTML = `
         <h4>${sp.name}</h4>
         <div class="meta">Size: ${sp.size.join(" or ")} \u2022 Speed: ${sp.speed} ft.</div>
-        <ul>${sp.traits.map(t => `<li>${t}</li>`).join("")}</ul>
+        <ul>${sp.traits.map(t => `<li><strong>${t.name}</strong>${t.description ? " \u2014 " + t.description : ""}${t.unlockLevel > 1 ? ` (level ${t.unlockLevel})` : ""}</li>`).join("")}</ul>
       `;
       card.addEventListener("click", () => { state.speciesId = sp.id; renderAll(); });
       grid.appendChild(card);

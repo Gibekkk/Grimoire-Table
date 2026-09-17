@@ -27,6 +27,14 @@ export function renderFeatsTab(ctx) {
     featCard.appendChild(h("label", {}, "Background (sets the origin feat below)"));
     featCard.appendChild(bgSelect);
   }
+  if (character.isNpc && canEditCore) {
+    const bgSelect = h("select", {});
+    bgSelect.appendChild(h("option", { value: "" }, "\u2014 No background \u2014"));
+    ruleset.backgrounds.forEach(b => bgSelect.appendChild(h("option", { value: b.id, selected: character.backgroundId === b.id ? "selected" : null }, b.name)));
+    bgSelect.addEventListener("change", () => patch({ backgroundId: bgSelect.value || null }));
+    featCard.appendChild(h("label", {}, "Background (sets the origin feat below)"));
+    featCard.appendChild(bgSelect);
+  }
   if (feat) {
     featCard.appendChild(lockedCard(feat.name, feat.summary, true));
     if (feat.id === "skilled") {
@@ -61,6 +69,13 @@ export function renderFeatsTab(ctx) {
   // ---- Species traits ----
   const spCard = h("div", { class: "card" });
   spCard.appendChild(h("h3", {}, `${sp?.name || "Species"} Traits`));
+  if (character.isNpc && canEditCore) {
+    const spSelect = h("select", {});
+    spSelect.appendChild(h("option", { value: "" }, "\u2014 No species set \u2014"));
+    ruleset.species.forEach(s => spSelect.appendChild(h("option", { value: s.id, selected: character.speciesId === s.id ? "selected" : null }, s.name)));
+    spSelect.addEventListener("change", () => patch({ speciesId: spSelect.value || null }));
+    spCard.appendChild(spSelect);
+  }
   if (character.isNpc && canEditCore) {
     const spSelect = h("select", {});
     spSelect.appendChild(h("option", { value: "" }, "\u2014 No species set \u2014"));

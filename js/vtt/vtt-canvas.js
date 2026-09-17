@@ -21,10 +21,13 @@ export class VttCanvas {
     this.zoom = 1;
     this.tokens = [];
     this.bgImage = null;
-    this.tool = "select"; // select | ruler | shape-rect | shape-circle
+    this.tool = "select"; // select | ruler | shape-rect | shape-circle | fog
     this.drag = null;
     this.ruler = null; // { startWorld, endWorld }
-    this.shape = null; // { kind, startWorld, endWorld }
+    this.shape = null; // { kind, startWorld, endWorld } — in-progress draw, local only
+    this.persistedShapes = []; // shared AoE markers synced from the map doc
+    this.revealedCells = new Set(); // cells NOT in this set are fogged; empty = fully fogged
+    this.fogViewerIsDm = false; // DM sees fog dimmed; players see it opaque
     this._images = new Map(); // cache of loaded token images by src
 
     this.canvas = document.createElement("canvas");
@@ -80,6 +83,33 @@ export class VttCanvas {
   setTokens(tokens) { this.tokens = tokens; }
   setGridPx(px) { this.gridPx = px || 70; }
   setTool(tool) { this.tool = tool; this.shape = null; this.ruler = null; }
+  setFogViewerIsDm(isDm) { this.fogViewerIsDm = !!isDm; }
+  setRevealedCells(arr) { this.revealedCells = new Set(arr || []); }
+  getRevealedCells() { return [...this.revealedCells]; }
+  setAoeShapes(arr) { this.persistedShapes = arr || []; }
+  setBackgroundImage(img) { this.bgImage = img || null; if (img) this._fitToView(); }
+
+  _fogGridSize() {
+    if (!this.bgImage || !this.gridPx) return { cols: 0, rows: 0 };
+    return { cols: Math.ceil(this.bgImage.width / this.gridPx), rows: Math.ceil(this.bgImage.height / this.gridPx) };
+  }
+
+  // Paints a small brush (cursor cell + immediate neighbours) so one click
+  // covers a visible patch rather than a single 5ft square.
+  _paintFogAt(gx, gy, mode) {
+    const cx = Math.floor(gx), cy = Math.floor(gy);
+    const radius = 1;
+    let changed = false;
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        if (Math.hypot(dx, dy) > radius + 0.4) continue;
+        const key = `${cx + dx},${cy + dy}`;
+        if (mode === "reveal") { if (!this.revealedCells.has(key)) { this.revealedCells.add(key); changed = true; } }
+        else if (this.revealedCells.has(key)) { this.revealedCells.delete(key); changed = true; }
+      }
+    }
+    return changed;
+  }
 
   _fitToView() {
     if (!this.bgImage) return;
@@ -110,14 +140,26 @@ export class VttCanvas {
   }
 
   _onPointerDown(e) {
-    if (e.button === 2) return; // right-click handled by contextmenu
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
+
+    if (this.tool === "fog") {
+      // Left click paints fog (hides); right click clears it (reveals).
+      const mode = e.button === 2 ? "reveal" : "hide";
+      const grid = this.worldToGrid(world.x, world.y);
+      this._paintFogAt(grid.x, grid.y, mode);
+      this.drag = { type: "fog", mode };
+      return;
+    }
+    if (e.button === 2) return; // right-click handled by contextmenu for other tools
 
     if (this.tool === "select") {
       const token = this._tokenAt(world.x, world.y);
       if (token && this.opts.canMoveToken(token)) {
-        this.drag = { type: "token", token, startWorld: world, origGrid: { x: token.x, y: token.y } };
+        // Keep the grab point under the cursor instead of snapping the token's
+        // origin to it — otherwise grabbing a large token jumps it sideways.
+        const grid = this.worldToGrid(world.x, world.y);
+        this.drag = { type: "token", token, grabOffsetX: token.x - grid.x, grabOffsetY: token.y - grid.y };
         return;
       }
       if (!token) { this.drag = { type: "pan", startScreen: { x: sx, y: sy }, startPan: { ...this.pan } }; return; }
@@ -137,12 +179,15 @@ export class VttCanvas {
       this.pan = { x: this.drag.startPan.x + (sx - this.drag.startScreen.x), y: this.drag.startPan.y + (sy - this.drag.startScreen.y) };
     } else if (this.drag.type === "token") {
       const grid = this.worldToGrid(world.x, world.y);
-      this.drag.token._previewX = grid.x;
-      this.drag.token._previewY = grid.y;
+      this.drag.token._previewX = grid.x + this.drag.grabOffsetX;
+      this.drag.token._previewY = grid.y + this.drag.grabOffsetY;
     } else if (this.drag.type === "ruler") {
       this.ruler.endWorld = world;
     } else if (this.drag.type === "shape") {
       this.shape.endWorld = world;
+    } else if (this.drag.type === "fog") {
+      const grid = this.worldToGrid(world.x, world.y);
+      this._paintFogAt(grid.x, grid.y, this.drag.mode);
     }
   }
 
@@ -160,7 +205,19 @@ export class VttCanvas {
     } else if (this.drag.type === "ruler") {
       setTimeout(() => { this.ruler = null; }, 2500);
     } else if (this.drag.type === "shape") {
-      setTimeout(() => { this.shape = null; }, 4000);
+      const s = this.shape;
+      if (s) {
+        const g1 = this.worldToGrid(s.startWorld.x, s.startWorld.y);
+        const g2 = this.worldToGrid(s.endWorld.x, s.endWorld.y);
+        const shapeData = { id: `shape_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, kind: s.kind, gx1: g1.x, gy1: g1.y, gx2: g2.x, gy2: g2.y };
+        // Optimistic local add so the drawer sees it immediately; the
+        // subscription will shortly replace this with the shared array.
+        this.persistedShapes = [...this.persistedShapes, shapeData];
+        this.opts.onShapePlaced?.(shapeData);
+      }
+      this.shape = null;
+    } else if (this.drag.type === "fog") {
+      this.opts.onFogStrokeEnd?.(this.getRevealedCells());
     }
     this.drag = null;
   }
@@ -183,6 +240,7 @@ export class VttCanvas {
 
   _onContextMenu(e) {
     e.preventDefault();
+    if (this.tool === "fog") return; // right-click means "erase fog", handled in pointerdown
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
     const token = this._tokenAt(world.x, world.y);
@@ -259,14 +317,56 @@ export class VttCanvas {
       }
     });
 
+    // Fog of war — after tokens (so it hides them) but before ruler/AoE
+    // overlays (so DM measurements stay readable on top of it).
+    const { cols, rows } = this._fogGridSize();
+    if (cols && rows) {
+      ctx.fillStyle = this.fogViewerIsDm ? "rgba(6,6,10,0.55)" : "rgba(4,4,7,1)";
+      for (let gx = 0; gx < cols; gx++) {
+        for (let gy = 0; gy < rows; gy++) {
+          if (this.revealedCells.has(`${gx},${gy}`)) continue;
+          const pos = this.gridToWorld(gx, gy);
+          ctx.fillRect(pos.x, pos.y, this.gridPx, this.gridPx);
+        }
+      }
+    }
+
+    // Persisted AoE markers — shared with the table, stay until cleared.
+    this.persistedShapes.forEach(s => {
+      const p1 = this.gridToWorld(s.gx1, s.gy1), p2 = this.gridToWorld(s.gx2, s.gy2);
+      ctx.fillStyle = "rgba(224,185,92,0.22)"; ctx.strokeStyle = "#e0b95c"; ctx.lineWidth = 2 / this.zoom;
+      ctx.setLineDash([5 / this.zoom, 5 / this.zoom]);
+      if (s.kind === "rect") {
+        const x = Math.min(p1.x, p2.x), y = Math.min(p1.y, p2.y);
+        ctx.fillRect(x, y, Math.abs(p2.x - p1.x), Math.abs(p2.y - p1.y));
+        ctx.strokeRect(x, y, Math.abs(p2.x - p1.x), Math.abs(p2.y - p1.y));
+      } else {
+        const r = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        ctx.beginPath(); ctx.arc(p1.x, p1.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    });
+
     if (this.ruler) {
       const { startWorld, endWorld } = this.ruler;
       ctx.strokeStyle = "#e0b95c"; ctx.lineWidth = 2 / this.zoom; ctx.setLineDash([6 / this.zoom, 4 / this.zoom]);
       ctx.beginPath(); ctx.moveTo(startWorld.x, startWorld.y); ctx.lineTo(endWorld.x, endWorld.y); ctx.stroke();
       ctx.setLineDash([]);
       const dist = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y) / this.gridPx * FEET_PER_GRID;
-      ctx.fillStyle = "#e0b95c"; ctx.font = `${14 / this.zoom}px sans-serif`;
-      ctx.fillText(`${Math.round(dist)} ft`, endWorld.x + 8 / this.zoom, endWorld.y);
+      const label = `${Math.round(dist)} ft`;
+      const fontSize = 14 / this.zoom;
+      ctx.font = `${fontSize}px sans-serif`;
+      const textW = ctx.measureText(label).width;
+      const padX = 8 / this.zoom, padY = 5 / this.zoom;
+      const boxX = endWorld.x + 10 / this.zoom, boxY = endWorld.y - fontSize / 2 - padY;
+      ctx.fillStyle = "rgba(16,16,24,0.88)";
+      ctx.strokeStyle = "#e0b95c"; ctx.lineWidth = 1 / this.zoom;
+      ctx.beginPath();
+      ctx.roundRect(boxX - padX, boxY, textW + padX * 2, fontSize + padY * 2, 5 / this.zoom);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#e0b95c"; ctx.textBaseline = "middle";
+      ctx.fillText(label, boxX, boxY + fontSize / 2 + padY);
+      ctx.textBaseline = "alphabetic";
     }
 
     if (this.shape) {

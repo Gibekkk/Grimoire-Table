@@ -4,6 +4,8 @@ import { VttCanvas } from "../../vtt/vtt-canvas.js";
 import { mountCharacterSheet } from "../../character-sheet.js";
 import { COVER_AC_BONUS, COVER_LABELS, estimateArmorClass } from "../../rules-engine.js";
 import { navigate } from "../../router.js";
+import { loadRuleset } from "../../data-loader.js";
+import { mountRoomInventoryPanel } from "./room-inventory-panel.js";
 
 // Module-level (not per-mount) so a background image, once decoded, stays
 // cached for the rest of the browser session — switching maps back and forth
@@ -12,6 +14,7 @@ import { navigate } from "../../router.js";
 const bgImageCache = new Map();
 
 export async function mountVttPanel(container, { campaignId, user, isDm, getAdvMode, onRoll }) {
+  const ruleset = await loadRuleset();
   const shell = h("div", { class: "vtt-shell" });
   const sidebar = h("div", { class: "vtt-sidebar" });
   const stage = h("div", { class: "vtt-stage" });
@@ -22,25 +25,39 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   const toolbar = h("div", { class: "vtt-toolbar" });
   const canvasHost = h("div", { class: "vtt-canvas-host" });
   const popup = h("div", { class: "vtt-token-popup", style: "display:none;" });
+  const roomInvPanel = h("div", { class: "vtt-token-popup vtt-room-inv", style: "display:none;" });
   stage.appendChild(toolbar);
   stage.appendChild(canvasHost);
   stage.appendChild(popup);
+  stage.appendChild(roomInvPanel);
 
   let myCharacter = null;
   let allMaps = [];
   let currentMap = null;
   let tokens = [];
   let sidebarOpen = true;
+  let roomInvOpen = false;
+  let roomInvUnsub = null;
   let unsubTokens = null, unsubMap = null;
   let combat = null;
   const unsubCombat = db.combat.subscribe(campaignId, (c) => { combat = c; });
+
+  function refreshRoomInventoryPanel() {
+    roomInvUnsub?.();
+    roomInvUnsub = null;
+    if (!roomInvOpen || !currentMap) return;
+    roomInvUnsub = mountRoomInventoryPanel(roomInvPanel, { campaignId, mapId: currentMap.id, ruleset, myCharacter, isDm });
+  }
 
   const canvas = new VttCanvas(canvasHost, {
     canMoveToken: (token) => isDm || (token.kind === "pc" && token.refId === myCharacter?.id),
     onTokenMoved: (token, x, y) => handleTokenMoved(token, x, y),
     onTokenClicked: (token) => showTokenPopup(token),
-    onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy)
+    onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
+    onFogStrokeEnd: (revealedCells) => { if (currentMap) db.maps.update(campaignId, currentMap.id, { revealedCells }); },
+    onShapePlaced: (shape) => { if (currentMap) db.maps.addShape(campaignId, currentMap.id, shape); }
   });
+  canvas.setFogViewerIsDm(isDm);
 
   // ---------------- Toolbar ----------------
   function buildToolbar() {
@@ -61,14 +78,39 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     zoomIn.addEventListener("click", () => canvas.zoomBy(1.15));
     const fitBtn = h("button", { class: "btn sm" }, "Fit");
     fitBtn.addEventListener("click", () => canvas._fitToView());
-    toolbar.appendChild(zoomOut); toolbar.appendChild(zoomIn); toolbar.appendChild(fitBtn);
+    const fsBtn = h("button", { class: "btn sm" }, shell.classList.contains("fullscreen") ? "Exit Full Screen" : "Full Screen");
+    fsBtn.addEventListener("click", () => {
+      shell.classList.toggle("fullscreen");
+      buildToolbar();
+      // Canvas sizes off its container, so let layout settle before refitting.
+      requestAnimationFrame(() => canvas._fitToView());
+    });
+    toolbar.appendChild(zoomOut); toolbar.appendChild(zoomIn); toolbar.appendChild(fitBtn); toolbar.appendChild(fsBtn);
 
     if (isDm) {
+      const fogBtn = h("button", { class: `btn sm ${canvas.tool === "fog" ? "primary" : ""}` }, "Fog");
+      fogBtn.title = "Left-click paints fog, right-click clears it";
+      fogBtn.addEventListener("click", () => { canvas.setTool("fog"); buildToolbar(); });
+      toolbar.appendChild(fogBtn);
+
       const mapSel = h("select", { style: "max-width:200px; margin:0;" });
       allMaps.forEach(m => mapSel.appendChild(h("option", { value: m.id, selected: currentMap?.id === m.id ? "selected" : null }, m.name)));
       mapSel.addEventListener("change", () => loadMap(mapSel.value));
       toolbar.appendChild(mapSel);
+
+      const clearAoeBtn = h("button", { class: "btn sm ghost" }, "Clear AoE");
+      clearAoeBtn.addEventListener("click", () => { if (currentMap) db.maps.clearShapes(campaignId, currentMap.id); });
+      toolbar.appendChild(clearAoeBtn);
     }
+
+    const roomInvBtn = h("button", { class: `btn sm ${roomInvOpen ? "primary" : ""}` }, "Room Loot");
+    roomInvBtn.addEventListener("click", () => {
+      roomInvOpen = !roomInvOpen;
+      roomInvPanel.style.display = roomInvOpen ? "block" : "none";
+      refreshRoomInventoryPanel();
+      buildToolbar();
+    });
+    toolbar.appendChild(roomInvBtn);
   }
 
   // ---------------- FAB (DM adds tokens) ----------------
@@ -119,6 +161,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   async function addToken(token) {
     if (!currentMap) { toast("Create a map first", "error"); return; }
     await db.tokens.add(campaignId, currentMap.id, token);
+    // Without this a player's own VTT never learns which map they're on.
+    if (token.kind === "pc") await db.characters.update(token.refId, { currentMapId: currentMap.id });
   }
 
   // ---------------- Cover auto-apply ----------------
@@ -229,7 +273,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       img.src = bg;
     }
     canvas.setGridPx(currentMap.gridPx);
+    canvas.setRevealedCells(currentMap.revealedCells || []);
+    canvas.setAoeShapes(currentMap.aoeShapes || []);
     unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; canvas.setTokens(tokens); });
+    refreshRoomInventoryPanel();
     buildToolbar();
     buildSidebar();
   }
@@ -237,6 +284,16 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   // ---------------- Boot ----------------
   const unsubMaps = db.maps.subscribeList(campaignId, async (list) => {
     allMaps = list;
+    // Live-sync fog/AoE for whoever is viewing this map, without re-decoding
+    // the background image (which would flicker).
+    if (currentMap) {
+      const updated = list.find(m => m.id === currentMap.id);
+      if (updated) {
+        currentMap = updated;
+        canvas.setRevealedCells(updated.revealedCells || []);
+        canvas.setAoeShapes(updated.aoeShapes || []);
+      }
+    }
     if (isDm) {
       if (!currentMap && list.length) loadMap(list[0].id);
       else buildToolbar();
@@ -251,6 +308,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     const unsubParty = db.characters.subscribeCampaignParty(campaignId, (party) => {
       myCharacter = party.find(c => c.ownerUid === user.uid) || null;
       buildSidebar();
+      refreshRoomInventoryPanel();
       if (myCharacter?.currentMapId) loadMap(myCharacter.currentMapId);
       else if (myCharacter) {
         canvasHost.innerHTML = "";
@@ -258,10 +316,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       }
     });
     buildToolbar();
-    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubTokens?.(); unsubMap?.(); sheetUnsub?.(); canvas.dispose(); };
+    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubTokens?.(); unsubMap?.(); sheetUnsub?.(); roomInvUnsub?.(); canvas.dispose(); };
   }
 
   buildToolbar();
   buildSidebar();
-  return () => { unsubMaps(); unsubCombat(); unsubTokens?.(); unsubMap?.(); canvas.dispose(); };
+  return () => { unsubMaps(); unsubCombat(); unsubTokens?.(); unsubMap?.(); roomInvUnsub?.(); canvas.dispose(); };
 }

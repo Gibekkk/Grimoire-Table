@@ -786,7 +786,7 @@
   "ammo": [
     {
       "id": "arrows-20",
-      "name": "Arrows (20)",
+      "name": "Arrow",
       "ammoType": "arrow",
       "quantity": 20,
       "weight": "1 lb.",
@@ -794,7 +794,7 @@
     },
     {
       "id": "crossbow-bolts-20",
-      "name": "Crossbow Bolts (20)",
+      "name": "Crossbow Bolt",
       "ammoType": "bolt",
       "quantity": 20,
       "weight": "1.5 lb.",
@@ -802,7 +802,7 @@
     },
     {
       "id": "sling-bullets-20",
-      "name": "Sling Bullets (20)",
+      "name": "Sling Bullet",
       "ammoType": "bullet",
       "quantity": 20,
       "weight": "1.5 lb.",
@@ -810,7 +810,7 @@
     },
     {
       "id": "blowgun-needles-50",
-      "name": "Blowgun Needles (50)",
+      "name": "Blowgun Needle",
       "ammoType": "needle",
       "quantity": 50,
       "weight": "1 lb.",
@@ -818,7 +818,7 @@
     },
     {
       "id": "firearm-bullets-10",
-      "name": "Firearm Bullets (10)",
+      "name": "Firearm Bullet",
       "ammoType": "bullet",
       "quantity": 10,
       "weight": "2 lb.",

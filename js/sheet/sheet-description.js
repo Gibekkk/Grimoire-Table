@@ -9,9 +9,19 @@ export function renderDescriptionTab(ctx) {
   const bg = findById(ruleset.backgrounds, character.backgroundId);
   const sp = findById(ruleset.species, character.speciesId);
 
-  // Portrait
+  // Portrait & name
   const portraitCard = h("div", { class: "card" });
-  portraitCard.appendChild(h("h3", {}, "Portrait"));
+  portraitCard.appendChild(h("h3", {}, "Portrait & Name"));
+  if (canEditCore) {
+    const nameInput = h("input", { type: "text", value: character.name || "" });
+    nameInput.addEventListener("change", () => {
+      const trimmed = nameInput.value.trim();
+      if (!trimmed) { nameInput.value = character.name; return; }
+      patch({ name: trimmed });
+    });
+    portraitCard.appendChild(h("label", {}, "Name"));
+    portraitCard.appendChild(nameInput);
+  }
   const portraitRow = h("div", { style: "display:flex; align-items:center; gap:14px;" });
   const preview = h("div", { class: "portrait-preview lg" });
   preview.innerHTML = character.portraitBase64 ? `<img src="${character.portraitBase64}">` : `<span>${(character.name || "?")[0].toUpperCase()}</span>`;
