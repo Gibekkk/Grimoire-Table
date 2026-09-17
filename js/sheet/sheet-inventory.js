@@ -62,18 +62,10 @@ export function renderInventoryTab(ctx) {
 
   function renderItemRow(item, indent) {
     const row = h("div", { class: `inventory-item ${item.equipped ? "equipped" : ""}`, style: indent ? "margin-left:20px;" : "" });
-    // A locked description hides the item's text from players. The DM always
-    // sees through the lock, and can toggle it right here.
-    const descHidden = item.descriptionLocked && !ctx.isDm;
     let metaLine = item.type;
     if (item.type === "weapon" && item.weaponData) metaLine = `${item.weaponData.damageDice} ${item.weaponData.damageType}${item.isCustom ? " \u2022 custom" : ""}`;
     else if (item.type === "armor" && item.armorData) metaLine = `${item.armorData.armorType} armor \u2022 AC ${item.armorData.baseAC}`;
     else if (item.type === "ammo") metaLine = `ammo \u2022 ${item.ammoType}`;
-    if (item.description || item.descriptionLocked) {
-      metaLine += descHidden
-        ? " \u2022 \u{1F512} description sealed"
-        : (item.description ? ` \u2022 ${item.description}` : "");
-    }
     const weight = item.weightLb ?? 0;
     row.innerHTML = `
       <div class="row1">
@@ -116,11 +108,6 @@ export function renderInventoryTab(ctx) {
       const sendBtn = h("button", { class: "btn sm ghost" }, "\u2192 Party");
       sendBtn.addEventListener("click", () => sendToParty(item));
       actions.appendChild(sendBtn);
-    }
-    if (ctx.isDm) {
-      const lockBtn = h("button", { class: "btn sm ghost" }, item.descriptionLocked ? "\u{1F513} Unlock desc" : "\u{1F512} Lock desc");
-      lockBtn.addEventListener("click", () => ctx.setItemLock(item, !item.descriptionLocked));
-      actions.appendChild(lockBtn);
     }
     if (canEditCore) {
       const delBtn = h("button", { class: "btn sm ghost" }, "Remove");

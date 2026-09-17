@@ -319,33 +319,6 @@ const localDb = {
     }
   },
 
-  // Item Workshop: campaign-scoped custom item definitions the DM authors once
-  // and can then stock in shops, drop as loot, or push into a character's bag.
-  campaignItems: {
-    async add(campaignId, item) {
-      const items = readTable("campaignItems");
-      items[campaignId] = items[campaignId] || [];
-      const id = uid("citem");
-      items[campaignId].push({ id, createdAt: Date.now(), ...item });
-      writeTable("campaignItems", items);
-      return id;
-    },
-    async update(campaignId, itemId, patch) {
-      const items = readTable("campaignItems");
-      const found = (items[campaignId] || []).find(i => i.id === itemId);
-      if (found) Object.assign(found, patch);
-      writeTable("campaignItems", items);
-    },
-    async remove(campaignId, itemId) {
-      const items = readTable("campaignItems");
-      items[campaignId] = (items[campaignId] || []).filter(i => i.id !== itemId);
-      writeTable("campaignItems", items);
-    },
-    subscribe(campaignId, cb) {
-      return subscribeTable("campaignItems", () => cb(readTable("campaignItems")[campaignId] || []));
-    }
-  },
-
   // Loot physically "in the room" (per-map) — distinct from partyInventory
   // (campaign-wide trading pool): dropped items and leftover loot tied to a
   // specific map, which the DM can fully override the contents of.
@@ -793,31 +766,6 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId), (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null));
-      });
-      return () => unsub();
-    }
-  },
-
-  campaignItems: {
-    async add(campaignId, item) {
-      const { db, fx } = await initFirebase();
-      const ref = fx.collection(db, "campaigns", campaignId, "campaignItems");
-      const docRef = await fx.addDoc(ref, { ...item, createdAt: fx.serverTimestamp() });
-      return docRef.id;
-    },
-    async update(campaignId, itemId, patch) {
-      const { db, fx } = await initFirebase();
-      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "campaignItems", itemId), patch);
-    },
-    async remove(campaignId, itemId) {
-      const { db, fx } = await initFirebase();
-      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "campaignItems", itemId));
-    },
-    subscribe(campaignId, cb) {
-      let unsub = () => {};
-      initFirebase().then(({ db, fx }) => {
-        const q = fx.query(fx.collection(db, "campaigns", campaignId, "campaignItems"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
       });
       return () => unsub();
     }

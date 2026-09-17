@@ -183,7 +183,6 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
     isOwner, isDm: !!opts.isDm, canEditCore, canEditVitals, canManageXp,
     patch, onRoll: (spec) => opts.onRoll?.(spec), currentAdvMode, toast,
     addItem, toggleEquip, changeQty, removeItem, consumeAmmoFor, doAttack, setContainer,
-    setItemLock: (item, locked) => db.inventory.update(characterId, item.id, { descriptionLocked: locked }),
     sendToParty, sendCurrencyToParty,
     onClassesChanged
   };

@@ -59,9 +59,6 @@ service cloud.firestore {
         }
       }
 
-      // Item Workshop catalog: everyone reads (shops and loot show these),
-      // only the DM authors them.
-      match /campaignItems/{itemId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /componentFolders/{folderId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /componentLibrary/{componentId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /relationships/{relId} { allow read, write: if isDm(campaignId); }
@@ -93,12 +90,7 @@ service cloud.firestore {
           character().ownerUid == request.auth.uid ||
           (character().campaignId != null && isMember(character().campaignId))
         );
-        // Owner manages their own bag; the campaign's DM can also add, remove,
-        // and re-lock items in any party member's inventory.
-        allow write: if signedIn() && (
-          character().ownerUid == request.auth.uid ||
-          (character().campaignId != null && isDm(character().campaignId))
-        );
+        allow write: if signedIn() && character().ownerUid == request.auth.uid;
       }
     }
 

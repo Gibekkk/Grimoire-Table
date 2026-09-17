@@ -330,38 +330,3 @@ export const ACTION_ECONOMY_TYPES = ["action", "bonusAction", "reaction", "movem
 
 // One grid square = 5 ft (PHB 2024 standard).
 export const FEET_PER_GRID = 5;
-
-// ---------------------------------------------------------------------------
-// Creature size and space (PHB 2024, "Creature Size and Space" table).
-// Note there are six sizes, not five — Small and Medium differ in rules text
-// but both occupy exactly 1 square, so they look identical on a grid.
-// gridSquares is the token's footprint in 5ft squares per side.
-// ---------------------------------------------------------------------------
-export const CREATURE_SIZES = [
-  { id: "tiny", name: "Tiny", space: "2\u00bd by 2\u00bd feet", gridSquares: 0.5 },
-  { id: "small", name: "Small", space: "5 by 5 feet", gridSquares: 1 },
-  { id: "medium", name: "Medium", space: "5 by 5 feet", gridSquares: 1 },
-  { id: "large", name: "Large", space: "10 by 10 feet", gridSquares: 2 },
-  { id: "huge", name: "Huge", space: "15 by 15 feet", gridSquares: 3 },
-  { id: "gargantuan", name: "Gargantuan", space: "20 by 20 feet", gridSquares: 4 }
-];
-export function sizeToGridSquares(sizeId) {
-  return CREATURE_SIZES.find(s => s.id === sizeId)?.gridSquares ?? 1;
-}
-
-// Reach for interacting with loot / bodies / merchants on the VTT.
-export const INTERACT_RANGE_FT = 5;
-
-// Distance in feet between two tokens, measured centre-to-centre on the grid.
-export function tokenDistanceFt(a, b) {
-  const ax = a.x + (a.w || 1) / 2, ay = a.y + (a.h || 1) / 2;
-  const bx = b.x + (b.w || 1) / 2, by = b.y + (b.h || 1) / 2;
-  return Math.hypot(ax - bx, ay - by) * FEET_PER_GRID;
-}
-
-// What a player is allowed to see about a token. Images are visible by default;
-// everything else stays hidden until the DM reveals it.
-export const DEFAULT_TOKEN_REVEAL = { name: false, image: true, ac: false, hp: false };
-export function tokenReveal(token) {
-  return { ...DEFAULT_TOKEN_REVEAL, ...(token?.reveal || {}) };
-}
