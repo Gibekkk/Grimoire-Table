@@ -285,10 +285,14 @@ export class VttCanvas {
       }
     }
 
+    const t0 = performance.now() / 1000; // drives the loot orb pulse
     this.tokens.forEach(t => {
       const gx = t._previewX ?? t.x, gy = t._previewY ?? t.y;
       const pos = this.gridToWorld(gx, gy);
       const size = this.gridToWorld(t.w || 1, t.h || 1);
+      const cx = pos.x + size.x / 2, cy = pos.y + size.y / 2;
+      const r = Math.min(size.x, size.y) / 2;
+
       if (t.kind === "component") {
         const img = this._getImage(t.imageBase64);
         if (img?.complete && img.naturalWidth) ctx.drawImage(img, pos.x, pos.y, size.x, size.y);
@@ -297,23 +301,67 @@ export class VttCanvas {
           ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
           ctx.strokeRect(pos.x, pos.y, size.x, size.y);
         }
-      } else {
-        const cx = pos.x + size.x / 2, cy = pos.y + size.y / 2, r = Math.min(size.x, size.y) / 2;
-        const img = this._getImage(t.imageBase64);
-        ctx.save();
-        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
-        if (img?.complete && img.naturalWidth) ctx.drawImage(img, pos.x, pos.y, size.x, size.y);
-        else { ctx.fillStyle = t.kind === "npc" ? "#9a3838" : "#3f8f80"; ctx.fillRect(pos.x, pos.y, size.x, size.y); }
-        ctx.restore();
-        ctx.strokeStyle = t.kind === "npc" ? "#c24b4b" : "#c69a3e";
-        ctx.lineWidth = 2 / this.zoom;
-        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-        if (!img || !img.naturalWidth) {
-          ctx.fillStyle = "#fff"; ctx.font = `${r}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-          ctx.fillText((t.name || "?")[0].toUpperCase(), cx, cy);
+        return;
+      }
+
+      if (t.kind === "loot") {
+        // Glowing white orb, gently pulsing so it reads as interactable.
+        const pulse = 0.75 + 0.25 * Math.sin(t0 * 2.2 + (t.x + t.y));
+        const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.6 * pulse);
+        glow.addColorStop(0, "rgba(255,255,255,0.95)");
+        glow.addColorStop(0.45, "rgba(235,240,255,0.55)");
+        glow.addColorStop(1, "rgba(200,220,255,0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath(); ctx.arc(cx, cy, r * 1.6 * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
+        ctx.beginPath(); ctx.arc(cx, cy, r * 0.42, 0, Math.PI * 2); ctx.fill();
+        if (this.showAllLabels || this.fogViewerIsDm) {
+          ctx.fillStyle = "#e7e3d8"; ctx.font = `${Math.max(10, r * 0.4)}px sans-serif`; ctx.textAlign = "center";
+          ctx.fillText(t.name || "Loot", cx, pos.y + size.y + r * 0.5);
         }
+        return;
+      }
+
+      // pc / npc / merchant / body all render as a bordered round token.
+      const reveal = { name: false, image: true, ac: false, hp: false, ...(t.reveal || {}) };
+      const canSeeAll = this.fogViewerIsDm || t.kind === "merchant";
+      const showImage = canSeeAll || reveal.image;
+      const showName = canSeeAll || reveal.name;
+
+      const img = showImage ? this._getImage(t.imageBase64) : null;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+      if (img?.complete && img.naturalWidth) ctx.drawImage(img, pos.x, pos.y, size.x, size.y);
+      else {
+        ctx.fillStyle = t.kind === "npc" ? "#9a3838" : t.kind === "merchant" ? "#6b5aa8" : t.kind === "body" ? "#3a3a44" : "#3f8f80";
+        ctx.fillRect(pos.x, pos.y, size.x, size.y);
+      }
+      ctx.restore();
+
+      const defaultBorder = t.kind === "npc" ? "#c24b4b" : t.kind === "merchant" ? "#a08ae0" : t.kind === "body" ? "#71717f" : "#c69a3e";
+      ctx.strokeStyle = t.borderColor || defaultBorder;
+      ctx.lineWidth = 2 / this.zoom;
+      if (t.kind === "body") ctx.setLineDash([4 / this.zoom, 3 / this.zoom]);
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (!img || !img.naturalWidth) {
+        ctx.fillStyle = "#fff"; ctx.font = `${r}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        const glyph = t.kind === "merchant" ? "$" : t.kind === "body" ? "\u2620" : (showName ? (t.name || "?")[0].toUpperCase() : "?");
+        ctx.fillText(glyph, cx, cy);
+        ctx.textBaseline = "alphabetic";
+      }
+
+      let label = showName ? (t.name || "") : "";
+      if (canSeeAll || reveal.hp) {
+        if (t.hpCurrent != null && t.hpMax != null) label += `  ${t.hpCurrent}/${t.hpMax}`;
+      }
+      if (canSeeAll || reveal.ac) {
+        if (t.ac != null) label += `  AC ${t.ac}`;
+      }
+      if (label.trim()) {
         ctx.fillStyle = "#e7e3d8"; ctx.font = `${Math.max(10, r * 0.4)}px sans-serif`; ctx.textAlign = "center";
-        ctx.fillText(t.name || "", cx, pos.y + size.y + r * 0.5);
+        ctx.fillText(label.trim(), cx, pos.y + size.y + r * 0.5);
       }
     });
 

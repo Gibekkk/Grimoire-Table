@@ -13,6 +13,7 @@ import { mountMapWorkshopPanel } from "./campaign/map-workshop-panel.js";
 import { mountVttPanel } from "./campaign/vtt-panel.js";
 import { mountInitiativeModal } from "./campaign/initiative-modal.js";
 import { mountRollOverlay } from "./campaign/roll-overlay.js";
+import { mountItemWorkshopPanel } from "./campaign/item-workshop-panel.js";
 
 export async function renderCampaign(container, params) {
   const user = getCurrentUser();
@@ -60,7 +61,7 @@ export async function renderCampaign(container, params) {
     { id: "vtt", label: "VTT" },
     { id: "loot", label: "Party Loot" }
   ];
-  if (isDm) tabDefs.push({ id: "npcs", label: "NPCs" }, { id: "social", label: "Social" }, { id: "workshop", label: "Map Workshop" }, { id: "notes", label: "DM Notes" });
+  if (isDm) tabDefs.push({ id: "npcs", label: "NPCs" }, { id: "social", label: "Social" }, { id: "workshop", label: "Map Workshop" }, { id: "items", label: "Item Workshop" }, { id: "notes", label: "DM Notes" });
   const panelHost = h("div", {});
 
   let activeUnmount = null;
@@ -94,6 +95,8 @@ export async function renderCampaign(container, params) {
       activeUnmount = mountSocialPanel(panelHost, ctx);
     } else if (tabId === "workshop") {
       activeUnmount = mountMapWorkshopPanel(panelHost, ctx);
+    } else if (tabId === "items") {
+      activeUnmount = mountItemWorkshopPanel(panelHost, ctx);
     } else if (tabId === "notes") {
       activeUnmount = mountDmNotesPanel(panelHost, { campaignId: campaign.id });
     }

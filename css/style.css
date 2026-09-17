@@ -536,3 +536,16 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
 .card, .sheet-shell, .area-tabs, .vtt-stage, .log-panel { overflow: visible; }
 .main { scrollbar-gutter: stable; }
 .vtt-sidebar { scrollbar-gutter: stable; }
+
+/* ---------- Wide modal (shops, loot windows) ---------- */
+.modal-box.wide { max-width: 640px; max-height: 84vh; overflow-y: auto; text-align: left; }
+
+/* ---------- VTT in-world clock ---------- */
+.vtt-clock {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--ink);
+}
+.vtt-clock .clock-face { font-family: var(--font-mono); font-size: 0.82rem; color: var(--gold-bright); margin-right: 4px; }
+
+/* Third FAB, stacked above the other two */
+.vtt-fab-tertiary { bottom: 148px; background: linear-gradient(180deg, #a08ae0, #6b5aa8); color: #140f24; }

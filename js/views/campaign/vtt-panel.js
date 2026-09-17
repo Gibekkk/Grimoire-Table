@@ -2,7 +2,8 @@ import { db } from "../../db.js";
 import { h, toast, escapeHtml, showContextMenu } from "../../util.js";
 import { VttCanvas } from "../../vtt/vtt-canvas.js";
 import { mountCharacterSheet } from "../../character-sheet.js";
-import { COVER_AC_BONUS, COVER_LABELS, estimateArmorClass } from "../../rules-engine.js";
+import { COVER_AC_BONUS, COVER_LABELS, estimateArmorClass, CREATURE_SIZES, sizeToGridSquares, tokenDistanceFt, INTERACT_RANGE_FT } from "../../rules-engine.js";
+import { openMerchantShop, openLootWindow } from "./merchant-shop.js";
 import { navigate } from "../../router.js";
 import { loadRuleset } from "../../data-loader.js";
 import { mountRoomInventoryPanel } from "./room-inventory-panel.js";
@@ -40,7 +41,20 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   let roomInvUnsub = null;
   let unsubTokens = null, unsubMap = null;
   let combat = null;
+  let catalog = [];
+  let partyList = [];
   const unsubCombat = db.combat.subscribe(campaignId, (c) => { combat = c; });
+  const unsubCatalog = db.campaignItems.subscribe(campaignId, (c) => { catalog = c; });
+  const unsubPartyList = db.characters.subscribeCampaignParty(campaignId, (p) => { partyList = p; });
+
+  // A player's own token moves freely; loot can be nudged, but only while the
+  // character is close enough to reach it.
+  function myToken() { return tokens.find(t => t.kind === "pc" && t.refId === myCharacter?.id); }
+  function withinReach(token) {
+    const mine = myToken();
+    if (!mine) return false;
+    return tokenDistanceFt(mine, token) <= INTERACT_RANGE_FT + 0.01;
+  }
 
   function refreshRoomInventoryPanel() {
     roomInvUnsub?.();
@@ -50,7 +64,12 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   }
 
   const canvas = new VttCanvas(canvasHost, {
-    canMoveToken: (token) => isDm || (token.kind === "pc" && token.refId === myCharacter?.id),
+    canMoveToken: (token) => {
+      if (isDm) return true;
+      if (token.kind === "pc" && token.refId === myCharacter?.id) return true;
+      if (token.kind === "loot") return withinReach(token);
+      return false;
+    },
     onTokenMoved: (token, x, y) => handleTokenMoved(token, x, y),
     onTokenClicked: (token) => showTokenPopup(token),
     onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
@@ -103,6 +122,35 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       toolbar.appendChild(clearAoeBtn);
     }
 
+    // In-world clock: DM sets it, everyone reads it.
+    const clockMins = currentMap?.clockMinutes ?? 8 * 60;
+    const hh = String(Math.floor((clockMins % 1440) / 60)).padStart(2, "0");
+    const mm = String(clockMins % 60).padStart(2, "0");
+    const clockWrap = h("div", { class: "vtt-clock" });
+    clockWrap.appendChild(h("span", { class: "clock-face" }, `\u{1F551} ${hh}:${mm}`));
+    if (isDm) {
+      const nudge = (delta) => {
+        const next = (((clockMins + delta) % 1440) + 1440) % 1440;
+        db.maps.update(campaignId, currentMap.id, { clockMinutes: next });
+      };
+      [["-1h", -60], ["-10m", -10], ["+10m", 10], ["+1h", 60]].forEach(([lbl, d]) => {
+        const b = h("button", { class: "icon-btn", style: "width:auto; padding:0 6px; font-size:0.66rem;" }, lbl);
+        b.addEventListener("click", () => nudge(d));
+        clockWrap.appendChild(b);
+      });
+      const setBtn = h("button", { class: "icon-btn", style: "width:auto; padding:0 6px; font-size:0.66rem;" }, "Set");
+      setBtn.addEventListener("click", () => {
+        const v = prompt("Set time (HH:MM, 24h):", `${hh}:${mm}`);
+        if (!v) return;
+        const m = v.match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) { toast("Use HH:MM", "error"); return; }
+        const mins = (parseInt(m[1], 10) % 24) * 60 + (parseInt(m[2], 10) % 60);
+        db.maps.update(campaignId, currentMap.id, { clockMinutes: mins });
+      });
+      clockWrap.appendChild(setBtn);
+    }
+    if (currentMap) toolbar.appendChild(clockWrap);
+
     const roomInvBtn = h("button", { class: `btn sm ${roomInvOpen ? "primary" : ""}` }, "Room Loot");
     roomInvBtn.addEventListener("click", () => {
       roomInvOpen = !roomInvOpen;
@@ -137,6 +185,35 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     showContextMenu(rect.left, rect.top - 10, items);
   });
 
+  const fabWorld = h("button", { class: "vtt-fab vtt-fab-tertiary" }, "\u2726");
+  fabWorld.title = "Add a merchant or drop loot";
+  if (isDm) stage.appendChild(fabWorld);
+  fabWorld.addEventListener("click", () => {
+    const items = [
+      { header: "Merchant" },
+      { label: "New merchant stall", action: async () => {
+        const name = prompt("Merchant name:", "Merchant");
+        if (!name) return;
+        await addToken({ kind: "merchant", refId: null, name, imageBase64: null, x: 2, y: 2, w: 1, h: 1, shopItems: [] });
+      }},
+      "---",
+      { header: "Drop loot (from Item Workshop)" }
+    ];
+    if (catalog.length === 0) items.push({ label: "No campaign items yet", action: () => {} });
+    catalog.forEach(def => items.push({
+      label: def.name,
+      action: async () => {
+        // The orb is the marker; the actual item lives in this map's room
+        // inventory, so the existing loot/take plumbing handles the transfer.
+        const { campaignItemToInventoryItem } = await import("./item-workshop-panel.js");
+        await db.roomInventory.add(campaignId, currentMap.id, campaignItemToInventoryItem(def));
+        await addToken({ kind: "loot", refId: def.id, name: def.name, imageBase64: def.imageBase64 || null, x: 3, y: 3, w: 1, h: 1 });
+      }
+    }));
+    const rect = fabWorld.getBoundingClientRect();
+    showContextMenu(rect.left, rect.top - 10, items);
+  });
+
   fabComponents.addEventListener("click", async () => {
     const [library, folders] = await Promise.all([
       new Promise(res => { const u = db.componentLibrary.subscribe(campaignId, (l) => { res(l); u(); }); }),
@@ -167,6 +244,15 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   // ---------------- Cover auto-apply ----------------
   async function handleTokenMoved(token, x, y) {
+    if (!isDm && token.kind === "loot") {
+      const mine = myToken();
+      const landed = { ...token, x, y };
+      if (!mine || tokenDistanceFt(mine, landed) > INTERACT_RANGE_FT + 0.01) {
+        toast(`You can only shift loot within ${INTERACT_RANGE_FT} ft of yourself`, "error");
+        canvas.setTokens(tokens); // snap the visual back to the stored position
+        return;
+      }
+    }
     await db.tokens.update(campaignId, currentMap.id, token.id, { x, y });
     if (token.kind === "pc" || token.kind === "npc") {
       const coverType = canvas.tokenOverlapsCover(token);
@@ -189,6 +275,18 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   // ---------------- Token popup ----------------
   async function showTokenPopup(token) {
+    if (token.kind === "merchant") {
+      openMerchantShop({ campaignId, mapId: currentMap.id, token, isDm, buyerCharacter: myCharacter, catalog });
+      return;
+    }
+    if (token.kind === "loot" || token.kind === "body") {
+      openLootWindow({
+        campaignId, mapId: currentMap.id, token, isDm,
+        looterCharacter: myCharacter, party: partyList,
+        canReach: isDm || withinReach(token)
+      });
+      return;
+    }
     popup.style.display = "block";
     popup.innerHTML = `<div class="spinner" style="margin:20px auto;"></div>`;
     if (token.kind === "component") {
@@ -197,15 +295,21 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       const character = await db.characters.get(token.refId);
       if (!character) { popup.style.display = "none"; return; }
       const ac = estimateArmorClass(character, null, false) + (character.acAdjustments || []).reduce((s, a) => s + a.value, 0);
+      const rv = { name: false, image: true, ac: false, hp: false, ...(token.reveal || {}) };
+      const mine = character.ownerUid === user.uid;
+      const seeAll = isDm || mine;
+      const displayName = seeAll || rv.name ? character.name : "Unknown";
+      const hpLine = seeAll || rv.hp ? `HP ${character.hp?.current ?? "?"} / ${character.hp?.max ?? "?"}` : "HP hidden";
+      const acLine = seeAll || rv.ac ? `AC ${ac}` : "AC hidden";
       popup.innerHTML = `
-        <h4>${escapeHtml(character.name)} ${token.kind === "npc" ? '<span class="badge rune">NPC</span>' : ""}</h4>
-        <p>HP ${character.hp?.current ?? "?"} / ${character.hp?.max ?? "?"} \u2022 AC ${ac}</p>
-        <div style="display:flex; gap:8px;">
-          <button class="btn sm primary" id="popup-open">Open Sheet</button>
+        <h4>${escapeHtml(displayName)} ${token.kind === "npc" ? '<span class="badge rune">NPC</span>' : ""}</h4>
+        <p>${hpLine} \u2022 ${acLine}</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          ${seeAll ? '<button class="btn sm primary" id="popup-open">Open Sheet</button>' : ""}
           <button class="btn sm ghost" id="popup-close">Close</button>
         </div>
       `;
-      popup.querySelector("#popup-open").addEventListener("click", () => navigate(`/character/${character.id}`));
+      popup.querySelector("#popup-open")?.addEventListener("click", () => navigate(`/character/${character.id}`));
     }
     popup.querySelector("#popup-close").addEventListener("click", () => { popup.style.display = "none"; });
   }
@@ -225,16 +329,53 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       });
       items.push("---");
     }
-    items.push({ label: "Resize\u2026", action: () => resizeToken(token) });
+    // Creature size presets straight from the PHB size table.
+    items.push({ header: "Size" });
+    CREATURE_SIZES.forEach(s => {
+      const sq = s.gridSquares;
+      const active = (token.w || 1) === sq;
+      items.push({
+        label: `${active ? "\u2713 " : ""}${s.name} (${s.space})`,
+        action: () => db.tokens.update(campaignId, currentMap.id, token.id, { w: sq, h: sq, sizeId: s.id })
+      });
+    });
+    items.push("---");
+    items.push({ label: "Border colour\u2026", action: () => {
+      const c = prompt("Border colour (any CSS colour, blank to reset):", token.borderColor || "");
+      if (c === null) return;
+      db.tokens.update(campaignId, currentMap.id, token.id, { borderColor: c.trim() || null });
+    }});
+
+    if (token.kind === "pc" || token.kind === "npc") {
+      const rv = { name: false, image: true, ac: false, hp: false, ...(token.reveal || {}) };
+      items.push("---");
+      items.push({ header: "Reveal to players" });
+      [["image", "Image"], ["name", "Name"], ["ac", "Armour Class"], ["hp", "Hit Points"]].forEach(([key, label]) => {
+        items.push({
+          label: `${rv[key] ? "\u2713 " : "\u2717 "}${label}`,
+          action: () => db.tokens.update(campaignId, currentMap.id, token.id, { reveal: { ...rv, [key]: !rv[key] } })
+        });
+      });
+      items.push("---");
+      items.push({
+        label: "Mark as dead (lootable body)",
+        action: () => db.tokens.update(campaignId, currentMap.id, token.id, { kind: "body", priorKind: token.kind })
+      });
+    }
+    if (token.kind === "body") {
+      items.push({
+        label: "Revive \u2014 restore token",
+        action: () => db.tokens.update(campaignId, currentMap.id, token.id, { kind: token.priorKind || "npc" })
+      });
+    }
+    if (token.kind === "loot") {
+      items.push("---");
+      items.push({ label: "Open loot", action: () => showTokenPopup(token) });
+    }
+
+    items.push("---");
     items.push({ label: "Remove from Map", danger: true, action: () => db.tokens.remove(campaignId, currentMap.id, token.id) });
     showContextMenu(sx, sy, items);
-  }
-
-  function resizeToken(token) {
-    const input = prompt(`Size in 5ft squares as "width,height" (currently ${token.w || 1},${token.h || 1}):`, `${token.w || 1},${token.h || 1}`);
-    if (!input) return;
-    const [w, h] = input.split(",").map(v => Math.max(0.25, parseFloat(v.trim()) || 1));
-    db.tokens.update(campaignId, currentMap.id, token.id, { w, h });
   }
 
   // ---------------- Sidebar content ----------------
@@ -316,10 +457,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       }
     });
     buildToolbar();
-    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubTokens?.(); unsubMap?.(); sheetUnsub?.(); roomInvUnsub?.(); canvas.dispose(); };
+    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubCatalog(); unsubPartyList(); unsubTokens?.(); unsubMap?.(); sheetUnsub?.(); roomInvUnsub?.(); canvas.dispose(); };
   }
 
   buildToolbar();
   buildSidebar();
-  return () => { unsubMaps(); unsubCombat(); unsubTokens?.(); unsubMap?.(); roomInvUnsub?.(); canvas.dispose(); };
+  return () => { unsubMaps(); unsubCombat(); unsubCatalog(); unsubPartyList(); unsubTokens?.(); unsubMap?.(); roomInvUnsub?.(); canvas.dispose(); };
 }
