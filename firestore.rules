@@ -36,11 +36,7 @@ service cloud.firestore {
 
       match /maps/{mapId} {
         allow read: if isMember(campaignId);
-        allow create, delete: if isDm(campaignId);
-        // DM can change anything; any member can place/clear AoE shapes
-        // (their own spell's area) without touching the rest of the map.
-        allow update: if isDm(campaignId) ||
-          (isMember(campaignId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["aoeShapes"]));
+        allow write: if isDm(campaignId);
 
         match /tokens/{tokenId} {
           function tokenOwnerUid() {
@@ -50,12 +46,6 @@ service cloud.firestore {
           allow create, delete: if isDm(campaignId);
           // A player may move only their own PC's token; the DM may move any token.
           allow update: if isDm(campaignId) || (isMember(campaignId) && resource.data.kind == "pc" && tokenOwnerUid() == request.auth.uid);
-        }
-
-        // Loot physically in this room/map — any member can drop or take
-        // items; the DM can add or override anything (encounter loot, etc.).
-        match /roomInventory/{itemId} {
-          allow read, write: if isMember(campaignId);
         }
       }
 

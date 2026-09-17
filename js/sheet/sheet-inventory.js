@@ -128,14 +128,15 @@ export function renderInventoryTab(ctx) {
 
   if (canEditCore) {
     invCard.appendChild(h("hr", { class: "divider" }));
-    invCard.appendChild(buildAddItemForm({ ruleset: ctx.ruleset, addItem: ctx.addItem }));
+    invCard.appendChild(buildAddItemForm(ctx));
   }
   wrap.appendChild(invCard);
 
   return wrap;
 }
 
-export function buildAddItemForm({ ruleset, addItem }) {
+function buildAddItemForm(ctx) {
+  const { ruleset, addItem, toast: toastFn } = ctx;
   const form = h("div", {});
   form.appendChild(h("label", {}, "Add item"));
   const catSelect = h("select", {});
@@ -152,66 +153,52 @@ export function buildAddItemForm({ ruleset, addItem }) {
   }
   function renderSourceOptions() {
     sourceSelect.innerHTML = "";
-    catalogFor(catSelect.value).forEach(entry => {
-      const label = catSelect.value === "ammo" && entry.quantity > 1 ? `${entry.name} (bundle of ${entry.quantity})` : entry.name;
-      sourceSelect.appendChild(h("option", { value: entry.id }, label));
-    });
+    catalogFor(catSelect.value).forEach(entry => sourceSelect.appendChild(h("option", { value: entry.id }, entry.name)));
     sourceSelect.appendChild(h("option", { value: "__custom__" }, "\u2014 Custom item \u2014"));
     renderCustomFields();
   }
-  function labeled(labelText, el) {
-    const wrap = h("div", { style: "margin-bottom:10px;" });
-    wrap.appendChild(h("label", { style: "margin-bottom:4px;" }, labelText));
-    el.style.marginBottom = "0";
-    wrap.appendChild(el);
-    return wrap;
-  }
-
   function renderCustomFields() {
     customFields.innerHTML = "";
     if (sourceSelect.value !== "__custom__") return;
     const cat = catSelect.value;
-    customFields.appendChild(labeled("Item name", h("input", { type: "text", placeholder: "e.g. Grandfather's Hunting Knife", id: "custom-name" })));
+    customFields.appendChild(h("input", { type: "text", placeholder: "Item name", id: "custom-name" }));
     if (cat === "weapon") {
-      customFields.appendChild(labeled("Damage dice", h("input", { type: "text", placeholder: "e.g. 1d8", id: "custom-dice" })));
+      customFields.appendChild(h("input", { type: "text", placeholder: "Damage dice, e.g. 1d8", id: "custom-dice" }));
       const typeSelect = h("select", { id: "custom-dmgtype" });
       ["slashing", "piercing", "bludgeoning", "fire", "cold", "acid", "poison", "necrotic", "radiant", "force", "lightning", "thunder", "psychic"].forEach(t => typeSelect.appendChild(h("option", { value: t }, t)));
-      customFields.appendChild(labeled("Damage type", typeSelect));
+      customFields.appendChild(typeSelect);
       const abilSelect = h("select", { id: "custom-ability" });
       [["str", "Strength"], ["dex", "Dexterity"], ["finesse", "Finesse"]].forEach(([v, l]) => abilSelect.appendChild(h("option", { value: v }, l)));
-      customFields.appendChild(labeled("Attack ability", abilSelect));
-      const rangedRow = h("label", { style: "display:flex; align-items:center; gap:6px; text-transform:none; margin-bottom:10px;" });
+      customFields.appendChild(abilSelect);
+      const rangedRow = h("label", { style: "display:flex; align-items:center; gap:6px; text-transform:none;" });
       rangedRow.appendChild(h("input", { type: "checkbox", id: "custom-ranged", style: "width:auto; margin:0;" }));
       rangedRow.appendChild(document.createTextNode(" Ranged weapon"));
       customFields.appendChild(rangedRow);
     } else if (cat === "armor") {
-      customFields.appendChild(labeled("Base Armor Class", h("input", { type: "number", placeholder: "11", id: "custom-ac", value: "11" })));
+      customFields.appendChild(h("input", { type: "number", placeholder: "Base AC", id: "custom-ac", value: "11" }));
       const dexSelect = h("select", { id: "custom-dexbonus" });
       [["full", "Full Dex"], ["max2", "Dex (max 2)"], ["none", "No Dex"]].forEach(([v, l]) => dexSelect.appendChild(h("option", { value: v }, l)));
-      customFields.appendChild(labeled("Dexterity bonus to AC", dexSelect));
+      customFields.appendChild(dexSelect);
     } else if (cat === "ammo") {
-      customFields.appendChild(labeled("Ammo type", h("input", { type: "text", placeholder: "e.g. arrow", id: "custom-ammotype" })));
+      customFields.appendChild(h("input", { type: "text", placeholder: "Ammo type, e.g. arrow", id: "custom-ammotype" }));
     } else if (cat === "gear") {
-      const containerRow = h("label", { style: "display:flex; align-items:center; gap:6px; text-transform:none; margin-bottom:10px;" });
+      const containerRow = h("label", { style: "display:flex; align-items:center; gap:6px; text-transform:none;" });
       containerRow.appendChild(h("input", { type: "checkbox", id: "custom-iscontainer", style: "width:auto; margin:0;" }));
       containerRow.appendChild(document.createTextNode(" This is a container (backpack, pouch, etc.)"));
       customFields.appendChild(containerRow);
     }
-    customFields.appendChild(labeled("Weight (lb.)", h("input", { type: "number", placeholder: "0", id: "custom-weight", value: "0", step: "0.1" })));
-    customFields.appendChild(labeled("Value (GP)", h("input", { type: "number", placeholder: "0", id: "custom-value", value: "0", step: "0.1" })));
+    customFields.appendChild(h("input", { type: "number", placeholder: "Weight (lb.)", id: "custom-weight", value: "0", step: "0.1" }));
+    customFields.appendChild(h("input", { type: "number", placeholder: "Value (GP)", id: "custom-value", value: "0", step: "0.1" }));
   }
   catSelect.addEventListener("change", renderSourceOptions);
   sourceSelect.addEventListener("change", renderCustomFields);
   renderSourceOptions();
 
-  const qtyLabel = h("label", {}, "Quantity");
   const qtyRow = h("div", { class: "field-row" });
   const qtyInput = h("input", { type: "number", value: "1", min: "1" });
   const addBtn = h("button", { class: "btn primary" }, "Add to Inventory");
   qtyRow.appendChild(qtyInput); qtyRow.appendChild(addBtn);
-  form.appendChild(qtyLabel);
   form.appendChild(qtyRow);
-  catSelect.addEventListener("change", () => { qtyLabel.textContent = catSelect.value === "ammo" ? "How many bundles?" : "Quantity"; });
 
   addBtn.addEventListener("click", async () => {
     const cat = catSelect.value;
@@ -234,7 +221,7 @@ export function buildAddItemForm({ ruleset, addItem }) {
         await addItem({
           type: "weapon", name: entry.name, quantity: qty, equipped: false, isCustom: false, catalogId: entry.id,
           weightLb: parseWeightLb(entry.weight), valueGp: parseCostToGp(entry.cost),
-          weaponData: { damageDice: entry.damageDice, damageType: entry.damageType, ability: entry.ability, ranged: entry.ranged, ammoType: entry.ammoType, properties: entry.properties, proficient: true, attackBonus: 0, damageBonus: 0 }
+          weaponData: { damageDice: entry.damageDice, damageType: entry.damageType, ability: entry.ability, ranged: entry.ranged, ammoType: entry.ammoType, range: entry.ranged ? undefined : null, properties: entry.properties, proficient: true, attackBonus: 0, damageBonus: 0 }
         });
       }
     } else if (cat === "armor") {
@@ -256,7 +243,7 @@ export function buildAddItemForm({ ruleset, addItem }) {
       } else {
         const entry = findById(ruleset.equipment.ammo, sourceSelect.value);
         if (!entry) return;
-        await addItem({ type: "ammo", name: entry.name, quantity: (entry.quantity || 1) * qty, ammoType: entry.ammoType, isCustom: false, weightLb: parseWeightLb(entry.weight), valueGp: parseCostToGp(entry.cost) });
+        await addItem({ type: "ammo", name: entry.name, quantity: qty, ammoType: entry.ammoType, isCustom: false, weightLb: parseWeightLb(entry.weight), valueGp: parseCostToGp(entry.cost) });
       }
     } else if (cat === "gear") {
       if (isCustom) {

@@ -74,20 +74,6 @@ function buildShell() {
   const shell = h("div", { class: "shell" }, [sidebar, main]);
   appRoot.appendChild(shell);
 
-  const collapseTab = h("button", { class: "sidebar-collapse-tab" }, "\u25c0");
-  collapseTab.title = "Collapse sidebar";
-  document.querySelector(".sidebar-collapse-tab")?.remove(); // buildShell can re-run on sign-out/in
-  document.body.appendChild(collapseTab);
-  const startCollapsed = localStorage.getItem("gt_sidebar_collapsed") === "1";
-  if (startCollapsed) { shell.classList.add("collapsed"); collapseTab.classList.add("collapsed"); }
-  collapseTab.textContent = startCollapsed ? "\u25b6" : "\u25c0";
-  collapseTab.addEventListener("click", () => {
-    const isCollapsed = shell.classList.toggle("collapsed");
-    collapseTab.classList.toggle("collapsed", isCollapsed);
-    collapseTab.textContent = isCollapsed ? "\u25b6" : "\u25c0";
-    localStorage.setItem("gt_sidebar_collapsed", isCollapsed ? "1" : "0");
-  });
-
   window.addEventListener("hashchange", () => { updateActiveNav(); refreshSidebarCharacters(); refreshSidebarCampaigns(); });
   updateActiveNav();
   refreshSidebarCharacters();
@@ -226,8 +212,6 @@ onAuthChange((user) => {
     initRouter(view);
   } else {
     charListEl = null;
-    campaignListEl = null;
-    document.querySelector(".sidebar-collapse-tab")?.remove();
     appRoot.innerHTML = "";
     renderLogin(appRoot);
   }

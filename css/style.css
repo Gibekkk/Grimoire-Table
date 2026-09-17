@@ -63,18 +63,6 @@ button, input, select, textarea { font-family: var(--font-body); font-size: 1rem
 /* ---------- Layout shell ---------- */
 #app { min-height: 100vh; }
 .shell { display: flex; min-height: 100vh; }
-.sidebar { transition: width .18s ease, padding .18s ease; }
-.shell.collapsed .sidebar { width: 0; padding-left: 0; padding-right: 0; overflow: hidden; border-right: none; }
-.shell.collapsed .main { margin-left: 0; }
-.main { transition: margin-left .18s ease; }
-.sidebar-collapse-tab {
-  position: fixed; top: 50%; left: 220px; transform: translate(-50%, -50%);
-  width: 22px; height: 46px; border-radius: 0 8px 8px 0; border: 1px solid var(--line); border-left: none;
-  background: var(--ink-raised); color: var(--text-dim); cursor: pointer; z-index: 30;
-  transition: left .18s ease, color .15s ease, background-color .15s ease;
-}
-.sidebar-collapse-tab:hover { color: var(--gold-bright); background: var(--ink-soft); }
-.sidebar-collapse-tab.collapsed { left: 0; }
 .sidebar {
   width: 220px; flex-shrink: 0;
   position: fixed; top: 0; left: 0; bottom: 0;
@@ -515,24 +503,3 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
 .roll-notify .who { font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gold-bright); }
 .roll-notify .what { font-size: 0.76rem; color: var(--text-dim); }
 .roll-notify .result { font-family: var(--font-mono); font-size: 1.3rem; color: var(--text); }
-
-
-/* ---------- Room inventory panel (docked left inside the VTT stage) ---------- */
-.vtt-room-inv {
-  top: 16px; left: 16px; right: auto; bottom: 16px; width: 300px;
-  overflow-y: auto; display: flex; flex-direction: column;
-}
-
-/* ---------- VTT fullscreen ---------- */
-.vtt-shell.fullscreen {
-  position: fixed; inset: 0; z-index: 300; height: 100vh; width: 100vw;
-  border-radius: 0; border: none;
-}
-
-/* ---------- Scrollbar hygiene ----------
-   Only these containers are allowed their own scrollbar. Cards and panels
-   inside them must grow naturally instead of nesting a second scroll region,
-   which is what produced stacked/overlapping scrollbars. */
-.card, .sheet-shell, .area-tabs, .vtt-stage, .log-panel { overflow: visible; }
-.main { scrollbar-gutter: stable; }
-.vtt-sidebar { scrollbar-gutter: stable; }
