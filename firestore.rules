@@ -3,12 +3,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
+    function campaignExists(campaignId) {
+      return exists(/databases/$(database)/documents/campaigns/$(campaignId));
+    }
     function isDm(campaignId) {
-      return signedIn() &&
+      return signedIn() && campaignExists(campaignId) &&
         get(/databases/$(database)/documents/campaigns/$(campaignId)).data.dmUid == request.auth.uid;
     }
     function isMember(campaignId) {
-      return signedIn() &&
+      return signedIn() && campaignExists(campaignId) &&
         request.auth.uid in get(/databases/$(database)/documents/campaigns/$(campaignId)).data.memberUids;
     }
 
@@ -36,19 +39,42 @@ service cloud.firestore {
 
       match /maps/{mapId} {
         allow read: if isMember(campaignId);
-        allow write: if isDm(campaignId);
+        allow create, delete: if isDm(campaignId);
+        // DM can change anything; any member can place/clear AoE shapes
+        // (their own spell's area) without touching the rest of the map.
+        allow update: if isDm(campaignId) ||
+          (isMember(campaignId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["aoeShapes"]));
 
         match /tokens/{tokenId} {
+          // Merchant tokens have refId == null and loot tokens' refId points at an
+          // item, not a character — exists() keeps this safe regardless of kind.
           function tokenOwnerUid() {
-            return get(/databases/$(database)/documents/characters/$(resource.data.refId)).data.ownerUid;
+            return exists(/databases/$(database)/documents/characters/$(resource.data.refId))
+              ? get(/databases/$(database)/documents/characters/$(resource.data.refId)).data.ownerUid
+              : null;
           }
           allow read: if isMember(campaignId);
           allow create, delete: if isDm(campaignId);
-          // A player may move only their own PC's token; the DM may move any token.
-          allow update: if isDm(campaignId) || (isMember(campaignId) && resource.data.kind == "pc" && tokenOwnerUid() == request.auth.uid);
+          allow update: if isDm(campaignId) || (
+            isMember(campaignId) && (
+              // A player may move only their own PC's token...
+              (resource.data.kind == "pc" && tokenOwnerUid() == request.auth.uid) ||
+              // ...or nudge a loot orb (the sheet enforces the 5ft reach check).
+              resource.data.kind == "loot"
+            )
+          );
+        }
+
+        // Loot physically in this room/map — any member can drop or take
+        // items; the DM can add or override anything (encounter loot, etc.).
+        match /roomInventory/{itemId} {
+          allow read, write: if isMember(campaignId);
         }
       }
 
+      // Item Workshop catalog: everyone reads (shops and loot show these),
+      // only the DM authors them.
+      match /campaignItems/{itemId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /componentFolders/{folderId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /componentLibrary/{componentId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /relationships/{relId} { allow read, write: if isDm(campaignId); }
@@ -75,12 +101,18 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       match /inventory/{itemId} {
+        function characterExists() { return exists(/databases/$(database)/documents/characters/$(characterId)); }
         function character() { return get(/databases/$(database)/documents/characters/$(characterId)).data; }
-        allow read: if signedIn() && (
+        allow read: if signedIn() && characterExists() && (
           character().ownerUid == request.auth.uid ||
           (character().campaignId != null && isMember(character().campaignId))
         );
-        allow write: if signedIn() && character().ownerUid == request.auth.uid;
+        // Owner manages their own bag; the campaign's DM can also add, remove,
+        // and re-lock items in any party member's inventory.
+        allow write: if signedIn() && characterExists() && (
+          character().ownerUid == request.auth.uid ||
+          (character().campaignId != null && isDm(character().campaignId))
+        );
       }
     }
 

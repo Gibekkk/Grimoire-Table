@@ -281,6 +281,20 @@ const localDb = {
       Object.assign(maps[campaignId][mapId], patch);
       writeTable("maps", maps);
     },
+    async addShape(campaignId, mapId, shape) {
+      const maps = readTable("maps");
+      const map = maps[campaignId]?.[mapId];
+      if (!map) return;
+      map.aoeShapes = [...(map.aoeShapes || []), shape];
+      writeTable("maps", maps);
+    },
+    async clearShapes(campaignId, mapId) {
+      const maps = readTable("maps");
+      const map = maps[campaignId]?.[mapId];
+      if (!map) return;
+      map.aoeShapes = [];
+      writeTable("maps", maps);
+    },
     async remove(campaignId, mapId) {
       const maps = readTable("maps");
       if (maps[campaignId]) delete maps[campaignId][mapId];
@@ -302,6 +316,65 @@ const localDb = {
     },
     subscribe(campaignId, mapId, cb) {
       return subscribeTable("maps", () => cb(readTable("maps")[campaignId]?.[mapId] || null));
+    }
+  },
+
+  // Item Workshop: campaign-scoped custom item definitions the DM authors once
+  // and can then stock in shops, drop as loot, or push into a character's bag.
+  campaignItems: {
+    async add(campaignId, item) {
+      const items = readTable("campaignItems");
+      items[campaignId] = items[campaignId] || [];
+      const id = uid("citem");
+      items[campaignId].push({ id, createdAt: Date.now(), ...item });
+      writeTable("campaignItems", items);
+      return id;
+    },
+    async update(campaignId, itemId, patch) {
+      const items = readTable("campaignItems");
+      const found = (items[campaignId] || []).find(i => i.id === itemId);
+      if (found) Object.assign(found, patch);
+      writeTable("campaignItems", items);
+    },
+    async remove(campaignId, itemId) {
+      const items = readTable("campaignItems");
+      items[campaignId] = (items[campaignId] || []).filter(i => i.id !== itemId);
+      writeTable("campaignItems", items);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("campaignItems", () => cb(readTable("campaignItems")[campaignId] || []));
+    }
+  },
+
+  // Loot physically "in the room" (per-map) — distinct from partyInventory
+  // (campaign-wide trading pool): dropped items and leftover loot tied to a
+  // specific map, which the DM can fully override the contents of.
+  roomInventory: {
+    async add(campaignId, mapId, item) {
+      const inv = readTable("roomInventory");
+      const key = `${campaignId}:${mapId}`;
+      inv[key] = inv[key] || [];
+      const id = uid("ritem");
+      inv[key].push({ id, createdAt: Date.now(), ...item });
+      writeTable("roomInventory", inv);
+      return id;
+    },
+    async update(campaignId, mapId, itemId, patch) {
+      const inv = readTable("roomInventory");
+      const key = `${campaignId}:${mapId}`;
+      const found = (inv[key] || []).find(i => i.id === itemId);
+      if (found) Object.assign(found, patch);
+      writeTable("roomInventory", inv);
+    },
+    async remove(campaignId, mapId, itemId) {
+      const inv = readTable("roomInventory");
+      const key = `${campaignId}:${mapId}`;
+      inv[key] = (inv[key] || []).filter(i => i.id !== itemId);
+      writeTable("roomInventory", inv);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("roomInventory", () => cb(readTable("roomInventory")[key] || []));
     }
   },
 
@@ -427,6 +500,20 @@ const localDb = {
 // ===========================================================================
 // FIRESTORE BACKEND — mirrors the exact same shape as localDb above.
 // ===========================================================================
+
+// Every onSnapshot() in this file is routed through here. Without an error
+// Every onSnapshot() below is routed through here. Without an error callback,
+// a permission-denied (e.g. a listener outliving a campaign you just left, or
+// a doc deleted mid-session) kills the listener silently and the SDK logs
+// "Uncaught Error in snapshot listener" with no indication of why.
+function onSnapshotError(err) {
+  if (err?.code === "permission-denied") {
+    console.warn("[grimoire] A live update stopped because access was denied (left the campaign? item deleted?):", err.message);
+  } else {
+    console.error("[grimoire] Firestore listener error:", err);
+  }
+}
+
 const firestoreDb = {
   auth: {
     onChange(cb) {
@@ -522,7 +609,7 @@ const firestoreDb = {
       initFirebase().then(({ db, fx }) => {
         unsub = fx.onSnapshot(fx.doc(db, "campaigns", id), (snap) => {
           cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-        });
+        }, onSnapshotError);
       });
       return () => unsub();
     }
@@ -560,7 +647,7 @@ const firestoreDb = {
       initFirebase().then(({ db, fx }) => {
         unsub = fx.onSnapshot(fx.doc(db, "characters", id), (snap) => {
           cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-        });
+        }, onSnapshotError);
       });
       return () => unsub();
     },
@@ -568,7 +655,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isNpc)));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isNpc)), onSnapshotError);
       });
       return () => unsub();
     },
@@ -576,7 +663,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.isNpc)));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.isNpc)), onSnapshotError);
       });
       return () => unsub();
     }
@@ -592,7 +679,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "log"), fx.orderBy("createdAt", "asc"), fx.limitToLast(300));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     }
@@ -617,7 +704,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "characters", characterId, "inventory"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     }
@@ -642,7 +729,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "partyInventory"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     }
@@ -666,7 +753,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "notes"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     }
@@ -682,6 +769,14 @@ const firestoreDb = {
     async update(campaignId, mapId, patch) {
       const { db, fx } = await initFirebase();
       await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), patch);
+    },
+    async addShape(campaignId, mapId, shape) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { aoeShapes: fx.arrayUnion(shape) });
+    },
+    async clearShapes(campaignId, mapId) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { aoeShapes: [] });
     },
     async remove(campaignId, mapId) {
       const { db, fx } = await initFirebase();
@@ -704,14 +799,64 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     },
     subscribe(campaignId, mapId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId), (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null));
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId), (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  campaignItems: {
+    async add(campaignId, item) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.collection(db, "campaigns", campaignId, "campaignItems");
+      const docRef = await fx.addDoc(ref, { ...item, createdAt: fx.serverTimestamp() });
+      return docRef.id;
+    },
+    async update(campaignId, itemId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "campaignItems", itemId), patch);
+    },
+    async remove(campaignId, itemId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "campaignItems", itemId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "campaignItems"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  roomInventory: {
+    async add(campaignId, mapId, item) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.collection(db, "campaigns", campaignId, "maps", mapId, "roomInventory");
+      const docRef = await fx.addDoc(ref, { ...item, createdAt: fx.serverTimestamp() });
+      return docRef.id;
+    },
+    async update(campaignId, mapId, itemId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "roomInventory", itemId), patch);
+    },
+    async remove(campaignId, mapId, itemId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "roomInventory", itemId));
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps", mapId, "roomInventory"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     }
@@ -735,7 +880,7 @@ const firestoreDb = {
     subscribe(campaignId, mapId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     },
@@ -760,7 +905,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentFolders"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentFolders"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     }
@@ -784,7 +929,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentLibrary"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentLibrary"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     }
@@ -808,7 +953,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "relationships"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "relationships"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
       });
       return () => unsub();
     }
@@ -827,7 +972,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "combat", "state"), (snap) => cb(snap.exists() ? snap.data() : null));
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "combat", "state"), (snap) => cb(snap.exists() ? snap.data() : null), onSnapshotError);
       });
       return () => unsub();
     }
