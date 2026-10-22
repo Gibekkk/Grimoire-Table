@@ -370,30 +370,36 @@ export class VttCanvas {
     // Fog of war overlay
     if (this.fogs && this.fogs.length > 0) {
       const isPlayer = !this._isDm;
-      const fogAlpha = isPlayer ? 0.95 : 0.25; // opaque for players, translucent for DM
       for (const fog of this.fogs) {
         const fx = this.gridToWorld(fog.x, 0);
         const fy = this.gridToWorld(fog.y, 0);
         const fr = this.gridToWorld(fog.radius, 0);
         if (isPlayer) {
           // Players see a dark circle (fog placed area)
-          ctx.fillStyle = `rgba(0,0,0,${fogAlpha})`;
+          ctx.fillStyle = "rgba(0,0,0,0.95)";
           ctx.beginPath();
           ctx.arc(fx, fy, fr, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // DM sees a subtle highlight of where fog will be
-          ctx.fillStyle = "rgba(0,0,0,0.12)";
+          // DM sees a translucent dark overlay — visible but you can still see the map through it
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
           ctx.beginPath();
           ctx.arc(fx, fy, fr, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = "rgba(198,154,62,0.4)";
-          ctx.lineWidth = 1.5 / this.zoom;
-          ctx.setLineDash([3 / this.zoom, 3 / this.zoom]);
+          // Gold dashed border so the DM clearly sees fog boundaries
+          ctx.strokeStyle = "rgba(224,185,92,0.7)";
+          ctx.lineWidth = 2 / this.zoom;
+          ctx.setLineDash([5 / this.zoom, 4 / this.zoom]);
           ctx.beginPath();
           ctx.arc(fx, fy, fr, 0, Math.PI * 2);
           ctx.stroke();
           ctx.setLineDash([]);
+          // Inner glow ring for extra visibility
+          ctx.strokeStyle = "rgba(224,185,92,0.25)";
+          ctx.lineWidth = 6 / this.zoom;
+          ctx.beginPath();
+          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+          ctx.stroke();
         }
       }
     }

@@ -56,6 +56,9 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   fogSliderWrap.appendChild(fogSliderLabel);
   fogSliderWrap.appendChild(fogSlider);
 
+  // Fullscreen state
+  let vttFullscreen = false;
+
   function buildToolbar() {
     toolbar.innerHTML = "";
     const toggleBtn = h("button", { class: "icon-btn" }, "\u2630");
@@ -70,6 +73,15 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     });
 
     toolbar.appendChild(fogSliderWrap);
+
+    // Separator
+    toolbar.appendChild(h("span", { style: "display:inline-block;width:1px;height:20px;background:var(--line);margin:0 4px;" }));
+
+    // Fullscreen toggle
+    const fsBtn = h("button", { class: "icon-btn", title: "Toggle fullscreen (Esc)" }, "\u25A2");
+    fsBtn.addEventListener("click", toggleVttFullscreen);
+    toolbar.appendChild(fsBtn);
+
     const zoomOut = h("button", { class: "icon-btn" }, "\u2212");
     zoomOut.addEventListener("click", () => canvas.zoomBy(0.85));
     const zoomIn = h("button", { class: "icon-btn" }, "+");
@@ -232,6 +244,32 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     await db.maps.updateFogs(campaignId, currentMap.id, newFogs);
     currentFogs = newFogs;
   }
+
+  // ---------------- VTT Fullscreen ----------------
+  function toggleVttFullscreen() {
+    vttFullscreen = !vttFullscreen;
+    if (vttFullscreen) {
+      shell.classList.add("vtt-shell--fullscreen");
+      stage.style.flex = "1";
+      stage.style.minHeight = "0";
+    } else {
+      shell.classList.remove("vtt-shell--fullscreen");
+      stage.style.flex = "";
+      stage.style.minHeight = "";
+    }
+    // Re-fit canvas after layout change
+    setTimeout(() => {
+      canvas._resize();
+      canvas._fitToView();
+    }, 50);
+  }
+
+  // Listen for Escape key to exit fullscreen
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && vttFullscreen) {
+      toggleVttFullscreen();
+    }
+  });
 
   // ---------------- Sidebar content ----------------
   let sheetUnsub = null;

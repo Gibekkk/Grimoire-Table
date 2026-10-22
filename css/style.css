@@ -481,6 +481,28 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
 .fog-slider::-webkit-slider-runnable-track {
   height: 4px; background: var(--line); border-radius: 2px;
 }
+
+/* ---------- VTT Fullscreen ---------- */
+.vtt-shell--fullscreen {
+  position: fixed; inset: 0; z-index: 1000;
+  border-radius: 0; margin: 0; height: 100vh;
+}
+.vtt-shell--fullscreen .vtt-sidebar {
+  display: none !important;
+}
+.vtt-shell--fullscreen .vtt-toolbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  background: rgba(16,16,24,0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.vtt-shell--fullscreen .vtt-canvas-host {
+  flex: 1;
+  background: #0c0d14;
+}
 @media (max-width: 900px) {
   .vtt-shell { flex-direction: column; height: auto; }
   .vtt-sidebar { width: auto; max-height: 260px; }
