@@ -547,28 +547,30 @@ export class VttCanvas {
     const ctx = this.ctx;
     const isPlayer = !this._isDm;
     for (const fog of this.fogs) {
-      // gridToWorld returns {x, y} — we only need the x component for a radius,
-      // but the center must be computed separately.
       const center = this.gridToWorld(fog.x, fog.y);
       const radius = fog.radius * this.gridPx;
       const cx = center.x;
       const cy = center.y;
+      // Skip invalid radii
+      if (radius <= 0) continue;
       if (isPlayer) {
+        // Players: nearly opaque black (fog of war)
         ctx.fillStyle = "rgba(0,0,0,0.95)";
         ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
       } else {
-        // DM: clearly visible translucent overlay with gold border
-        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        // DM: very light translucent overlay so the map is still clearly visible
+        ctx.fillStyle = "rgba(0,0,0,0.12)";
         ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = "rgba(224,185,92,0.8)";
-        ctx.lineWidth = 2 / this.zoom;
-        ctx.setLineDash([5 / this.zoom, 4 / this.zoom]);
+        // Bright gold border so the DM can clearly see fog boundaries
+        ctx.strokeStyle = "rgba(224,185,92,0.7)";
+        ctx.lineWidth = 2.5 / this.zoom;
+        ctx.setLineDash([6 / this.zoom, 4 / this.zoom]);
         ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
         ctx.setLineDash([]);
-        // Inner glow ring
-        ctx.strokeStyle = "rgba(224,185,92,0.2)";
-        ctx.lineWidth = 6 / this.zoom;
-        ctx.beginPath(); ctx.arc(cx, cy, radius - 4 / this.zoom, 0, Math.PI * 2); ctx.stroke();
+        // Outer glow ring
+        ctx.strokeStyle = "rgba(224,185,92,0.15)";
+        ctx.lineWidth = 8 / this.zoom;
+        ctx.beginPath(); ctx.arc(cx, cy, radius + 2 / this.zoom, 0, Math.PI * 2); ctx.stroke();
       }
     }
   }

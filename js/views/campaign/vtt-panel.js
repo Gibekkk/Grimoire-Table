@@ -104,6 +104,17 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toolbar.appendChild(zoomOut); toolbar.appendChild(zoomIn); toolbar.appendChild(fitBtn);
 
     if (isDm) {
+      // Fog management buttons
+      const clearFogBtn = h("button", { class: "btn sm danger", title: "Clear all fog" }, "✕ Fog");
+      clearFogBtn.addEventListener("click", () => {
+        if (!currentMap) return;
+        currentFogs = [];
+        db.maps.updateFogs(campaignId, currentMap.id, []);
+        canvas.setFogs([]);
+        toast("All fog cleared");
+      });
+      toolbar.appendChild(clearFogBtn);
+
       const mapSel = h("select", { style: "max-width:200px; margin:0;" });
       allMaps.forEach(m => mapSel.appendChild(h("option", { value: m.id, selected: currentMap?.id === m.id ? "selected" : null }, m.name)));
       mapSel.addEventListener("change", () => loadMap(mapSel.value));
