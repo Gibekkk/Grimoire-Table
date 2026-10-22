@@ -302,6 +302,13 @@ const localDb = {
       map.fogs = fogs;
       writeTable("maps", maps);
     },
+    async updatePersistentShapes(campaignId, mapId, shapes) {
+      const maps = readTable("maps");
+      const map = maps[campaignId]?.[mapId];
+      if (!map) return;
+      map.persistentShapes = shapes;
+      writeTable("maps", maps);
+    },
     async remove(campaignId, mapId) {
       const maps = readTable("maps");
       if (maps[campaignId]) delete maps[campaignId][mapId];
@@ -788,6 +795,10 @@ const firestoreDb = {
     async updateFogs(campaignId, mapId, fogs) {
       const { db, fx } = await initFirebase();
       await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { fogs });
+    },
+    async updatePersistentShapes(campaignId, mapId, shapes) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { persistentShapes: shapes });
     },
     async remove(campaignId, mapId) {
       const { db, fx } = await initFirebase();

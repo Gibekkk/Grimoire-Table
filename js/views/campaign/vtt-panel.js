@@ -42,7 +42,9 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
     isDm: isDm,
     onFogPlaced: (fog) => handleFogPlaced(fog),
-    onFogRemoved: (fog) => handleFogRemoved(fog)
+    onFogRemoved: (fog) => handleFogRemoved(fog),
+    onPersistentShapeAdded: (shape) => handleShapeAdded(shape),
+    onPersistentShapeRemoved: (shape) => handleShapeRemoved(shape)
   });
 
   // ---------------- Toolbar ----------------
@@ -56,6 +58,16 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   fogSliderWrap.appendChild(fogSliderLabel);
   fogSliderWrap.appendChild(fogSlider);
 
+  // Shape size/angle slider (for rect/circle width or cone angle)
+  const shapeSliderWrap = h("div", { class: "fog-slider-wrap", style: "display:none;" });
+  const shapeSliderLabel = h("span", { class: "fog-slider-label" }, "Angle:");
+  const shapeSlider = h("input", { type: "range", min: 15, max: 180, value: 60, class: "fog-slider" });
+  shapeSlider.addEventListener("input", () => {
+    shapeSliderLabel.textContent = `Angle: ${shapeSlider.value}°`;
+  });
+  shapeSliderWrap.appendChild(shapeSliderLabel);
+  shapeSliderWrap.appendChild(shapeSlider);
+
   // Fullscreen state
   let vttFullscreen = false;
 
@@ -66,19 +78,20 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toggleBtn.addEventListener("click", () => { sidebarOpen = !sidebarOpen; sidebar.style.display = sidebarOpen ? "flex" : "none"; });
     toolbar.appendChild(toggleBtn);
 
-    [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"], ["fog", "Fog of War"]].forEach(([tool, label]) => {
-      const btn = h("button", { class: `btn sm ${canvas.tool === tool ? "primary" : ""}` }, label);
+    [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"], ["shape-cone", "Cone AoE"], ["fog", "Fog of War"]].forEach(([tool, label]) => {
+      const btn = h("button", { class: `btn sm ${canvas.tool === tool ? "primary" : ""}`, title: label }, label);
       btn.addEventListener("click", () => { canvas.setTool(tool); buildToolbar(); });
       toolbar.appendChild(btn);
     });
 
     toolbar.appendChild(fogSliderWrap);
+    toolbar.appendChild(shapeSliderWrap);
 
     // Separator
     toolbar.appendChild(h("span", { style: "display:inline-block;width:1px;height:20px;background:var(--line);margin:0 4px;" }));
 
     // Fullscreen toggle
-    const fsBtn = h("button", { class: "icon-btn", title: "Toggle fullscreen (Esc)" }, "\u25A2");
+    const fsBtn = h("button", { class: "icon-btn", title: "Toggle fullscreen (Esc)" }, "⛶");
     fsBtn.addEventListener("click", toggleVttFullscreen);
     toolbar.appendChild(fsBtn);
 
@@ -97,11 +110,15 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       toolbar.appendChild(mapSel);
     }
 
-    // Update fog slider visibility based on active tool
+    // Update sliders visibility based on active tool
     fogSliderWrap.style.display = canvas.tool === "fog" ? "flex" : "none";
     if (canvas.tool === "fog") {
       fogSlider.value = canvas.getFogCursorSize();
       fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogCursorSize() * 5)}ft`;
+    }
+    shapeSliderWrap.style.display = (canvas.tool === "shape-cone") ? "flex" : "none";
+    if (canvas.tool === "shape-cone") {
+      shapeSliderLabel.textContent = `Angle: ${shapeSlider.value}°`;
     }
   }
 
@@ -245,6 +262,23 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     currentFogs = newFogs;
   }
 
+  // ---------------- Persistent AoE shapes handlers ----------------
+  let currentShapes = [];
+
+  async function handleShapeAdded(shape) {
+    if (!currentMap) return;
+    const newShapes = [...currentShapes, shape];
+    await db.maps.updatePersistentShapes(campaignId, currentMap.id, newShapes);
+    currentShapes = newShapes;
+  }
+
+  async function handleShapeRemoved(shape) {
+    if (!currentMap) return;
+    const newShapes = currentShapes.filter(s => s.id !== shape.id);
+    await db.maps.updatePersistentShapes(campaignId, currentMap.id, newShapes);
+    currentShapes = newShapes;
+  }
+
   // ---------------- VTT Fullscreen ----------------
   function toggleVttFullscreen() {
     vttFullscreen = !vttFullscreen;
@@ -257,14 +291,12 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       stage.style.flex = "";
       stage.style.minHeight = "";
     }
-    // Re-fit canvas after layout change
     setTimeout(() => {
       canvas._resize();
       canvas._fitToView();
     }, 50);
   }
 
-  // Listen for Escape key to exit fullscreen
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && vttFullscreen) {
       toggleVttFullscreen();
@@ -311,7 +343,9 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     unsubFogs = db.maps.subscribe(campaignId, mapId, (map) => {
       currentMap = map || currentMap;
       currentFogs = map?.fogs || [];
+      currentShapes = map?.persistentShapes || [];
       canvas.setFogs(currentFogs);
+      canvas.setPersistentShapes(currentShapes);
     });
     buildToolbar();
     buildSidebar();

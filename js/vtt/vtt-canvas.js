@@ -1,7 +1,7 @@
 // A lightweight 2D-canvas tabletop: background image + 5ft grid + draggable
-// tokens + a ruler + AoE shape markers. Built on the browser's native Canvas
-// API (no game-engine dependency) to stay consistent with the rest of this
-// project's "plain JS modules" approach.
+// tokens + a ruler + persistent AoE shapes + fog of war. Built on the browser's
+// native Canvas API (no game-engine dependency) to stay consistent with the rest
+// of this project's "plain JS modules" approach.
 //
 // Coordinate spaces:
 //   screen  — raw pointer event coordinates relative to the canvas element
@@ -10,30 +10,39 @@
 //
 // Everything is drawn inside a single ctx.translate/scale so grid lines and
 // tokens don't need per-shape zoom math — only pointer hit-testing does.
+//
+// Performance: rendering is event-driven via a dirty flag rather than a
+// continuous rAF loop. The canvas only redraws when something changes.
 
 const FEET_PER_GRID = 5;
 
 export class VttCanvas {
   constructor(container, opts) {
     this.container = container;
-    this.opts = opts; // { gridPx, canMoveToken(token), onTokenMoved(token,x,y), onTokenClicked(token), onTokenContextMenu(token,screenX,screenY), isDm }
+    this.opts = opts;
     this.pan = { x: 0, y: 0 };
     this.zoom = 1;
     this.tokens = [];
     this.bgImage = null;
-    this.tool = "select"; // select | ruler | shape-rect | shape-circle | fog
+    this.tool = "select";
     this.drag = null;
-    this.ruler = null; // { startWorld, endWorld }
-    this.shape = null; // { kind, startWorld, endWorld }
-    this._images = new Map(); // cache of loaded token images by src
+    this.ruler = null;
+    this.shape = null;
+    this._images = new Map();
 
-    // Fog of war state
-    this.fogs = []; // { id, x, y, radius, revealed } — all in grid units
-    this.fogCursorSize = 3; // grid units (radius)
+    // --- Fog of war ---
+    this.fogs = [];
+    this.fogCursorSize = 3;
     this.fogCursorMin = 1;
     this.fogCursorMax = 15;
-    this._isDm = opts.isDm || false;
-    this._showFogToPlayers = !this._isDm; // players see fog (dark), DM sees translucent
+    this._isDm = !!opts.isDm;
+    this._fogCursorWorld = null;
+
+    // --- Persistent AoE shapes (like tokens, stay until removed) ---
+    this.persistentShapes = [];
+
+    // --- Performance: dirty flag (event-driven rendering) ---
+    this._dirty = true;
 
     this.canvas = document.createElement("canvas");
     this.canvas.style.touchAction = "none";
@@ -57,8 +66,22 @@ export class VttCanvas {
     this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
     this.canvas.addEventListener("contextmenu", this._onContextMenu);
 
-    this._raf = requestAnimationFrame(() => this._loop());
-    this._updateCursor();
+    // Event-driven render loop
+    this._raf = null;
+    this._markDirty();
+  }
+
+  // Tell the canvas it needs to redraw
+  _markDirty() {
+    if (this._dirty) return;
+    this._dirty = true;
+    if (!this._raf) {
+      this._raf = requestAnimationFrame(() => {
+        this._raf = null;
+        this._dirty = false;
+        this._draw();
+      });
+    }
   }
 
   _resize() {
@@ -70,27 +93,39 @@ export class VttCanvas {
     this.canvas.style.width = w + "px";
     this.canvas.style.height = h + "px";
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._markDirty();
   }
 
   setBackground(base64) {
-    if (!base64) { this.bgImage = null; return; }
+    if (!base64) { this.bgImage = null; this._markDirty(); return; }
     const img = new Image();
     img.onload = () => { this.bgImage = img; this._fitToView(); };
     img.src = base64;
   }
 
-  // Skips decoding entirely when the caller already has a loaded Image
-  // (e.g. a per-mapId cache) — instant map switching instead of a reload flicker.
   setBackgroundImage(img) {
     this.bgImage = img || null;
     if (img) this._fitToView();
+    this._markDirty();
   }
 
-  setTokens(tokens) { this.tokens = tokens; }
-  setGridPx(px) { this.gridPx = px || 70; }
-  setTool(tool) { this.tool = tool; this.shape = null; this.ruler = null; this._updateCursor(); }
-  setFogs(fogs) { this.fogs = fogs || []; }
-  setFogCursorSize(size) { this.fogCursorSize = Math.max(this.fogCursorMin, Math.min(this.fogCursorMax, size)); this._updateCursor(); }
+  setTokens(tokens) { this.tokens = tokens; this._markDirty(); }
+  setGridPx(px) { this.gridPx = px || 70; this._markDirty(); }
+  setTool(tool) {
+    this.tool = tool;
+    this.shape = null;
+    this.ruler = null;
+    this._updateCursor();
+    this._markDirty();
+  }
+
+  // --- Fog API ---
+  setFogs(fogs) { this.fogs = fogs || []; this._markDirty(); }
+  setFogCursorSize(size) {
+    this.fogCursorSize = Math.max(this.fogCursorMin, Math.min(this.fogCursorMax, size));
+    this._updateCursor();
+    this._markDirty();
+  }
   getFogCursorSize() { return this.fogCursorSize; }
   getFogCursorMin() { return this.fogCursorMin; }
   getFogCursorMax() { return this.fogCursorMax; }
@@ -98,13 +133,20 @@ export class VttCanvas {
 
   _updateCursor() {
     if (!this.canvas) return;
-    if (this.tool === "fog") {
-      this.canvas.style.cursor = "crosshair";
-    } else if (this.tool === "select") {
-      this.canvas.style.cursor = "grab";
-    } else {
-      this.canvas.style.cursor = "crosshair";
-    }
+    this.canvas.style.cursor = this.tool === "fog" ? "crosshair" : "grab";
+  }
+
+  // --- Persistent shapes API ---
+  setPersistentShapes(shapes) { this.persistentShapes = shapes || []; this._markDirty(); }
+  addPersistentShape(shape) {
+    this.persistentShapes = [...this.persistentShapes, shape];
+    this._markDirty();
+    this.opts.onPersistentShapeAdded?.(shape);
+  }
+  removePersistentShape(shape) {
+    this.persistentShapes = this.persistentShapes.filter(s => s.id !== shape.id);
+    this._markDirty();
+    this.opts.onPersistentShapeRemoved?.(shape);
   }
 
   _fitToView() {
@@ -112,6 +154,7 @@ export class VttCanvas {
     const { clientWidth: w, clientHeight: h } = this.container;
     this.zoom = Math.min(w / this.bgImage.width, h / this.bgImage.height, 1) || 1;
     this.pan = { x: (w - this.bgImage.width * this.zoom) / 2, y: (h - this.bgImage.height * this.zoom) / 2 };
+    this._markDirty();
   }
 
   screenToWorld(sx, sy) {
@@ -135,8 +178,10 @@ export class VttCanvas {
     return null;
   }
 
+  // --- Pointer handlers ---
+
   _onPointerDown(e) {
-    if (e.button === 2) return; // right-click handled by contextmenu
+    if (e.button === 2) return;
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
 
@@ -150,16 +195,33 @@ export class VttCanvas {
       this.drag = { type: "click", token };
       return;
     }
-    if (this.tool === "ruler") { this.drag = { type: "ruler" }; this.ruler = { startWorld: world, endWorld: world }; return; }
-    if (this.tool.startsWith("shape-")) { this.drag = { type: "shape" }; this.shape = { kind: this.tool === "shape-rect" ? "rect" : "circle", startWorld: world, endWorld: world }; return; }
+
+    if (this.tool === "ruler") {
+      this.drag = { type: "ruler" };
+      this.ruler = { startWorld: world, endWorld: world };
+      this._markDirty();
+      return;
+    }
+
+    if (this.tool === "shape-rect" || this.tool === "shape-circle") {
+      this.drag = { type: "shape" };
+      this.shape = { kind: this.tool === "shape-rect" ? "rect" : "circle", startWorld: world, endWorld: world };
+      this._markDirty();
+      return;
+    }
+
+    if (this.tool === "shape-cone") {
+      this.drag = { type: "shape-cone" };
+      this.shape = { kind: "cone", origin: { ...world }, endWorld: { ...world } };
+      this._markDirty();
+      return;
+    }
+
     if (this.tool === "fog") {
       const grid = this.worldToGrid(world.x, world.y);
-      // Left click: place fog
-      if (e.button === 0) {
-        const id = "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
-        this.drag = { type: "fog-place", fog: { id, x: grid.x, y: grid.y, radius: this.fogCursorSize } };
-      }
-      // Right click: remove fog (handled separately below)
+      const id = "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+      this.drag = { type: "fog-place", fog: { id, x: grid.x, y: grid.y, radius: this.fogCursorSize } };
+      this._markDirty();
       return;
     }
   }
@@ -171,39 +233,94 @@ export class VttCanvas {
 
     if (this.drag.type === "pan") {
       this.pan = { x: this.drag.startPan.x + (sx - this.drag.startScreen.x), y: this.drag.startPan.y + (sy - this.drag.startScreen.y) };
+      this._markDirty();
     } else if (this.drag.type === "token") {
       const grid = this.worldToGrid(world.x, world.y);
       this.drag.token._previewX = grid.x;
       this.drag.token._previewY = grid.y;
+      this._markDirty();
     } else if (this.drag.type === "ruler") {
       this.ruler.endWorld = world;
+      this._markDirty();
     } else if (this.drag.type === "shape") {
       this.shape.endWorld = world;
-    } else if (this.tool === "fog" && !this.shape) {
-      // Track world position for cursor display
+      this._markDirty();
+    } else if (this.drag.type === "shape-cone") {
+      this.shape.endWorld = world;
+      this._markDirty();
+    } else if (this.tool === "fog") {
       this._fogCursorWorld = world;
+      this._markDirty();
     }
   }
 
   _onPointerUp() {
     if (!this.drag) return;
+
     if (this.drag.type === "token") {
       const t = this.drag.token;
-      const finalX = Math.round((t._previewX ?? t.x) * 4) / 4; // snap to quarter-grid
+      const finalX = Math.round((t._previewX ?? t.x) * 4) / 4;
       const finalY = Math.round((t._previewY ?? t.y) * 4) / 4;
       delete t._previewX; delete t._previewY;
       t.x = finalX; t.y = finalY;
       this.opts.onTokenMoved?.(t, finalX, finalY);
+      this._markDirty();
     } else if (this.drag.type === "click") {
       this.opts.onTokenClicked?.(this.drag.token);
     } else if (this.drag.type === "ruler") {
-      setTimeout(() => { this.ruler = null; }, 2500);
+      this.ruler = null;
+      this._markDirty();
     } else if (this.drag.type === "shape") {
-      setTimeout(() => { this.shape = null; }, 4000);
+      // Make persistent shape (rect or circle)
+      const { kind, startWorld, endWorld } = this.shape;
+      if (kind === "rect") {
+        const w2 = Math.abs(endWorld.x - startWorld.x) / this.gridPx;
+        const h2 = Math.abs(endWorld.y - startWorld.y) / this.gridPx;
+        if (w2 > 0.1 && h2 > 0.1) {
+          this.addPersistentShape({
+            id: "shape_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+            kind: "rect",
+            x: startWorld.x / this.gridPx,
+            y: startWorld.y / this.gridPx,
+            w: w2,
+            h: h2
+          });
+        }
+      } else {
+        const r = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y) / this.gridPx;
+        if (r > 0.1) {
+          this.addPersistentShape({
+            id: "shape_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+            kind: "circle",
+            x: startWorld.x / this.gridPx,
+            y: startWorld.y / this.gridPx,
+            radius: r
+          });
+        }
+      }
+      this.shape = null;
+      this._markDirty();
+    } else if (this.drag.type === "shape-cone") {
+      // Make persistent cone shape
+      const { origin, endWorld } = this.shape;
+      const dx = endWorld.x - origin.x;
+      const dy = endWorld.y - origin.y;
+      const dist = Math.hypot(dx, dy) / this.gridPx;
+      if (dist > 0.1) {
+        const angle = Math.atan2(dy, dx);
+        this.addPersistentShape({
+          id: "shape_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+          kind: "cone",
+          originX: origin.x / this.gridPx,
+          originY: origin.y / this.gridPx,
+          angle: angle,
+          distance: dist
+        });
+      }
+      this.shape = null;
+      this._markDirty();
     } else if (this.drag.type === "fog-place") {
       this.opts.onFogPlaced?.(this.drag.fog);
-    } else if (this.drag.type === "fog-remove") {
-      this.opts.onFogRemoved?.(this.drag.fog);
     }
     this.drag = null;
   }
@@ -211,7 +328,6 @@ export class VttCanvas {
   _onWheel(e) {
     e.preventDefault();
     if (this.tool === "fog") {
-      // Resize fog cursor with scroll wheel
       const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
       this.setFogCursorSize(this.fogCursorSize * factor);
       return;
@@ -221,6 +337,7 @@ export class VttCanvas {
     const factor = e.deltaY < 0 ? 1.1 : 0.9;
     this.zoom = Math.max(0.2, Math.min(4, this.zoom * factor));
     this.pan = { x: sx - worldBefore.x * this.zoom, y: sy - worldBefore.y * this.zoom };
+    this._markDirty();
   }
 
   zoomBy(factor) {
@@ -228,6 +345,7 @@ export class VttCanvas {
     const worldBefore = this.screenToWorld(w / 2, h / 2);
     this.zoom = Math.max(0.2, Math.min(4, this.zoom * factor));
     this.pan = { x: w / 2 - worldBefore.x * this.zoom, y: h / 2 - worldBefore.y * this.zoom };
+    this._markDirty();
   }
 
   _onContextMenu(e) {
@@ -235,7 +353,7 @@ export class VttCanvas {
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
 
-    // Fog tool: right-click on fog to remove it
+    // Fog tool: right-click on fog to remove
     if (this.tool === "fog") {
       for (let i = this.fogs.length - 1; i >= 0; i--) {
         const f = this.fogs[i];
@@ -250,8 +368,59 @@ export class VttCanvas {
       return;
     }
 
+    // Persistent shapes: right-click to remove
+    if (this.tool === "shape-rect" || this.tool === "shape-circle" || this.tool === "shape-cone") {
+      for (let i = this.persistentShapes.length - 1; i >= 0; i--) {
+        const s = this.persistentShapes[i];
+        if (this._pointInShape(world.x, world.y, s)) {
+          this.removePersistentShape(s);
+          return;
+        }
+      }
+      return;
+    }
+
     const token = this._tokenAt(world.x, world.y);
     if (token) this.opts.onTokenContextMenu?.(token, e.clientX, e.clientY);
+  }
+
+  // Check if a point is inside a persistent shape
+  _pointInShape(px, py, shape) {
+    if (shape.kind === "rect") {
+      const pos = this.gridToWorld(shape.x, shape.y);
+      const size = this.gridToWorld(shape.w, shape.h);
+      return px >= pos.x && px <= pos.x + size.x && py >= pos.y && py <= pos.y + size.y;
+    }
+    if (shape.kind === "circle") {
+      const pos = this.gridToWorld(shape.x, shape.y);
+      const r = this.gridToWorld(shape.radius, 0);
+      return Math.hypot(px - pos.x, py - pos.y) <= r;
+    }
+    if (shape.kind === "cone") {
+      const origin = this.gridToWorld(shape.originX, shape.originY);
+      const dx = Math.cos(shape.angle) * shape.distance * this.gridPx;
+      const dy = Math.sin(shape.angle) * shape.distance * this.gridPx;
+      const endX = origin.x + dx;
+      const endY = origin.y + dy;
+      const spread = shape.distance * 0.5; // cone half-angle spread
+      const spreadRad = Math.atan2(spread * this.gridPx, shape.distance * this.gridPx);
+      return this._pointInCone(px, py, origin.x, origin.y, endX, endY, spreadRad);
+    }
+    return false;
+  }
+
+  _pointInCone(px, py, ox, oy, ex, ey, halfAngle) {
+    const dx = ex - ox;
+    const dy = ey - oy;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const dx2 = px - ox;
+    const dy2 = py - oy;
+    const d2 = Math.hypot(dx2, dy2);
+    if (d2 > dist * 1.1) return false;
+    let angleDiff = Math.abs(angle - Math.atan2(dy2, dx2));
+    if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+    return angleDiff <= halfAngle;
   }
 
   _getImage(src) {
@@ -263,10 +432,7 @@ export class VttCanvas {
     return img;
   }
 
-  _loop() {
-    this._raf = requestAnimationFrame(() => this._loop());
-    this._draw();
-  }
+  // --- Rendering ---
 
   _draw() {
     const ctx = this.ctx;
@@ -279,10 +445,12 @@ export class VttCanvas {
     ctx.translate(this.pan.x, this.pan.y);
     ctx.scale(this.zoom, this.zoom);
 
+    // Background
     if (this.bgImage) ctx.drawImage(this.bgImage, 0, 0);
 
+    // Grid — improved contrast
     if (this.gridPx && this.bgImage) {
-      ctx.strokeStyle = "rgba(198,154,62,0.25)";
+      ctx.strokeStyle = "rgba(198,154,62,0.4)";
       ctx.lineWidth = 1 / this.zoom;
       for (let x = 0; x <= this.bgImage.width; x += this.gridPx) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.bgImage.height); ctx.stroke();
@@ -292,6 +460,7 @@ export class VttCanvas {
       }
     }
 
+    // Tokens
     this.tokens.forEach(t => {
       const gx = t._previewX ?? t.x, gy = t._previewY ?? t.y;
       const pos = this.gridToWorld(gx, gy);
@@ -319,92 +488,224 @@ export class VttCanvas {
           ctx.fillStyle = "#fff"; ctx.font = `${r}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
           ctx.fillText((t.name || "?")[0].toUpperCase(), cx, cy);
         }
-        ctx.fillStyle = "#e7e3d8"; ctx.font = `${Math.max(10, r * 0.4)}px sans-serif`; ctx.textAlign = "center";
+        // Token name — improved contrast with text shadow
+        ctx.fillStyle = "#fff"; ctx.font = `bold ${Math.max(10, r * 0.4)}px sans-serif`; ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 4;
         ctx.fillText(t.name || "", cx, pos.y + size.y + r * 0.5);
+        ctx.shadowBlur = 0;
       }
     });
 
+    // Ruler
     if (this.ruler) {
       const { startWorld, endWorld } = this.ruler;
       ctx.strokeStyle = "#e0b95c"; ctx.lineWidth = 2 / this.zoom; ctx.setLineDash([6 / this.zoom, 4 / this.zoom]);
       ctx.beginPath(); ctx.moveTo(startWorld.x, startWorld.y); ctx.lineTo(endWorld.x, endWorld.y); ctx.stroke();
       ctx.setLineDash([]);
       const dist = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y) / this.gridPx * FEET_PER_GRID;
-      ctx.fillStyle = "#e0b95c"; ctx.font = `${14 / this.zoom}px sans-serif`;
+      ctx.fillStyle = "#e0b95c"; ctx.font = `bold ${14 / this.zoom}px sans-serif`;
+      ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
       ctx.fillText(`${Math.round(dist)} ft`, endWorld.x + 8 / this.zoom, endWorld.y);
+      ctx.shadowBlur = 0;
     }
 
+    // Persistent shapes
+    this._drawPersistentShapes();
+
+    // Temporary shape preview (being drawn right now)
     if (this.shape) {
-      const { kind, startWorld, endWorld } = this.shape;
-      ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
-      if (kind === "rect") {
-        const x = Math.min(startWorld.x, endWorld.x), y = Math.min(startWorld.y, endWorld.y);
-        const w2 = Math.abs(endWorld.x - startWorld.x), h2 = Math.abs(endWorld.y - startWorld.y);
-        ctx.fillRect(x, y, w2, h2); ctx.strokeRect(x, y, w2, h2);
-      } else {
-        const r = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y);
-        ctx.beginPath(); ctx.arc(startWorld.x, startWorld.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      }
+      this._drawShapePreview();
     }
 
-    // Fog cursor (only visible when fog tool is active)
+    // Fog cursor
     if (this.tool === "fog" && this._fogCursorWorld) {
       const cx = this._fogCursorWorld.x;
       const cy = this._fogCursorWorld.y;
       const r = this.gridToWorld(this.fogCursorSize, 0);
-      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.strokeStyle = "rgba(255,255,255,0.7)";
       ctx.lineWidth = 1.5 / this.zoom;
       ctx.setLineDash([4 / this.zoom, 4 / this.zoom]);
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
-      // Show radius in feet
       const feet = Math.round(this.fogCursorSize * FEET_PER_GRID);
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = `${11 / this.zoom}px sans-serif`;
+      ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = `bold ${11 / this.zoom}px sans-serif`;
       ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 3;
       ctx.fillText(`${feet} ft`, cx, cy + r + 14 / this.zoom);
+      ctx.shadowBlur = 0;
     }
 
     // Fog of war overlay
     if (this.fogs && this.fogs.length > 0) {
-      const isPlayer = !this._isDm;
-      for (const fog of this.fogs) {
-        const fx = this.gridToWorld(fog.x, 0);
-        const fy = this.gridToWorld(fog.y, 0);
-        const fr = this.gridToWorld(fog.radius, 0);
-        if (isPlayer) {
-          // Players see a dark circle (fog placed area)
-          ctx.fillStyle = "rgba(0,0,0,0.95)";
-          ctx.beginPath();
-          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          // DM sees a translucent dark overlay — visible but you can still see the map through it
-          ctx.fillStyle = "rgba(0,0,0,0.45)";
-          ctx.beginPath();
-          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-          ctx.fill();
-          // Gold dashed border so the DM clearly sees fog boundaries
-          ctx.strokeStyle = "rgba(224,185,92,0.7)";
-          ctx.lineWidth = 2 / this.zoom;
-          ctx.setLineDash([5 / this.zoom, 4 / this.zoom]);
-          ctx.beginPath();
-          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          // Inner glow ring for extra visibility
-          ctx.strokeStyle = "rgba(224,185,92,0.25)";
-          ctx.lineWidth = 6 / this.zoom;
-          ctx.beginPath();
-          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      }
+      this._drawFogOverlay();
     }
 
     ctx.restore();
+  }
+
+  _drawFogOverlay() {
+    const ctx = this.ctx;
+    const isPlayer = !this._isDm;
+    for (const fog of this.fogs) {
+      const fx = this.gridToWorld(fog.x, 0);
+      const fy = this.gridToWorld(fog.y, 0);
+      const fr = this.gridToWorld(fog.radius, 0);
+      if (isPlayer) {
+        ctx.fillStyle = "rgba(0,0,0,0.95)";
+        ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+      } else {
+        // DM: translucent dark overlay with gold border
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "rgba(224,185,92,0.8)";
+        ctx.lineWidth = 2 / this.zoom;
+        ctx.setLineDash([5 / this.zoom, 4 / this.zoom]);
+        ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        // Inner glow ring
+        ctx.strokeStyle = "rgba(224,185,92,0.2)";
+        ctx.lineWidth = 6 / this.zoom;
+        ctx.beginPath(); ctx.arc(fx, fy, fr - 4 / this.zoom, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+  }
+
+  _drawPersistentShapes() {
+    const ctx = this.ctx;
+    for (const shape of this.persistentShapes) {
+      if (shape.kind === "rect") {
+        const pos = this.gridToWorld(shape.x, shape.y);
+        const size = this.gridToWorld(shape.w, shape.h);
+        ctx.fillStyle = "rgba(63,143,128,0.25)";
+        ctx.strokeStyle = "#56b8a5";
+        ctx.lineWidth = 2 / this.zoom;
+        ctx.fillRect(pos.x, pos.y, size.x, size.y);
+        ctx.strokeRect(pos.x, pos.y, size.x, size.y);
+        // Size label
+        const feetW = Math.round(shape.w * FEET_PER_GRID);
+        const feetH = Math.round(shape.h * FEET_PER_GRID);
+        ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
+        ctx.fillText(`${feetW}×${feetH} ft`, pos.x + size.x / 2, pos.y + size.y + 16 / this.zoom);
+        ctx.shadowBlur = 0;
+      } else if (shape.kind === "circle") {
+        const pos = this.gridToWorld(shape.x, shape.y);
+        const r = this.gridToWorld(shape.radius, 0);
+        ctx.fillStyle = "rgba(63,143,128,0.25)";
+        ctx.strokeStyle = "#56b8a5";
+        ctx.lineWidth = 2 / this.zoom;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        // Size label
+        const feet = Math.round(shape.radius * FEET_PER_GRID);
+        ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
+        ctx.fillText(`${feet} ft radius`, pos.x, pos.y + r + 16 / this.zoom);
+        ctx.shadowBlur = 0;
+      } else if (shape.kind === "cone") {
+        this._drawCone(shape);
+      }
+    }
+  }
+
+  _drawCone(shape) {
+    const ctx = this.ctx;
+    const origin = this.gridToWorld(shape.originX, shape.originY);
+    const length = shape.distance * this.gridPx;
+    const dx = Math.cos(shape.angle) * length;
+    const dy = Math.sin(shape.angle) * length;
+    const endX = origin.x + dx;
+    const endY = origin.y + dy;
+    const spread = shape.distance * 0.4; // half-angle spread in grid units
+    const spreadRad = Math.atan2(spread * this.gridPx, length);
+
+    // Calculate arc points
+    const startAngle = shape.angle - spreadRad;
+    const endAngle = shape.angle + spreadRad;
+
+    ctx.fillStyle = "rgba(63,143,128,0.25)";
+    ctx.strokeStyle = "#56b8a5";
+    ctx.lineWidth = 2 / this.zoom;
+
+    ctx.beginPath();
+    ctx.moveTo(origin.x, origin.y);
+    ctx.lineTo(endX, endY);
+    ctx.arc(origin.x, origin.y, length, shape.angle, shape.angle, false);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Size label
+    const feet = Math.round(shape.distance * FEET_PER_GRID);
+    const degrees = Math.round(spreadRad * 2 * (180 / Math.PI));
+    const labelX = origin.x + Math.cos(shape.angle) * length * 0.6;
+    const labelY = origin.y + Math.sin(shape.angle) * length * 0.6;
+    ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
+    ctx.fillText(`${feet} ft, ${degrees}°`, labelX, labelY);
+    ctx.shadowBlur = 0;
+  }
+
+  _drawShapePreview() {
+    const ctx = this.ctx;
+    const { kind, startWorld, endWorld } = this.shape;
+
+    if (kind === "rect") {
+      const x = Math.min(startWorld.x, endWorld.x), y = Math.min(startWorld.y, endWorld.y);
+      const w2 = Math.abs(endWorld.x - startWorld.x), h2 = Math.abs(endWorld.y - startWorld.y);
+      ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
+      ctx.fillRect(x, y, w2, h2); ctx.strokeRect(x, y, w2, h2);
+      const feetW = Math.round((w2 / this.gridPx) * FEET_PER_GRID);
+      const feetH = Math.round((h2 / this.gridPx) * FEET_PER_GRID);
+      ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
+      ctx.fillText(`${feetW}×${feetH} ft`, x + w2 / 2, y + h2 + 16 / this.zoom);
+      ctx.shadowBlur = 0;
+    } else if (kind === "circle") {
+      const r = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y);
+      ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
+      ctx.beginPath(); ctx.arc(startWorld.x, startWorld.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      const feet = Math.round((r / this.gridPx) * FEET_PER_GRID);
+      ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
+      ctx.fillText(`${feet} ft radius`, startWorld.x, startWorld.y + r + 16 / this.zoom);
+      ctx.shadowBlur = 0;
+    } else if (kind === "cone") {
+      const { origin, endWorld } = this.shape;
+      const dx = endWorld.x - origin.x;
+      const dy = endWorld.y - origin.y;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      const spread = Math.min(dist * 0.4, 10 * this.gridPx);
+      const spreadRad = Math.atan2(spread, dist);
+      const startAngle = angle - spreadRad;
+      const endAngle = angle + spreadRad;
+
+      ctx.fillStyle = "rgba(63,143,128,0.25)";
+      ctx.strokeStyle = "#56b8a5";
+      ctx.lineWidth = 2 / this.zoom;
+      ctx.beginPath();
+      ctx.moveTo(origin.x, origin.y);
+      ctx.lineTo(origin.x + Math.cos(startAngle) * dist, origin.y + Math.sin(startAngle) * dist);
+      ctx.arc(origin.x, origin.y, dist, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      const feet = Math.round((dist / this.gridPx) * FEET_PER_GRID);
+      const degrees = Math.round(spreadRad * 2 * (180 / Math.PI));
+      const labelX = origin.x + Math.cos(angle) * dist * 0.6;
+      const labelY = origin.y + Math.sin(angle) * dist * 0.6;
+      ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
+      ctx.fillText(`${feet} ft, ${degrees}°`, labelX, labelY);
+      ctx.shadowBlur = 0;
+    }
   }
 
   // Bounding-box overlap check used for auto cover application.
