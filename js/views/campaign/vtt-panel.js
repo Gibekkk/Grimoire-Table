@@ -347,6 +347,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     } else {
       const img = new Image();
       img.onload = () => { bgImageCache.set(bg, img); canvas.setBackgroundImage(img); };
+      img.onerror = () => {
+        console.error("[VTT] Failed to load background image for map:", mapId, "bg length:", bg?.length);
+        toast("Failed to load map background", "error");
+      };
       img.src = bg;
     }
     canvas.setGridPx(currentMap.gridPx);

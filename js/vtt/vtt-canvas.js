@@ -43,6 +43,7 @@ export class VttCanvas {
 
     // --- Performance: dirty flag (event-driven rendering) ---
     this._dirty = true;
+    this._raf = null;
 
     this.canvas = document.createElement("canvas");
     this.canvas.style.touchAction = "none";
@@ -66,22 +67,18 @@ export class VttCanvas {
     this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
     this.canvas.addEventListener("contextmenu", this._onContextMenu);
 
-    // Event-driven render loop
-    this._raf = null;
+    // Start event-driven render loop
     this._markDirty();
   }
 
-  // Tell the canvas it needs to redraw
+  // Tell the canvas it needs to redraw. Always schedules — never skips.
+  // Multiple calls before the frame fires are coalesced into one draw.
   _markDirty() {
-    if (this._dirty) return;
-    this._dirty = true;
-    if (!this._raf) {
-      this._raf = requestAnimationFrame(() => {
-        this._raf = null;
-        this._dirty = false;
-        this._draw();
-      });
-    }
+    if (this._raf) return; // already scheduled this frame
+    this._raf = requestAnimationFrame(() => {
+      this._raf = null;
+      this._draw();
+    });
   }
 
   _resize() {
@@ -437,6 +434,7 @@ export class VttCanvas {
   _draw() {
     const ctx = this.ctx;
     const { clientWidth: w, clientHeight: h } = this.container;
+    if (!w || !h) return; // container not ready yet — wait for next resize
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#0c0d14";
     ctx.fillRect(0, 0, w, h);
@@ -446,17 +444,22 @@ export class VttCanvas {
     ctx.scale(this.zoom, this.zoom);
 
     // Background
-    if (this.bgImage) ctx.drawImage(this.bgImage, 0, 0);
+    if (this.bgImage) {
+      ctx.drawImage(this.bgImage, 0, 0);
+    }
 
-    // Grid — improved contrast
-    if (this.gridPx && this.bgImage) {
+    // Grid — improved contrast (always draw if we have a grid size)
+    if (this.gridPx) {
       ctx.strokeStyle = "rgba(198,154,62,0.4)";
       ctx.lineWidth = 1 / this.zoom;
-      for (let x = 0; x <= this.bgImage.width; x += this.gridPx) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.bgImage.height); ctx.stroke();
+      // Determine grid bounds: use bg image dimensions if available, else the visible area
+      const bgW = this.bgImage?.width ?? (w / this.zoom) * 3;
+      const bgH = this.bgImage?.height ?? (h / this.zoom) * 3;
+      for (let x = 0; x <= bgW; x += this.gridPx) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, bgH); ctx.stroke();
       }
-      for (let y = 0; y <= this.bgImage.height; y += this.gridPx) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.bgImage.width, y); ctx.stroke();
+      for (let y = 0; y <= bgH; y += this.gridPx) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(bgW, y); ctx.stroke();
       }
     }
 
