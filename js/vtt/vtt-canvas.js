@@ -16,16 +16,24 @@ const FEET_PER_GRID = 5;
 export class VttCanvas {
   constructor(container, opts) {
     this.container = container;
-    this.opts = opts; // { gridPx, canMoveToken(token), onTokenMoved(token,x,y), onTokenClicked(token), onTokenContextMenu(token,screenX,screenY) }
+    this.opts = opts; // { gridPx, canMoveToken(token), onTokenMoved(token,x,y), onTokenClicked(token), onTokenContextMenu(token,screenX,screenY), isDm }
     this.pan = { x: 0, y: 0 };
     this.zoom = 1;
     this.tokens = [];
     this.bgImage = null;
-    this.tool = "select"; // select | ruler | shape-rect | shape-circle
+    this.tool = "select"; // select | ruler | shape-rect | shape-circle | fog
     this.drag = null;
     this.ruler = null; // { startWorld, endWorld }
     this.shape = null; // { kind, startWorld, endWorld }
     this._images = new Map(); // cache of loaded token images by src
+
+    // Fog of war state
+    this.fogs = []; // { id, x, y, radius, revealed } — all in grid units
+    this.fogCursorSize = 3; // grid units (radius)
+    this.fogCursorMin = 1;
+    this.fogCursorMax = 15;
+    this._isDm = opts.isDm || false;
+    this._showFogToPlayers = !this._isDm; // players see fog (dark), DM sees translucent
 
     this.canvas = document.createElement("canvas");
     this.canvas.style.touchAction = "none";
@@ -50,6 +58,7 @@ export class VttCanvas {
     this.canvas.addEventListener("contextmenu", this._onContextMenu);
 
     this._raf = requestAnimationFrame(() => this._loop());
+    this._updateCursor();
   }
 
   _resize() {
@@ -79,7 +88,24 @@ export class VttCanvas {
 
   setTokens(tokens) { this.tokens = tokens; }
   setGridPx(px) { this.gridPx = px || 70; }
-  setTool(tool) { this.tool = tool; this.shape = null; this.ruler = null; }
+  setTool(tool) { this.tool = tool; this.shape = null; this.ruler = null; this._updateCursor(); }
+  setFogs(fogs) { this.fogs = fogs || []; }
+  setFogCursorSize(size) { this.fogCursorSize = Math.max(this.fogCursorMin, Math.min(this.fogCursorMax, size)); this._updateCursor(); }
+  getFogCursorSize() { return this.fogCursorSize; }
+  getFogCursorMin() { return this.fogCursorMin; }
+  getFogCursorMax() { return this.fogCursorMax; }
+  isDm() { return this._isDm; }
+
+  _updateCursor() {
+    if (!this.canvas) return;
+    if (this.tool === "fog") {
+      this.canvas.style.cursor = "crosshair";
+    } else if (this.tool === "select") {
+      this.canvas.style.cursor = "grab";
+    } else {
+      this.canvas.style.cursor = "crosshair";
+    }
+  }
 
   _fitToView() {
     if (!this.bgImage) return;
@@ -126,6 +152,16 @@ export class VttCanvas {
     }
     if (this.tool === "ruler") { this.drag = { type: "ruler" }; this.ruler = { startWorld: world, endWorld: world }; return; }
     if (this.tool.startsWith("shape-")) { this.drag = { type: "shape" }; this.shape = { kind: this.tool === "shape-rect" ? "rect" : "circle", startWorld: world, endWorld: world }; return; }
+    if (this.tool === "fog") {
+      const grid = this.worldToGrid(world.x, world.y);
+      // Left click: place fog
+      if (e.button === 0) {
+        const id = "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+        this.drag = { type: "fog-place", fog: { id, x: grid.x, y: grid.y, radius: this.fogCursorSize } };
+      }
+      // Right click: remove fog (handled separately below)
+      return;
+    }
   }
 
   _onPointerMove(e) {
@@ -143,6 +179,9 @@ export class VttCanvas {
       this.ruler.endWorld = world;
     } else if (this.drag.type === "shape") {
       this.shape.endWorld = world;
+    } else if (this.tool === "fog" && !this.shape) {
+      // Track world position for cursor display
+      this._fogCursorWorld = world;
     }
   }
 
@@ -161,12 +200,22 @@ export class VttCanvas {
       setTimeout(() => { this.ruler = null; }, 2500);
     } else if (this.drag.type === "shape") {
       setTimeout(() => { this.shape = null; }, 4000);
+    } else if (this.drag.type === "fog-place") {
+      this.opts.onFogPlaced?.(this.drag.fog);
+    } else if (this.drag.type === "fog-remove") {
+      this.opts.onFogRemoved?.(this.drag.fog);
     }
     this.drag = null;
   }
 
   _onWheel(e) {
     e.preventDefault();
+    if (this.tool === "fog") {
+      // Resize fog cursor with scroll wheel
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      this.setFogCursorSize(this.fogCursorSize * factor);
+      return;
+    }
     const { x: sx, y: sy } = this._eventPos(e);
     const worldBefore = this.screenToWorld(sx, sy);
     const factor = e.deltaY < 0 ? 1.1 : 0.9;
@@ -185,6 +234,22 @@ export class VttCanvas {
     e.preventDefault();
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
+
+    // Fog tool: right-click on fog to remove it
+    if (this.tool === "fog") {
+      for (let i = this.fogs.length - 1; i >= 0; i--) {
+        const f = this.fogs[i];
+        const fx = this.gridToWorld(f.x, 0);
+        const fy = this.gridToWorld(f.y, 0);
+        const fr = this.gridToWorld(f.radius, 0);
+        if (Math.hypot(world.x - fx, world.y - fy) <= fr) {
+          this.opts.onFogRemoved?.(f);
+          return;
+        }
+      }
+      return;
+    }
+
     const token = this._tokenAt(world.x, world.y);
     if (token) this.opts.onTokenContextMenu?.(token, e.clientX, e.clientY);
   }
@@ -279,6 +344,57 @@ export class VttCanvas {
       } else {
         const r = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y);
         ctx.beginPath(); ctx.arc(startWorld.x, startWorld.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+    }
+
+    // Fog cursor (only visible when fog tool is active)
+    if (this.tool === "fog" && this._fogCursorWorld) {
+      const cx = this._fogCursorWorld.x;
+      const cy = this._fogCursorWorld.y;
+      const r = this.gridToWorld(this.fogCursorSize, 0);
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.lineWidth = 1.5 / this.zoom;
+      ctx.setLineDash([4 / this.zoom, 4 / this.zoom]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Show radius in feet
+      const feet = Math.round(this.fogCursorSize * FEET_PER_GRID);
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.font = `${11 / this.zoom}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(`${feet} ft`, cx, cy + r + 14 / this.zoom);
+    }
+
+    // Fog of war overlay
+    if (this.fogs && this.fogs.length > 0) {
+      const isPlayer = !this._isDm;
+      const fogAlpha = isPlayer ? 0.95 : 0.25; // opaque for players, translucent for DM
+      for (const fog of this.fogs) {
+        const fx = this.gridToWorld(fog.x, 0);
+        const fy = this.gridToWorld(fog.y, 0);
+        const fr = this.gridToWorld(fog.radius, 0);
+        if (isPlayer) {
+          // Players see a dark circle (fog placed area)
+          ctx.fillStyle = `rgba(0,0,0,${fogAlpha})`;
+          ctx.beginPath();
+          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // DM sees a subtle highlight of where fog will be
+          ctx.fillStyle = "rgba(0,0,0,0.12)";
+          ctx.beginPath();
+          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(198,154,62,0.4)";
+          ctx.lineWidth = 1.5 / this.zoom;
+          ctx.setLineDash([3 / this.zoom, 3 / this.zoom]);
+          ctx.beginPath();
+          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
       }
     }
 

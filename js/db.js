@@ -295,6 +295,13 @@ const localDb = {
       map.aoeShapes = [];
       writeTable("maps", maps);
     },
+    async updateFogs(campaignId, mapId, fogs) {
+      const maps = readTable("maps");
+      const map = maps[campaignId]?.[mapId];
+      if (!map) return;
+      map.fogs = fogs;
+      writeTable("maps", maps);
+    },
     async remove(campaignId, mapId) {
       const maps = readTable("maps");
       if (maps[campaignId]) delete maps[campaignId][mapId];
@@ -777,6 +784,10 @@ const firestoreDb = {
     async clearShapes(campaignId, mapId) {
       const { db, fx } = await initFirebase();
       await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { aoeShapes: [] });
+    },
+    async updateFogs(campaignId, mapId, fogs) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { fogs });
     },
     async remove(campaignId, mapId) {
       const { db, fx } = await initFirebase();

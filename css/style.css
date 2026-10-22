@@ -456,6 +456,31 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
   border-radius: 10px; padding: 14px; width: 220px; box-shadow: var(--shadow); z-index: 20;
 }
 .vtt-token-popup h4 { margin: 0 0 6px; color: var(--gold-bright); }
+
+/* ---------- Fog of war slider ---------- */
+.fog-slider-wrap {
+  display: flex; align-items: center; gap: 6px; padding: 2px 8px;
+  background: var(--ink); border-radius: 6px; border: 1px solid var(--line);
+}
+.fog-slider-label {
+  font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase;
+  letter-spacing: 0.04em; white-space: nowrap;
+}
+.fog-slider {
+  width: 80px; height: 4px; -webkit-appearance: none; appearance: none;
+  background: var(--line); border-radius: 2px; outline: none; cursor: pointer;
+}
+.fog-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--gold); border: 2px solid var(--gold-bright); cursor: pointer;
+}
+.fog-slider::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--gold); border: 2px solid var(--gold-bright); cursor: pointer;
+}
+.fog-slider::-webkit-slider-runnable-track {
+  height: 4px; background: var(--line); border-radius: 2px;
+}
 @media (max-width: 900px) {
   .vtt-shell { flex-direction: column; height: auto; }
   .vtt-sidebar { width: auto; max-height: 260px; }

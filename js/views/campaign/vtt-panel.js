@@ -39,10 +39,23 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     canMoveToken: (token) => isDm || (token.kind === "pc" && token.refId === myCharacter?.id),
     onTokenMoved: (token, x, y) => handleTokenMoved(token, x, y),
     onTokenClicked: (token) => showTokenPopup(token),
-    onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy)
+    onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
+    isDm: isDm,
+    onFogPlaced: (fog) => handleFogPlaced(fog),
+    onFogRemoved: (fog) => handleFogRemoved(fog)
   });
 
   // ---------------- Toolbar ----------------
+  const fogSliderWrap = h("div", { class: "fog-slider-wrap", style: "display:none;" });
+  const fogSliderLabel = h("span", { class: "fog-slider-label" }, "Size:");
+  const fogSlider = h("input", { type: "range", min: canvas.getFogCursorMin(), max: canvas.getFogCursorMax(), value: canvas.getFogCursorSize(), class: "fog-slider" });
+  fogSlider.addEventListener("input", () => {
+    canvas.setFogCursorSize(parseInt(fogSlider.value));
+    fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogCursorSize() * 5)}ft`;
+  });
+  fogSliderWrap.appendChild(fogSliderLabel);
+  fogSliderWrap.appendChild(fogSlider);
+
   function buildToolbar() {
     toolbar.innerHTML = "";
     const toggleBtn = h("button", { class: "icon-btn" }, "\u2630");
@@ -50,11 +63,13 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toggleBtn.addEventListener("click", () => { sidebarOpen = !sidebarOpen; sidebar.style.display = sidebarOpen ? "flex" : "none"; });
     toolbar.appendChild(toggleBtn);
 
-    [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"]].forEach(([tool, label]) => {
+    [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"], ["fog", "Fog of War"]].forEach(([tool, label]) => {
       const btn = h("button", { class: `btn sm ${canvas.tool === tool ? "primary" : ""}` }, label);
       btn.addEventListener("click", () => { canvas.setTool(tool); buildToolbar(); });
       toolbar.appendChild(btn);
     });
+
+    toolbar.appendChild(fogSliderWrap);
     const zoomOut = h("button", { class: "icon-btn" }, "\u2212");
     zoomOut.addEventListener("click", () => canvas.zoomBy(0.85));
     const zoomIn = h("button", { class: "icon-btn" }, "+");
@@ -68,6 +83,13 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       allMaps.forEach(m => mapSel.appendChild(h("option", { value: m.id, selected: currentMap?.id === m.id ? "selected" : null }, m.name)));
       mapSel.addEventListener("change", () => loadMap(mapSel.value));
       toolbar.appendChild(mapSel);
+    }
+
+    // Update fog slider visibility based on active tool
+    fogSliderWrap.style.display = canvas.tool === "fog" ? "flex" : "none";
+    if (canvas.tool === "fog") {
+      fogSlider.value = canvas.getFogCursorSize();
+      fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogCursorSize() * 5)}ft`;
     }
   }
 
@@ -193,6 +215,24 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     db.tokens.update(campaignId, currentMap.id, token.id, { w, h });
   }
 
+  // ---------------- Fog of war handlers ----------------
+  let currentFogs = [];
+  let unsubFogs = null;
+
+  async function handleFogPlaced(fog) {
+    if (!currentMap) return;
+    const newFogs = [...currentFogs, fog];
+    await db.maps.updateFogs(campaignId, currentMap.id, newFogs);
+    currentFogs = newFogs;
+  }
+
+  async function handleFogRemoved(fog) {
+    if (!currentMap) return;
+    const newFogs = currentFogs.filter(f => f.id !== fog.id);
+    await db.maps.updateFogs(campaignId, currentMap.id, newFogs);
+    currentFogs = newFogs;
+  }
+
   // ---------------- Sidebar content ----------------
   let sheetUnsub = null;
   function buildSidebar() {
@@ -215,7 +255,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   // ---------------- Map loading ----------------
   async function loadMap(mapId) {
-    unsubTokens?.(); unsubMap?.();
+    unsubTokens?.(); unsubMap?.(); unsubFogs?.();
     currentMap = allMaps.find(m => m.id === mapId) || null;
     if (!currentMap) return;
     const bg = currentMap.backgroundBase64;
@@ -230,6 +270,11 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     }
     canvas.setGridPx(currentMap.gridPx);
     unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; canvas.setTokens(tokens); });
+    unsubFogs = db.maps.subscribe(campaignId, mapId, (map) => {
+      currentMap = map || currentMap;
+      currentFogs = map?.fogs || [];
+      canvas.setFogs(currentFogs);
+    });
     buildToolbar();
     buildSidebar();
   }
@@ -258,10 +303,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       }
     });
     buildToolbar();
-    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubTokens?.(); unsubMap?.(); sheetUnsub?.(); canvas.dispose(); };
+    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubTokens?.(); unsubMap?.(); unsubFogs?.(); sheetUnsub?.(); canvas.dispose(); };
   }
 
   buildToolbar();
   buildSidebar();
-  return () => { unsubMaps(); unsubCombat(); unsubTokens?.(); unsubMap?.(); canvas.dispose(); };
+  return () => { unsubMaps(); unsubCombat(); unsubTokens?.(); unsubMap?.(); unsubFogs?.(); canvas.dispose(); };
 }
