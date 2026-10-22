@@ -547,25 +547,28 @@ export class VttCanvas {
     const ctx = this.ctx;
     const isPlayer = !this._isDm;
     for (const fog of this.fogs) {
-      const fx = this.gridToWorld(fog.x, 0);
-      const fy = this.gridToWorld(fog.y, 0);
-      const fr = this.gridToWorld(fog.radius, 0);
+      // gridToWorld returns {x, y} — we only need the x component for a radius,
+      // but the center must be computed separately.
+      const center = this.gridToWorld(fog.x, fog.y);
+      const radius = fog.radius * this.gridPx;
+      const cx = center.x;
+      const cy = center.y;
       if (isPlayer) {
         ctx.fillStyle = "rgba(0,0,0,0.95)";
-        ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
       } else {
-        // DM: translucent dark overlay with gold border
+        // DM: clearly visible translucent overlay with gold border
         ctx.fillStyle = "rgba(0,0,0,0.45)";
-        ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = "rgba(224,185,92,0.8)";
         ctx.lineWidth = 2 / this.zoom;
         ctx.setLineDash([5 / this.zoom, 4 / this.zoom]);
-        ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
         ctx.setLineDash([]);
         // Inner glow ring
         ctx.strokeStyle = "rgba(224,185,92,0.2)";
         ctx.lineWidth = 6 / this.zoom;
-        ctx.beginPath(); ctx.arc(fx, fy, fr - 4 / this.zoom, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, radius - 4 / this.zoom, 0, Math.PI * 2); ctx.stroke();
       }
     }
   }
