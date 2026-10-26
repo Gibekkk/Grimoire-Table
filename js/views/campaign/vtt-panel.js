@@ -37,14 +37,18 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   const canvas = new VttCanvas(canvasHost, {
     canMoveToken: (token) => isDm || (token.kind === "pc" && token.refId === myCharacter?.id),
+    canMoveShape: (shape) => isDm || shape.ownerUid === user.uid,
     onTokenMoved: (token, x, y) => handleTokenMoved(token, x, y),
     onTokenClicked: (token) => showTokenPopup(token),
     onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
     isDm: isDm,
+    currentUid: user.uid,
+    coneAngle: 60,
     onFogPlaced: (fog) => handleFogPlaced(fog),
     onFogRemoved: (fog) => handleFogRemoved(fog),
     onPersistentShapeAdded: (shape) => handleShapeAdded(shape),
-    onPersistentShapeRemoved: (shape) => handleShapeRemoved(shape)
+    onPersistentShapeRemoved: (shape) => handleShapeRemoved(shape),
+    onPersistentShapeMoved: (shape) => handleShapeMoved(shape)
   });
 
   // ---------------- Toolbar ----------------
@@ -64,6 +68,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   const shapeSlider = h("input", { type: "range", min: 15, max: 180, value: 60, class: "fog-slider" });
   shapeSlider.addEventListener("input", () => {
     shapeSliderLabel.textContent = `Angle: ${shapeSlider.value}°`;
+    canvas.opts.coneAngle = parseInt(shapeSlider.value);
   });
   shapeSliderWrap.appendChild(shapeSliderLabel);
   shapeSliderWrap.appendChild(shapeSlider);
@@ -290,6 +295,11 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     currentShapes = newShapes;
   }
 
+  async function handleShapeMoved(shape) {
+    if (!currentMap) return;
+    await db.maps.updatePersistentShapes(campaignId, currentMap.id, currentShapes);
+  }
+
   // ---------------- VTT Fullscreen ----------------
   function toggleVttFullscreen() {
     vttFullscreen = !vttFullscreen;
@@ -311,6 +321,15 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && vttFullscreen) {
       toggleVttFullscreen();
+    }
+    // Delete selected shape
+    if ((e.key === "Delete" || e.key === "Backspace") && canvas.selectedShape) {
+      const shape = canvas.selectedShape;
+      // Only allow deletion if user owns it or is DM
+      if (isDm || shape.ownerUid === user.uid) {
+        canvas.removePersistentShape(shape);
+        canvas.selectedShape = null;
+      }
     }
   });
 

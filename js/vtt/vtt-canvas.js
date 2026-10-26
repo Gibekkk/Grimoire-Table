@@ -30,6 +30,9 @@ export class VttCanvas {
     this.shape = null;
     this._images = new Map();
 
+    // --- Shape selection ---
+    this.selectedShape = null;
+
     // --- Fog of war ---
     this.fogs = [];
     this.fogCursorSize = 3;
@@ -175,6 +178,15 @@ export class VttCanvas {
     return null;
   }
 
+  _shapeAt(worldX, worldY) {
+    // Search in reverse so the topmost shape is selected first
+    for (let i = this.persistentShapes.length - 1; i >= 0; i--) {
+      const s = this.persistentShapes[i];
+      if (this._pointInShape(worldX, worldY, s)) return s;
+    }
+    return null;
+  }
+
   // --- Pointer handlers ---
 
   _onPointerDown(e) {
@@ -188,7 +200,29 @@ export class VttCanvas {
         this.drag = { type: "token", token, startWorld: world, origGrid: { x: token.x, y: token.y } };
         return;
       }
-      if (!token) { this.drag = { type: "pan", startScreen: { x: sx, y: sy }, startPan: { ...this.pan } }; return; }
+      // Check for shape hit
+      const shape = this._shapeAt(world.x, world.y);
+      if (shape && this._canMoveShape(shape)) {
+        this.selectedShape = shape;
+        this.drag = { type: "shape-drag", shape, startWorld: world, origGrid: { x: shape.x, y: shape.y } };
+        // For circle: store original center for offset calculation
+        if (shape.kind === "circle") {
+          this.drag._centerOffset = {
+            x: (world.x / this.gridPx) - shape.x,
+            y: (world.y / this.gridPx) - shape.y
+          };
+        }
+        // For cone: store origin offset
+        if (shape.kind === "cone") {
+          this.drag._originOffset = {
+            x: (world.x / this.gridPx) - shape.originX,
+            y: (world.y / this.gridPx) - shape.originY
+          };
+        }
+        this._markDirty();
+        return;
+      }
+      if (!token && !shape) { this.drag = { type: "pan", startScreen: { x: sx, y: sy }, startPan: { ...this.pan } }; return; }
       this.drag = { type: "click", token };
       return;
     }
@@ -208,8 +242,9 @@ export class VttCanvas {
     }
 
     if (this.tool === "shape-cone") {
+      const coneAngle = this.opts?.coneAngle ?? 60;
       this.drag = { type: "shape-cone" };
-      this.shape = { kind: "cone", origin: { ...world }, endWorld: { ...world } };
+      this.shape = { kind: "cone", origin: { ...world }, endWorld: { ...world }, coneAngle };
       this._markDirty();
       return;
     }
@@ -241,9 +276,47 @@ export class VttCanvas {
       this._markDirty();
     } else if (this.drag.type === "shape") {
       this.shape.endWorld = world;
+      // Circle: drag distance = diameter, center = midpoint
+      if (this.shape.kind === "circle") {
+        this.shape._centerWorld = {
+          x: (this.shape.startWorld.x + this.shape.endWorld.x) / 2,
+          y: (this.shape.startWorld.y + this.shape.endWorld.y) / 2
+        };
+        this.shape._diameter = Math.hypot(
+          this.shape.endWorld.x - this.shape.startWorld.x,
+          this.shape.endWorld.y - this.shape.startWorld.y
+        );
+      }
       this._markDirty();
     } else if (this.drag.type === "shape-cone") {
+      const dx = world.x - this.shape.origin.x;
+      const dy = world.y - this.shape.origin.y;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      // Use the slider's cone angle for the preview
+      const coneAngleDeg = this.shape.coneAngle || 60;
+      const halfAngleRad = (coneAngleDeg / 2) * (Math.PI / 180);
+      this.shape._dist = dist;
+      this.shape._angle = angle;
+      this.shape._halfAngleRad = halfAngleRad;
       this.shape.endWorld = world;
+      this._markDirty();
+    } else if (this.drag.type === "shape-drag") {
+      const { shape, startWorld, origGrid } = this.drag;
+      const startGrid = this.worldToGrid(startWorld.x, startWorld.y);
+      const endGrid = this.worldToGrid(world.x, world.y);
+      const dx = endGrid.x - startGrid.x;
+      const dy = endGrid.y - startGrid.y;
+      if (shape.kind === "circle") {
+        shape.x = origGrid.x + dx;
+        shape.y = origGrid.y + dy;
+      } else if (shape.kind === "cone") {
+        shape.originX = origGrid.x + dx;
+        shape.originY = origGrid.y + dy;
+      } else {
+        shape.x = origGrid.x + dx;
+        shape.y = origGrid.y + dy;
+      }
       this._markDirty();
     } else if (this.tool === "fog") {
       this._fogCursorWorld = world;
@@ -267,31 +340,49 @@ export class VttCanvas {
     } else if (this.drag.type === "ruler") {
       this.ruler = null;
       this._markDirty();
+    } else if (this.drag.type === "shape-drag") {
+      // Persist the moved shape
+      const { shape } = this.drag;
+      if (shape.kind === "cone") {
+        this.opts.onPersistentShapeMoved?.(shape);
+      } else {
+        this.opts.onPersistentShapeMoved?.(shape);
+      }
+      this.selectedShape = null;
+      this._markDirty();
     } else if (this.drag.type === "shape") {
       // Make persistent shape (rect or circle)
       const { kind, startWorld, endWorld } = this.shape;
       if (kind === "rect") {
+        // Always produce positive width/height regardless of drag direction
+        const x = Math.min(startWorld.x, endWorld.x);
+        const y = Math.min(startWorld.y, endWorld.y);
         const w2 = Math.abs(endWorld.x - startWorld.x) / this.gridPx;
         const h2 = Math.abs(endWorld.y - startWorld.y) / this.gridPx;
         if (w2 > 0.1 && h2 > 0.1) {
           this.addPersistentShape({
             id: "shape_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
             kind: "rect",
-            x: startWorld.x / this.gridPx,
-            y: startWorld.y / this.gridPx,
+            x: x / this.gridPx,
+            y: y / this.gridPx,
             w: w2,
-            h: h2
+            h: h2,
+            ownerUid: this.opts.currentUid
           });
         }
       } else {
-        const r = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y) / this.gridPx;
-        if (r > 0.1) {
+        // Circle: use diameter drag → radius = diameter / 2, center = midpoint
+        const diameter = this.shape._diameter || 0;
+        const center = this.shape._centerWorld || startWorld;
+        const radius = diameter / 2 / this.gridPx;
+        if (radius > 0.1) {
           this.addPersistentShape({
             id: "shape_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
             kind: "circle",
-            x: startWorld.x / this.gridPx,
-            y: startWorld.y / this.gridPx,
-            radius: r
+            x: center.x / this.gridPx,
+            y: center.y / this.gridPx,
+            radius: radius,
+            ownerUid: this.opts.currentUid
           });
         }
       }
@@ -299,19 +390,19 @@ export class VttCanvas {
       this._markDirty();
     } else if (this.drag.type === "shape-cone") {
       // Make persistent cone shape
-      const { origin, endWorld } = this.shape;
-      const dx = endWorld.x - origin.x;
-      const dy = endWorld.y - origin.y;
-      const dist = Math.hypot(dx, dy) / this.gridPx;
+      const { origin, endWorld, _dist, _angle, coneAngle } = this.shape;
+      const dist = (_dist || Math.hypot(endWorld.x - origin.x, endWorld.y - origin.y)) / this.gridPx;
+      const angle = _angle ?? Math.atan2(endWorld.y - origin.y, endWorld.x - origin.x);
       if (dist > 0.1) {
-        const angle = Math.atan2(dy, dx);
         this.addPersistentShape({
           id: "shape_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
           kind: "cone",
           originX: origin.x / this.gridPx,
           originY: origin.y / this.gridPx,
           angle: angle,
-          distance: dist
+          distance: dist,
+          angleDeg: coneAngle || 60,
+          ownerUid: this.opts.currentUid
         });
       }
       this.shape = null;
@@ -365,7 +456,16 @@ export class VttCanvas {
       return;
     }
 
-    // Persistent shapes: right-click to remove
+    // Persistent shapes: right-click to remove (any tool or select mode)
+    const shape = this._shapeAt(world.x, world.y);
+    if (shape) {
+      if (this.opts.canMoveShape?.(shape)) {
+        this.removePersistentShape(shape);
+      }
+      return;
+    }
+
+    // Shape tools: right-click to remove shapes
     if (this.tool === "shape-rect" || this.tool === "shape-circle" || this.tool === "shape-cone") {
       for (let i = this.persistentShapes.length - 1; i >= 0; i--) {
         const s = this.persistentShapes[i];
@@ -395,15 +495,22 @@ export class VttCanvas {
     }
     if (shape.kind === "cone") {
       const origin = this.gridToWorld(shape.originX, shape.originY);
-      const dx = Math.cos(shape.angle) * shape.distance * this.gridPx;
-      const dy = Math.sin(shape.angle) * shape.distance * this.gridPx;
-      const endX = origin.x + dx;
-      const endY = origin.y + dy;
-      const spread = shape.distance * 0.5; // cone half-angle spread
-      const spreadRad = Math.atan2(spread * this.gridPx, shape.distance * this.gridPx);
-      return this._pointInCone(px, py, origin.x, origin.y, endX, endY, spreadRad);
+      const length = shape.distance * this.gridPx;
+      const angleDeg = shape.angleDeg ?? 60;
+      const halfAngleRad = (angleDeg / 2) * (Math.PI / 180);
+      const startAngle = shape.angle - halfAngleRad;
+      const endAngle = shape.angle + halfAngleRad;
+      return this._pointInCone(px, py, origin.x, origin.y, origin.x + Math.cos(shape.angle) * length, origin.y + Math.sin(shape.angle) * length, halfAngleRad);
     }
     return false;
+  }
+
+  // Check if the current user can move this shape
+  _canMoveShape(shape) {
+    if (this._isDm) return true;
+    // Legacy shapes without ownerUid are treated as DM-owned (player can move them)
+    if (shape.ownerUid == null) return true;
+    return shape.ownerUid === this.opts.currentUid;
   }
 
   _pointInCone(px, py, ox, oy, ex, ey, halfAngle) {
@@ -581,6 +688,10 @@ export class VttCanvas {
   _drawPersistentShapes() {
     const ctx = this.ctx;
     for (const shape of this.persistentShapes) {
+      // Draw highlight for selected shape
+      if (this.selectedShape && this.selectedShape.id === shape.id) {
+        this._drawShapeHighlight(shape);
+      }
       if (shape.kind === "rect") {
         const pos = this.gridToWorld(shape.x, shape.y);
         const size = this.gridToWorld(shape.w, shape.h);
@@ -625,12 +736,12 @@ export class VttCanvas {
     const dy = Math.sin(shape.angle) * length;
     const endX = origin.x + dx;
     const endY = origin.y + dy;
-    const spread = shape.distance * 0.4; // half-angle spread in grid units
-    const spreadRad = Math.atan2(spread * this.gridPx, length);
 
-    // Calculate arc points
-    const startAngle = shape.angle - spreadRad;
-    const endAngle = shape.angle + spreadRad;
+    // Use stored angleDeg, fall back to 60°
+    const angleDeg = shape.angleDeg ?? 60;
+    const halfAngleRad = (angleDeg / 2) * (Math.PI / 180);
+    const startAngle = shape.angle - halfAngleRad;
+    const endAngle = shape.angle + halfAngleRad;
 
     ctx.fillStyle = "rgba(63,143,128,0.25)";
     ctx.strokeStyle = "#56b8a5";
@@ -638,22 +749,53 @@ export class VttCanvas {
 
     ctx.beginPath();
     ctx.moveTo(origin.x, origin.y);
-    ctx.lineTo(endX, endY);
-    ctx.arc(origin.x, origin.y, length, shape.angle, shape.angle, false);
+    ctx.lineTo(origin.x + Math.cos(startAngle) * length, origin.y + Math.sin(startAngle) * length);
+    ctx.arc(origin.x, origin.y, length, startAngle, endAngle);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
     // Size label
     const feet = Math.round(shape.distance * FEET_PER_GRID);
-    const degrees = Math.round(spreadRad * 2 * (180 / Math.PI));
     const labelX = origin.x + Math.cos(shape.angle) * length * 0.6;
     const labelY = origin.y + Math.sin(shape.angle) * length * 0.6;
     ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
     ctx.textAlign = "center";
     ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-    ctx.fillText(`${feet} ft, ${degrees}°`, labelX, labelY);
+    ctx.fillText(`${feet} ft, ${angleDeg}°`, labelX, labelY);
     ctx.shadowBlur = 0;
+  }
+
+  _drawShapeHighlight(shape) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setLineDash([4 / this.zoom, 4 / this.zoom]);
+    ctx.strokeStyle = "#e0b95c";
+    ctx.lineWidth = 2 / this.zoom;
+    if (shape.kind === "rect") {
+      const pos = this.gridToWorld(shape.x, shape.y);
+      const size = this.gridToWorld(shape.w, shape.h);
+      ctx.strokeRect(pos.x - 2 / this.zoom, pos.y - 2 / this.zoom, size.x + 4 / this.zoom, size.y + 4 / this.zoom);
+    } else if (shape.kind === "circle") {
+      const pos = this.gridToWorld(shape.x, shape.y);
+      const r = this.gridToWorld(shape.radius, 0);
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 2 / this.zoom, 0, Math.PI * 2); ctx.stroke();
+    } else if (shape.kind === "cone") {
+      const origin = this.gridToWorld(shape.originX, shape.originY);
+      const length = shape.distance * this.gridPx;
+      const angleDeg = shape.angleDeg ?? 60;
+      const halfAngleRad = (angleDeg / 2) * (Math.PI / 180);
+      const startAngle = shape.angle - halfAngleRad;
+      const endAngle = shape.angle + halfAngleRad;
+      ctx.beginPath();
+      ctx.moveTo(origin.x, origin.y);
+      ctx.lineTo(origin.x + Math.cos(startAngle) * (length + 4 / this.zoom), origin.y + Math.sin(startAngle) * (length + 4 / this.zoom));
+      ctx.arc(origin.x, origin.y, length + 4 / this.zoom, startAngle, endAngle);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   _drawShapePreview() {
@@ -673,25 +815,24 @@ export class VttCanvas {
       ctx.fillText(`${feetW}×${feetH} ft`, x + w2 / 2, y + h2 + 16 / this.zoom);
       ctx.shadowBlur = 0;
     } else if (kind === "circle") {
-      const r = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y);
+      const diameter = this.shape._diameter || 0;
+      const center = this.shape._centerWorld || startWorld;
+      const r = diameter / 2;
       ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
-      ctx.beginPath(); ctx.arc(startWorld.x, startWorld.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       const feet = Math.round((r / this.gridPx) * FEET_PER_GRID);
       ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
       ctx.textAlign = "center";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-      ctx.fillText(`${feet} ft radius`, startWorld.x, startWorld.y + r + 16 / this.zoom);
+      ctx.fillText(`${feet} ft radius`, center.x, center.y + r + 16 / this.zoom);
       ctx.shadowBlur = 0;
     } else if (kind === "cone") {
-      const { origin, endWorld } = this.shape;
-      const dx = endWorld.x - origin.x;
-      const dy = endWorld.y - origin.y;
-      const dist = Math.hypot(dx, dy);
-      const angle = Math.atan2(dy, dx);
-      const spread = Math.min(dist * 0.4, 10 * this.gridPx);
-      const spreadRad = Math.atan2(spread, dist);
-      const startAngle = angle - spreadRad;
-      const endAngle = angle + spreadRad;
+      const { origin, endWorld, coneAngle, _dist, _angle, _halfAngleRad } = this.shape;
+      const dist = _dist ?? Math.hypot(endWorld.x - origin.x, endWorld.y - origin.y);
+      const angle = _angle ?? Math.atan2(endWorld.y - origin.y, endWorld.x - origin.x);
+      const halfAngleRad = _halfAngleRad ?? ((coneAngle || 60) / 2) * (Math.PI / 180);
+      const startAngle = angle - halfAngleRad;
+      const endAngle = angle + halfAngleRad;
 
       ctx.fillStyle = "rgba(63,143,128,0.25)";
       ctx.strokeStyle = "#56b8a5";
@@ -705,7 +846,7 @@ export class VttCanvas {
       ctx.stroke();
 
       const feet = Math.round((dist / this.gridPx) * FEET_PER_GRID);
-      const degrees = Math.round(spreadRad * 2 * (180 / Math.PI));
+      const degrees = coneAngle || 60;
       const labelX = origin.x + Math.cos(angle) * dist * 0.6;
       const labelY = origin.y + Math.sin(angle) * dist * 0.6;
       ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
