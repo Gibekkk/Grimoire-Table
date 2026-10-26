@@ -204,19 +204,19 @@ export class VttCanvas {
       const shape = this._shapeAt(world.x, world.y);
       if (shape && this._canMoveShape(shape)) {
         this.selectedShape = shape;
-        this.drag = { type: "shape-drag", shape, startWorld: world, origGrid: { x: shape.x, y: shape.y } };
-        // For circle: store original center for offset calculation
-        if (shape.kind === "circle") {
-          this.drag._centerOffset = {
-            x: (world.x / this.gridPx) - shape.x,
-            y: (world.y / this.gridPx) - shape.y
-          };
-        }
-        // For cone: store origin offset
+        // Store the correct origin/center grid coords for each shape type
+        let origGrid;
         if (shape.kind === "cone") {
-          this.drag._originOffset = {
-            x: (world.x / this.gridPx) - shape.originX,
-            y: (world.y / this.gridPx) - shape.originY
+          origGrid = { x: shape.originX, y: shape.originY };
+        } else {
+          origGrid = { x: shape.x, y: shape.y };
+        }
+        this.drag = { type: "shape-drag", shape, startWorld: world, origGrid };
+        // For circle: store click offset within the circle
+        if (shape.kind === "circle") {
+          this.drag._clickGrid = {
+            x: world.x / this.gridPx - shape.x,
+            y: world.y / this.gridPx - shape.y
           };
         }
         this._markDirty();
@@ -490,7 +490,7 @@ export class VttCanvas {
     }
     if (shape.kind === "circle") {
       const pos = this.gridToWorld(shape.x, shape.y);
-      const r = this.gridToWorld(shape.radius, 0);
+      const r = shape.radius * this.gridPx;
       return Math.hypot(px - pos.x, py - pos.y) <= r;
     }
     if (shape.kind === "cone") {
@@ -710,7 +710,7 @@ export class VttCanvas {
         ctx.shadowBlur = 0;
       } else if (shape.kind === "circle") {
         const pos = this.gridToWorld(shape.x, shape.y);
-        const r = this.gridToWorld(shape.radius, 0);
+        const r = shape.radius * this.gridPx;
         ctx.fillStyle = "rgba(63,143,128,0.25)";
         ctx.strokeStyle = "#56b8a5";
         ctx.lineWidth = 2 / this.zoom;
@@ -778,7 +778,7 @@ export class VttCanvas {
       ctx.strokeRect(pos.x - 2 / this.zoom, pos.y - 2 / this.zoom, size.x + 4 / this.zoom, size.y + 4 / this.zoom);
     } else if (shape.kind === "circle") {
       const pos = this.gridToWorld(shape.x, shape.y);
-      const r = this.gridToWorld(shape.radius, 0);
+      const r = shape.radius * this.gridPx;
       ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 2 / this.zoom, 0, Math.PI * 2); ctx.stroke();
     } else if (shape.kind === "cone") {
       const origin = this.gridToWorld(shape.originX, shape.originY);
