@@ -263,16 +263,20 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   async function handleFogPlaced(fog) {
     if (!currentMap || !isDm) return; // Non-DM can't modify fog
-    // fog can be a single object (circle tool) or an array (draw-fog tool)
-    const newFogs = Array.isArray(fog) ? fog : [...currentFogs, fog];
-    await db.maps.updateFogs(campaignId, currentMap.id, newFogs);
-    currentFogs = newFogs;
+    // fog can be a single object (circle tool) or an array of new objects (draw-fog tool)
+    const additions = Array.isArray(fog) ? fog : [fog];
+    const idSet = new Set(currentFogs.map(f => f.id));
+    for (const f of additions) {
+      if (!idSet.has(f.id)) currentFogs.push(f); // merge, don't replace
+    }
+    await db.maps.updateFogs(campaignId, currentMap.id, currentFogs);
   }
 
   async function handleFogRemoved(fogs) {
     if (!currentMap || !isDm) return; // Non-DM can't modify fog
-    // fogs is the remaining array (from erase-fog) or a single fog to remove
-    currentFogs = Array.isArray(fogs) ? fogs : currentFogs.filter(f => f.id !== fogs.id);
+    // fogs is the remaining array (from erase-fog)
+    const remainingIds = new Set(fogs.map(f => f.id));
+    currentFogs = currentFogs.filter(f => remainingIds.has(f.id));
     await db.maps.updateFogs(campaignId, currentMap.id, currentFogs);
   }
 

@@ -594,30 +594,49 @@ export class VttCanvas {
     } else if (this.drag.type === "fog-place") {
       this.opts.onFogPlaced?.(this.drag.fog);
     } else if (this.drag.type === "draw-fog" || this.drag.type === "erase-fog") {
-      // Convert live strokes to non-overlapping circles and save
-      const circles = this._convertStrokesToCircles();
       if (this.drag.type === "draw-fog") {
-        const newFogs = [...this.fogs, ...circles.map(c => ({
-          id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-          x: c.x / this.gridPx,
-          y: c.y / this.gridPx,
-          radius: c.radius
-        }))];
+        // Save each live stroke as a unified fog object
+        const newFogs = [...this.fogs];
+        for (const stroke of this.liveFogStrokes) {
+          const pts = stroke.points;
+          if (pts.length < 2) continue;
+          newFogs.push({
+            id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+            kind: "stroke",
+            points: pts.map(p => ({ x: p.x / this.gridPx, y: p.y / this.gridPx })),
+            size: stroke.size || this.fogBrushSize
+          });
+        }
         this.opts.onFogPlaced?.(newFogs);
       } else {
-        // Erase: remove circles that overlap with the drawn eraser area
-        const eraserCircles = this._convertStrokesToCircles();
-        let remaining = this.fogs.filter(fog => {
-          for (const ec of eraserCircles) {
-            const ecWorld = { x: ec.x, y: ec.y };
-            const fogWorld = this.gridToWorld(fog.x, fog.y);
-            const dist = Math.hypot(ecWorld.x - fogWorld.x, ecWorld.y - fogWorld.y);
-            const eraseRadius = this.fogBrushSize * this.gridPx;
-            if (dist < fog.radius * this.gridPx + eraseRadius) {
-              return false; // overlap, remove this fog
-            }
+        // Erase: compute where the eraser path covers, then remove matching stored fogs
+        const eraserCircles = [];
+        if (this._currentStroke && this._currentStroke.points.length >= 2) {
+          for (let i = 1; i < this._currentStroke.points.length; i++) {
+            const p = this._currentStroke.points[i];
+            eraserCircles.push({ x: p.x, y: p.y, radius: this.fogBrushSize * this.gridPx / 2 });
           }
-          return true;
+        }
+        const brushR = this.fogBrushSize * this.gridPx;
+        const remaining = this.fogs.filter(fog => {
+          if (fog.kind === "stroke" && fog.points) {
+            // Erase stroke shapes by checking each segment against eraser circles
+            for (const seg of fog.points) {
+              for (const ec of eraserCircles) {
+                const dist = Math.hypot(seg.x * this.gridPx - ec.x, seg.y * this.gridPx - ec.y);
+                if (dist < brushR + ec.radius) return false;
+              }
+            }
+            return true; // keep this stroke
+          } else {
+            // Erase circle fogs
+            const fogWorld = this.gridToWorld(fog.x, fog.y);
+            for (const ec of eraserCircles) {
+              const dist = Math.hypot(fogWorld.x - ec.x, fogWorld.y - ec.y);
+              if (dist < fog.radius * this.gridPx + ec.radius) return false;
+            }
+            return true;
+          }
         });
         this.opts.onFogRemoved?.(remaining);
       }
@@ -888,8 +907,9 @@ export class VttCanvas {
     const ctx = this.ctx;
     const isPlayer = !this._isDm;
 
-    // Draw saved fog circles
+    // Draw saved fog circles (legacy circle-based fogs)
     for (const fog of this.fogs) {
+      if (fog.kind === "stroke") continue; // drawn below as unified paths
       const center = this.gridToWorld(fog.x, fog.y);
       const radius = fog.radius * this.gridPx;
       const cx = center.x;
@@ -913,16 +933,43 @@ export class VttCanvas {
       }
     }
 
-    // Draw live drawing strokes (converted to circles for rendering)
+    // Draw saved stroke fogs as unified continuous thick paths (paint-like)
+    for (const fog of this.fogs) {
+      if (fog.kind !== "stroke" || !fog.points || fog.points.length < 2) continue;
+      const pts = fog.points.map(p => ({ x: p.x * this.gridPx, y: p.y * this.gridPx }));
+      const brushPx = (fog.size || this.fogBrushSize) * this.gridPx;
+      ctx.fillStyle = isPlayer ? "rgba(0,0,0,1)" : "rgba(0,0,0,0.12)";
+      // Connected thick path — strokes merge into one solid shape when overlapping
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      // Stroke with doubled width so it fills as a solid blob (not thin line)
+      ctx.lineWidth = brushPx * 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.stroke();
+    }
+
+    // Draw live drawing strokes as unified continuous thick paths (paint-like)
     if (this.liveFogStrokes.length > 0) {
-      const circles = this._convertStrokesToCircles();
-      for (const c of circles) {
-        if (isPlayer) {
-          ctx.fillStyle = "rgba(0,0,0,1)"; // players: pitch black, no transparency
-        } else {
-          ctx.fillStyle = "rgba(0,0,0,0.12)";
+      for (const stroke of this.liveFogStrokes) {
+        const pts = stroke.points;
+        if (pts.length < 2) continue;
+        const brushPx = (stroke.size || this.fogBrushSize) * this.gridPx;
+        ctx.fillStyle = isPlayer ? "rgba(0,0,0,1)" : "rgba(0,0,0,0.12)";
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x, pts[i].y);
         }
-        ctx.beginPath(); ctx.arc(c.x, c.y, c.radius * this.gridPx, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = brushPx * 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.stroke();
       }
     }
   }
@@ -977,9 +1024,11 @@ export class VttCanvas {
     const dx = Math.cos(shape.angle) * length;
     const dy = Math.sin(shape.angle) * length;
 
-    // Equilateral triangle: tip at distance, two base vertices perpendicular to midpoint
+    // Tip of the cone (where it points)
     const tipX = origin.x + dx;
     const tipY = origin.y + dy;
+
+    // Base vertices — perpendicular offset from midpoint, height of equilateral triangle
     const midX = origin.x + dx / 2;
     const midY = origin.y + dy / 2;
     const perpX = -Math.sin(shape.angle);
@@ -990,29 +1039,37 @@ export class VttCanvas {
     const b2x = midX - perpX * halfWidth;
     const b2y = midY - perpY * halfWidth;
 
+    // Draw as one continuous filled shape: origin → b1 → tip → b2 → close
     ctx.fillStyle = "rgba(63,143,128,0.25)";
     ctx.strokeStyle = "#56b8a5";
     ctx.lineWidth = 2 / this.zoom;
 
     ctx.beginPath();
-    ctx.moveTo(origin.x, origin.y);
-    ctx.lineTo(tipX, tipY);
-    ctx.lineTo(b1x, b1y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(tipX, tipY);
-    ctx.lineTo(b2x, b2y);
+    ctx.moveTo(origin.x, origin.y);   // tail-left base
+    ctx.lineTo(b1x, b1y);             // tip-side
+    ctx.lineTo(tipX, tipY);           // far tip
+    ctx.lineTo(b2x, b2y);             // near-side
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Size label — distance (side length) and angle
+    // Subtle inner fill for depth
+    const midTipX = origin.x + dx * 0.35;
+    const midTipY = origin.y + dy * 0.35;
+    ctx.fillStyle = "rgba(63,143,128,0.08)";
+    ctx.beginPath();
+    ctx.moveTo(midTipX, midTipY);
+    ctx.lineTo(b1x + (tipX - b1x) * 0.15, b1y + (tipY - b1y) * 0.15);
+    ctx.lineTo(tipX, tipY);
+    ctx.lineTo(b2x + (tipX - b2x) * 0.15, b2y + (tipY - b2y) * 0.15);
+    ctx.closePath();
+    ctx.fill();
+
+    // Size label
     const feet = Math.round(shape.distance * FEET_PER_GRID);
     const degrees = Math.round((shape.angle * 180 / Math.PI));
-    const labelX = origin.x + dx * 0.6;
-    const labelY = origin.y + dy * 0.6;
+    const labelX = origin.x + dx * 0.5;
+    const labelY = origin.y + dy * 0.5;
     ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
     ctx.textAlign = "center";
     ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
@@ -1097,7 +1154,7 @@ export class VttCanvas {
       const dist = _dist ?? Math.hypot(endWorld.x - origin.x, endWorld.y - origin.y);
       const angle = _angle ?? Math.atan2(endWorld.y - origin.y, endWorld.x - origin.x);
 
-      // Equilateral triangle preview
+      // Equilateral triangle preview — drawn as one unified shape (origin → base1 → tip → base2)
       const tipX = origin.x + Math.cos(angle) * dist;
       const tipY = origin.y + Math.sin(angle) * dist;
       const midX = origin.x + Math.cos(angle) * dist / 2;
@@ -1115,13 +1172,8 @@ export class VttCanvas {
       ctx.lineWidth = 2 / this.zoom;
       ctx.beginPath();
       ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(tipX, tipY);
       ctx.lineTo(b1x, b1y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX, tipY);
       ctx.lineTo(b2x, b2y);
       ctx.closePath();
       ctx.fill();
