@@ -263,8 +263,14 @@ export class VttCanvas {
 
   _updateCursor() {
     if (!this.canvas) return;
-    const isFogTool = this.tool === "fog" || this.tool === "draw-fog" || this.tool === "erase-fog";
-    this.canvas.style.cursor = isFogTool ? "crosshair" : "grab";
+    if (this.drag) {
+      // In drag mode — crosshair for fog tools, grab for others
+      const isFogTool = this.tool === "fog" || this.tool === "draw-fog" || this.tool === "erase-fog";
+      this.canvas.style.cursor = isFogTool ? "crosshair" : "grab";
+    } else {
+      // Not dragging — revert to default cursor
+      this.canvas.style.cursor = "";
+    }
   }
 
   // --- Persistent shapes API ---
@@ -353,9 +359,19 @@ export class VttCanvas {
         this._markDirty();
         return;
       }
+      // Clear ruler when clicking on VTT canvas (non-tool area)
+      if (this.ruler) {
+        this.ruler = null;
+        this._markDirty();
+      }
       if (!token && !shape) { this.drag = { type: "pan", startScreen: { x: sx, y: sy }, startPan: { ...this.pan } }; return; }
       this.drag = { type: "click", token };
       return;
+    }
+
+    // Clear ruler when clicking elsewhere (non-tool area)
+    if (this.ruler && !token && !shape) {
+      this.ruler = null;
     }
 
     if (this.tool === "ruler") {
@@ -515,7 +531,7 @@ export class VttCanvas {
     } else if (this.drag.type === "click") {
       this.opts.onTokenClicked?.(this.drag.token);
     } else if (this.drag.type === "ruler") {
-      this.ruler = null;
+      // Keep ruler visible until user clicks elsewhere on VTT canvas
       this._markDirty();
     } else if (this.drag.type === "shape-drag") {
       // Persist the moved shape
@@ -1127,31 +1143,27 @@ export class VttCanvas {
     const dx = Math.cos(shape.angle) * length;
     const dy = Math.sin(shape.angle) * length;
 
-    // Tip of the cone (where it points)
+    // Directional cone — half-fan shape (D&D 5e style), fans out from origin to ONE side only
     const tipX = origin.x + dx;
     const tipY = origin.y + dy;
-
-    // Base vertices — perpendicular offset from midpoint, height of equilateral triangle
     const midX = origin.x + dx / 2;
     const midY = origin.y + dy / 2;
     const perpX = -Math.sin(shape.angle);
     const perpY = Math.cos(shape.angle);
     const halfWidth = length * (Math.sqrt(3) / 4);
+    // Only one side — split the symmetric diamond in half for directional fan
     const b1x = midX + perpX * halfWidth;
     const b1y = midY + perpY * halfWidth;
-    const b2x = midX - perpX * halfWidth;
-    const b2y = midY - perpY * halfWidth;
 
-    // Draw as one continuous filled shape: origin → b1 → tip → b2 → close
+    // Draw as one continuous filled shape: origin → base → tip → close (half-triangle)
     ctx.fillStyle = "rgba(63,143,128,0.25)";
     ctx.strokeStyle = "#56b8a5";
     ctx.lineWidth = 2 / this.zoom;
 
     ctx.beginPath();
-    ctx.moveTo(origin.x, origin.y);   // tail-left base
-    ctx.lineTo(b1x, b1y);             // tip-side
+    ctx.moveTo(origin.x, origin.y);   // apex (origin)
+    ctx.lineTo(b1x, b1y);             // single base vertex
     ctx.lineTo(tipX, tipY);           // far tip
-    ctx.lineTo(b2x, b2y);             // near-side
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -1164,7 +1176,6 @@ export class VttCanvas {
     ctx.moveTo(midTipX, midTipY);
     ctx.lineTo(b1x + (tipX - b1x) * 0.15, b1y + (tipY - b1y) * 0.15);
     ctx.lineTo(tipX, tipY);
-    ctx.lineTo(b2x + (tipX - b2x) * 0.15, b2y + (tipY - b2y) * 0.15);
     ctx.closePath();
     ctx.fill();
 
@@ -1199,24 +1210,16 @@ export class VttCanvas {
       const length = shape.distance * this.gridPx;
       const tipX = origin.x + Math.cos(shape.angle) * length;
       const tipY = origin.y + Math.sin(shape.angle) * length;
-      const midX = origin.x + Math.cos(shape.angle) * length / 2;
-      const midY = origin.y + Math.sin(shape.angle) * length / 2;
-      const perpX = -Math.sin(shape.angle);
-      const perpY = Math.cos(shape.angle);
-      const halfWidth = length * (Math.sqrt(3) / 4);
-      const b1x = midX + perpX * halfWidth;
-      const b1y = midY + perpY * halfWidth;
-      const b2x = midX - perpX * halfWidth;
-      const b2y = midY - perpY * halfWidth;
+      // Directional cone — fans out from origin (30° half-angle)
+      const v1x = origin.x + Math.cos(shape.angle - Math.PI / 6) * length;
+      const v1y = origin.y + Math.sin(shape.angle - Math.PI / 6) * length;
+      const v2x = origin.x + Math.cos(shape.angle + Math.PI / 6) * length;
+      const v2y = origin.y + Math.sin(shape.angle + Math.PI / 6) * length;
       ctx.beginPath();
       ctx.moveTo(origin.x, origin.y);
+      ctx.lineTo(v1x, v1y);
       ctx.lineTo(tipX, tipY);
-      ctx.lineTo(b1x, b1y);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(tipX, tipY);
-      ctx.lineTo(b2x, b2y);
+      ctx.lineTo(v2x, v2y);
       ctx.closePath();
       ctx.stroke();
     }
@@ -1257,7 +1260,7 @@ export class VttCanvas {
       const dist = _dist ?? Math.hypot(endWorld.x - origin.x, endWorld.y - origin.y);
       const angle = _angle ?? Math.atan2(endWorld.y - origin.y, endWorld.x - origin.x);
 
-      // Equilateral triangle preview — drawn as one unified shape (origin → base1 → tip → base2)
+      // Directional cone — half-fan shape (one side of symmetric diamond)
       const tipX = origin.x + Math.cos(angle) * dist;
       const tipY = origin.y + Math.sin(angle) * dist;
       const midX = origin.x + Math.cos(angle) * dist / 2;
@@ -1265,10 +1268,9 @@ export class VttCanvas {
       const perpX = -Math.sin(angle);
       const perpY = Math.cos(angle);
       const halfWidth = dist * (Math.sqrt(3) / 4);
+      // Only one side — split in half (directional fan instead of symmetric diamond)
       const b1x = midX + perpX * halfWidth;
       const b1y = midY + perpY * halfWidth;
-      const b2x = midX - perpX * halfWidth;
-      const b2y = midY - perpY * halfWidth;
 
       ctx.fillStyle = "rgba(63,143,128,0.25)";
       ctx.strokeStyle = "#56b8a5";
@@ -1277,7 +1279,6 @@ export class VttCanvas {
       ctx.moveTo(origin.x, origin.y);
       ctx.lineTo(b1x, b1y);
       ctx.lineTo(tipX, tipY);
-      ctx.lineTo(b2x, b2y);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
