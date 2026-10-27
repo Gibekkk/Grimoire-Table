@@ -595,50 +595,153 @@ export class VttCanvas {
       this.opts.onFogPlaced?.(this.drag.fog);
     } else if (this.drag.type === "draw-fog" || this.drag.type === "erase-fog") {
       if (this.drag.type === "draw-fog") {
-        // Save each live stroke as a unified fog object
-        const newFogs = [...this.fogs];
+        // Merge new strokes with existing fog — remove overlapping segments, keep only unique
+        const mergedFogs = [...this.fogs];
+
         for (const stroke of this.liveFogStrokes) {
           const pts = stroke.points;
           if (pts.length < 2) continue;
-          newFogs.push({
-            id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-            kind: "stroke",
-            points: pts.map(p => ({ x: p.x / this.gridPx, y: p.y / this.gridPx })),
-            size: stroke.size || this.fogBrushSize
-          });
-        }
-        this.opts.onFogPlaced?.(newFogs);
-      } else {
-        // Erase: compute where the eraser path covers, then remove matching stored fogs
-        const eraserCircles = [];
-        if (this._currentStroke && this._currentStroke.points.length >= 2) {
-          for (let i = 1; i < this._currentStroke.points.length; i++) {
-            const p = this._currentStroke.points[i];
-            eraserCircles.push({ x: p.x, y: p.y, radius: this.fogBrushSize * this.gridPx / 2 });
-          }
-        }
-        const brushR = this.fogBrushSize * this.gridPx;
-        const remaining = this.fogs.filter(fog => {
-          if (fog.kind === "stroke" && fog.points) {
-            // Erase stroke shapes by checking each segment against eraser circles
-            for (const seg of fog.points) {
-              for (const ec of eraserCircles) {
-                const dist = Math.hypot(seg.x * this.gridPx - ec.x, seg.y * this.gridPx - ec.y);
-                if (dist < brushR + ec.radius) return false;
+          const brushPx = (stroke.size || this.fogBrushSize) * this.gridPx;
+
+          // Filter out points/segments that already exist in saved fog (prevent stacking)
+          const keptPoints = [];
+          for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            let shouldKeep = true;
+
+            for (const existing of mergedFogs) {
+              if (!shouldKeep) break;
+              // Check against circle fogs
+              if (existing.kind !== "stroke") {
+                const cx = existing.x * this.gridPx;
+                const cy = existing.y * this.gridPx;
+                const cr = (existing.radius || 1) * this.gridPx;
+                const dist = Math.hypot(p.x - cx, p.y - cy);
+                if (dist < cr + brushPx / 2) { shouldKeep = false; break; }
+              } else {
+                // Check against existing stroke segments
+                const ePts = existing.points.map(ep => ({ x: ep.x * this.gridPx, y: ep.y * this.gridPx }));
+                for (let j = 0; j < ePts.length && shouldKeep; j++) {
+                  const dist = Math.hypot(p.x - ePts[j].x, p.y - ePts[j].y);
+                  if (dist < brushPx) { shouldKeep = false; break; }
+                }
               }
             }
-            return true; // keep this stroke
-          } else {
-            // Erase circle fogs
-            const fogWorld = this.gridToWorld(fog.x, fog.y);
-            for (const ec of eraserCircles) {
-              const dist = Math.hypot(fogWorld.x - ec.x, fogWorld.y - ec.y);
-              if (dist < fog.radius * this.gridPx + ec.radius) return false;
+            // Also check against kept points from previous points in this stroke
+            for (const kp of keptPoints) {
+              const dist = Math.hypot(p.x - kp.x, p.y - kp.y);
+              if (dist < brushPx / 2) { shouldKeep = false; break; }
             }
-            return true;
+            if (shouldKeep) keptPoints.push({ x: p.x, y: p.y });
           }
-        });
-        this.opts.onFogRemoved?.(remaining);
+
+          // Split into sub-strokes where points are too far apart
+          if (keptPoints.length >= 2) {
+            const subStrokes = [keptPoints[0]];
+            for (let i = 1; i < keptPoints.length; i++) {
+              const dist = Math.hypot(
+                keptPoints[i].x - keptPoints[i - 1].x,
+                keptPoints[i].y - keptPoints[i - 1].y
+              );
+              if (dist > this.fogBrushSize * this.gridPx) {
+                // Gap detected — start new sub-stroke
+                mergedFogs.push({
+                  id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+                  kind: "stroke",
+                  points: [subStrokes.pop()],
+                  size: this.fogBrushSize
+                });
+                subStrokes.push(keptPoints[i]);
+              } else {
+                subStrokes.push(keptPoints[i]);
+              }
+            }
+            mergedFogs.push({
+              id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+              kind: "stroke",
+              points: subStrokes.map(p => ({ x: p.x / this.gridPx, y: p.y / this.gridPx })),
+              size: this.fogBrushSize
+            });
+          }
+        }
+
+        this.opts.onFogPlaced?.(mergedFogs);
+      } else {
+        // Erase: clip individual points from existing fogs instead of deleting entire strokes
+        const eraserPts = [];
+        if (this._currentStroke && this._currentStroke.points.length >= 2) {
+          for (let i = 0; i < this._currentStroke.points.length; i++) {
+            eraserPts.push(this._currentStroke.points[i]);
+          }
+        }
+        const eraseR = this.fogBrushSize * this.gridPx / 2;
+
+        // Process each existing fog — clip points that fall within the erased area
+        let updatedFogs = [];
+        for (const fog of this.fogs) {
+          if (fog.kind === "stroke" && fog.points) {
+            const pts = fog.points.map(p => ({ x: p.x * this.gridPx, y: p.y * this.gridPx }));
+            // Clip each point against eraser area
+            const keptPoints = [];
+            for (let i = 0; i < pts.length; i++) {
+              let inEraser = false;
+              for (const ep of eraserPts) {
+                if (Math.hypot(pts[i].x - ep.x, pts[i].y - ep.y) <= eraseR) {
+                  inEraser = true;
+                  break;
+                }
+              }
+              if (!inEraser) keptPoints.push({ x: pts[i].x / this.gridPx, y: pts[i].y / this.gridPx });
+            }
+
+            // Split into sub-strokes where gaps exceed brush size
+            if (keptPoints.length >= 2) {
+              let currentStroke = [keptPoints[0]];
+              for (let i = 1; i < keptPoints.length; i++) {
+                const dist = Math.hypot(
+                  keptPoints[i].x * this.gridPx - currentStroke[currentStroke.length - 1].x * this.gridPx,
+                  keptPoints[i].y * this.gridPx - currentStroke[currentStroke.length - 1].y * this.gridPx
+                );
+                if (dist > this.fogBrushSize * this.gridPx) {
+                  // Gap — push current stroke and start new one
+                  updatedFogs.push({
+                    id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+                    kind: "stroke",
+                    points: currentStroke.map(p => ({ x: p.x / this.gridPx, y: p.y / this.gridPx })),
+                    size: fog.size || this.fogBrushSize
+                  });
+                  currentStroke = [keptPoints[i]];
+                } else {
+                  currentStroke.push(keptPoints[i]);
+                }
+              }
+              // Push remaining stroke if it has enough points
+              if (currentStroke.length >= 2) {
+                updatedFogs.push({
+                  id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+                  kind: "stroke",
+                  points: currentStroke.map(p => ({ x: p.x / this.gridPx, y: p.y / this.gridPx })),
+                  size: fog.size || this.fogBrushSize
+                });
+              }
+            }
+          } else {
+            // Legacy circle fogs — remove entirely if they overlap the eraser
+            const fogWorld = this.gridToWorld(fog.x, fog.y);
+            const fogR = (fog.radius || 1) * this.gridPx;
+            let fullyErased = false;
+            for (const ep of eraserPts) {
+              const dist = Math.hypot(fogWorld.x - ep.x, fogWorld.y - ep.y);
+              if (dist <= fogR + eraseR) {
+                fullyErased = true;
+                break;
+              }
+            }
+            if (!fullyErased) updatedFogs.push(fog);
+          }
+        }
+
+        this.opts.onFogRemoved?.(updatedFogs);
       }
       this.liveFogStrokes = [];
       this._currentStroke = null;
