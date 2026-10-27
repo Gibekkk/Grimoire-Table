@@ -54,10 +54,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   // ---------------- Toolbar ----------------
   const fogSliderWrap = h("div", { class: "fog-slider-wrap", style: "display:none;" });
   const fogSliderLabel = h("span", { class: "fog-slider-label" }, "Size:");
-  const fogSlider = h("input", { type: "range", min: canvas.getFogCursorMin(), max: canvas.getFogCursorMax(), value: canvas.getFogCursorSize(), class: "fog-slider" });
+  const fogSlider = h("input", { type: "range", min: canvas.getFogBrushMin(), max: canvas.getFogBrushMax(), value: canvas.getFogBrushSize(), class: "fog-slider" });
   fogSlider.addEventListener("input", () => {
-    canvas.setFogCursorSize(parseInt(fogSlider.value));
-    fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogCursorSize() * 5)}ft`;
+    canvas.setFogBrushSize(parseInt(fogSlider.value));
+    fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
   });
   fogSliderWrap.appendChild(fogSliderLabel);
   fogSliderWrap.appendChild(fogSlider);
@@ -83,7 +83,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toggleBtn.addEventListener("click", () => { sidebarOpen = !sidebarOpen; sidebar.style.display = sidebarOpen ? "flex" : "none"; });
     toolbar.appendChild(toggleBtn);
 
-    [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"], ["shape-cone", "Cone AoE"], ["fog", "Fog of War"]].forEach(([tool, label]) => {
+    [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"], ["shape-cone", "Cone AoE"], ["draw-fog", "Draw Fog"], ["erase-fog", "Erase Fog"], ["fog", "Fog Circles"]].forEach(([tool, label]) => {
       const btn = h("button", { class: `btn sm ${canvas.tool === tool ? "primary" : ""}`, title: label }, label);
       btn.addEventListener("click", () => { canvas.setTool(tool); buildToolbar(); });
       toolbar.appendChild(btn);
@@ -116,6 +116,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
         currentFogs = [];
         db.maps.updateFogs(campaignId, currentMap.id, []);
         canvas.setFogs([]);
+        canvas.clearLiveFog();
         toast("All fog cleared");
       });
       toolbar.appendChild(clearFogBtn);
@@ -127,10 +128,11 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     }
 
     // Update sliders visibility based on active tool
-    fogSliderWrap.style.display = canvas.tool === "fog" ? "flex" : "none";
-    if (canvas.tool === "fog") {
-      fogSlider.value = canvas.getFogCursorSize();
-      fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogCursorSize() * 5)}ft`;
+    const isFogTool = canvas.tool === "fog" || canvas.tool === "draw-fog" || canvas.tool === "erase-fog";
+    fogSliderWrap.style.display = isFogTool ? "flex" : "none";
+    if (isFogTool) {
+      fogSlider.value = canvas.getFogBrushSize();
+      fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
     }
     shapeSliderWrap.style.display = (canvas.tool === "shape-cone") ? "flex" : "none";
     if (canvas.tool === "shape-cone") {
@@ -266,16 +268,17 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   async function handleFogPlaced(fog) {
     if (!currentMap) return;
-    const newFogs = [...currentFogs, fog];
+    // fog can be a single object (circle tool) or an array (draw-fog tool)
+    const newFogs = Array.isArray(fog) ? fog : [...currentFogs, fog];
     await db.maps.updateFogs(campaignId, currentMap.id, newFogs);
     currentFogs = newFogs;
   }
 
-  async function handleFogRemoved(fog) {
+  async function handleFogRemoved(fogs) {
     if (!currentMap) return;
-    const newFogs = currentFogs.filter(f => f.id !== fog.id);
-    await db.maps.updateFogs(campaignId, currentMap.id, newFogs);
-    currentFogs = newFogs;
+    // fogs is the remaining array (from erase-fog) or a single fog to remove
+    currentFogs = Array.isArray(fogs) ? fogs : currentFogs.filter(f => f.id !== fogs.id);
+    await db.maps.updateFogs(campaignId, currentMap.id, currentFogs);
   }
 
   // ---------------- Persistent AoE shapes handlers ----------------

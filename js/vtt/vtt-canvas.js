@@ -35,11 +35,17 @@ export class VttCanvas {
 
     // --- Fog of war ---
     this.fogs = [];
-    this.fogCursorSize = 3;
-    this.fogCursorMin = 1;
-    this.fogCursorMax = 15;
+    this.fogBrushSize = 3;
+    this.fogBrushMin = 1;
+    this.fogBrushMax = 15;
     this._isDm = !!opts.isDm;
     this._fogCursorWorld = null;
+
+    // Live fog drawing layer
+    this.fogCanvas = null;
+    this.fogCtx = null;
+    this.liveFogStrokes = []; // [{ points: [{x,y}, ...] }]
+    this._currentStroke = null;
 
     // --- Persistent AoE shapes (like tokens, stay until removed) ---
     this.persistentShapes = [];
@@ -70,6 +76,9 @@ export class VttCanvas {
     this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
     this.canvas.addEventListener("contextmenu", this._onContextMenu);
 
+    // Fog drawing canvas — separate layer for live freeform fog
+    this._initFogCanvas();
+
     // Start event-driven render loop
     this._markDirty();
   }
@@ -84,6 +93,102 @@ export class VttCanvas {
     });
   }
 
+  _initFogCanvas() {
+    const fc = document.createElement("canvas");
+    fc.style.position = "absolute";
+    fc.style.top = "0";
+    fc.style.left = "0";
+    fc.style.pointerEvents = "none";
+    fc.style.touchAction = "none";
+    this.container.appendChild(fc);
+    this.fogCanvas = fc;
+    this.fogCtx = fc.getContext("2d");
+    this._resizeFogCanvas();
+  }
+
+  _resizeFogCanvas() {
+    if (!this.fogCanvas) return;
+    const { clientWidth: w, clientHeight: h } = this.container;
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    this.fogCanvas.width = w * dpr;
+    this.fogCanvas.height = h * dpr;
+    this.fogCanvas.style.width = w + "px";
+    this.fogCanvas.style.height = h + "px";
+    this.fogCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // Convert live drawing strokes to non-overlapping circles
+  _convertStrokesToCircles() {
+    const circles = [];
+    const brushPx = this.fogBrushSize * this.gridPx;
+    const dedupDist = brushPx;
+
+    for (const stroke of this.liveFogStrokes) {
+      const pts = stroke.points;
+      if (pts.length < 2) continue;
+
+      for (let i = 0; i < pts.length; i += 2) { // sample every other point
+        const p = pts[i];
+        // Check if this point overlaps any existing circle
+        let overlaps = false;
+        for (const c of circles) {
+          const dx = p.x - c.x;
+          const dy = p.y - c.y;
+          if (Math.hypot(dx, dy) < dedupDist) {
+            overlaps = true;
+            break;
+          }
+        }
+        if (!overlaps) {
+          circles.push({ x: p.x, y: p.y, radius: this.fogBrushSize });
+        }
+      }
+    }
+    return circles;
+  }
+
+  // Clear live fog and reset
+  clearLiveFog() {
+    this.liveFogStrokes = [];
+    this._currentStroke = null;
+    if (this.fogCtx) {
+      this.fogCtx.clearRect(0, 0, this.fogCanvas.width, this.fogCanvas.height);
+    }
+    this._markDirty();
+  }
+
+  // Get brush size in world pixels
+  _getBrushWorldRadius() {
+    return this.fogBrushSize * this.gridPx;
+  }
+
+  // Draw fog at a point using the fog canvas (for live preview)
+  _drawFogOnCanvas(worldX, worldY) {
+    if (!this.fogCtx) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const screenX = worldX * this.zoom + this.pan.x + rect.left;
+    const screenY = worldY * this.zoom + this.pan.y + rect.top;
+    const brushPx = this.fogBrushSize * this.gridPx * this.zoom;
+    this.fogCtx.fillStyle = "rgba(0,0,0,1)";
+    this.fogCtx.beginPath();
+    this.fogCtx.arc(screenX, screenY, brushPx / 2, 0, Math.PI * 2);
+    this.fogCtx.fill();
+  }
+
+  // Erase fog from the fog canvas
+  _eraseFogOnCanvas(worldX, worldY) {
+    if (!this.fogCtx) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const screenX = worldX * this.zoom + this.pan.x + rect.left;
+    const screenY = worldY * this.zoom + this.pan.y + rect.top;
+    const brushPx = this.fogBrushSize * this.gridPx * this.zoom;
+    this.fogCtx.globalCompositeOperation = "destination-out";
+    this.fogCtx.beginPath();
+    this.fogCtx.arc(screenX, screenY, brushPx / 2, 0, Math.PI * 2);
+    this.fogCtx.fill();
+    this.fogCtx.globalCompositeOperation = "source-over";
+  }
+
   _resize() {
     const { clientWidth: w, clientHeight: h } = this.container;
     if (!w || !h) return;
@@ -93,6 +198,7 @@ export class VttCanvas {
     this.canvas.style.width = w + "px";
     this.canvas.style.height = h + "px";
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._resizeFogCanvas();
     this._markDirty();
   }
 
@@ -115,6 +221,14 @@ export class VttCanvas {
     this.tool = tool;
     this.shape = null;
     this.ruler = null;
+    // Clear live fog stroke if switching away from fog tools
+    if (tool !== "fog" && tool !== "draw-fog" && tool !== "erase-fog") {
+      if (this._currentStroke && this._currentStroke.points.length > 0) {
+        // Auto-save the current stroke
+        this.liveFogStrokes.push(this._currentStroke);
+        this._currentStroke = null;
+      }
+    }
     this._updateCursor();
     this._markDirty();
   }
@@ -129,11 +243,22 @@ export class VttCanvas {
   getFogCursorSize() { return this.fogCursorSize; }
   getFogCursorMin() { return this.fogCursorMin; }
   getFogCursorMax() { return this.fogCursorMax; }
+
+  // Brush size for draw-fog and erase-fog tools
+  getFogBrushSize() { return this.fogBrushSize; }
+  getFogBrushMin() { return this.fogBrushMin; }
+  getFogBrushMax() { return this.fogBrushMax; }
+  setFogBrushSize(size) {
+    this.fogBrushSize = Math.max(this.fogBrushMin, Math.min(this.fogBrushMax, size));
+    this._updateCursor();
+    this._markDirty();
+  }
   isDm() { return this._isDm; }
 
   _updateCursor() {
     if (!this.canvas) return;
-    this.canvas.style.cursor = this.tool === "fog" ? "crosshair" : "grab";
+    const isFogTool = this.tool === "fog" || this.tool === "draw-fog" || this.tool === "erase-fog";
+    this.canvas.style.cursor = isFogTool ? "crosshair" : "grab";
   }
 
   // --- Persistent shapes API ---
@@ -249,6 +374,24 @@ export class VttCanvas {
       return;
     }
 
+    if (this.tool === "draw-fog") {
+      this.drag = { type: "draw-fog" };
+      this._currentStroke = { points: [{ x: world.x, y: world.y }] };
+      this.liveFogStrokes.push(this._currentStroke);
+      this._drawFogOnCanvas(world.x, world.y);
+      this._markDirty();
+      return;
+    }
+
+    if (this.tool === "erase-fog") {
+      this.drag = { type: "erase-fog" };
+      this._currentStroke = { points: [{ x: world.x, y: world.y }] };
+      this.liveFogStrokes.push(this._currentStroke);
+      this._eraseFogOnCanvas(world.x, world.y);
+      this._markDirty();
+      return;
+    }
+
     if (this.tool === "fog") {
       const grid = this.worldToGrid(world.x, world.y);
       const id = "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
@@ -301,6 +444,28 @@ export class VttCanvas {
       this.shape._halfAngleRad = halfAngleRad;
       this.shape.endWorld = world;
       this._markDirty();
+    } else if (this.drag.type === "draw-fog") {
+      // Record stroke point
+      const lastPt = this._currentStroke.points[this._currentStroke.points.length - 1];
+      const dx = world.x - lastPt.x;
+      const dy = world.y - lastPt.y;
+      const dist = Math.hypot(dx, dy);
+      // Only add point if moved enough (avoid too many points)
+      if (dist > 2) {
+        this._currentStroke.points.push({ x: world.x, y: world.y });
+        this._drawFogOnCanvas(world.x, world.y);
+        this._markDirty();
+      }
+    } else if (this.drag.type === "erase-fog") {
+      const lastPt = this._currentStroke.points[this._currentStroke.points.length - 1];
+      const dx = world.x - lastPt.x;
+      const dy = world.y - lastPt.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 2) {
+        this._currentStroke.points.push({ x: world.x, y: world.y });
+        this._eraseFogOnCanvas(world.x, world.y);
+        this._markDirty();
+      }
     } else if (this.drag.type === "shape-drag") {
       const { shape, startWorld, origGrid } = this.drag;
       const startGrid = this.worldToGrid(startWorld.x, startWorld.y);
@@ -409,15 +574,44 @@ export class VttCanvas {
       this._markDirty();
     } else if (this.drag.type === "fog-place") {
       this.opts.onFogPlaced?.(this.drag.fog);
-    }
+    } else if (this.drag.type === "draw-fog" || this.drag.type === "erase-fog") {
+      // Convert live strokes to non-overlapping circles and save
+      const circles = this._convertStrokesToCircles();
+      if (this.drag.type === "draw-fog") {
+        const newFogs = [...this.fogs, ...circles.map(c => ({
+          id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+          x: c.x / this.gridPx,
+          y: c.y / this.gridPx,
+          radius: c.radius
+        }))];
+        this.opts.onFogPlaced?.(newFogs);
+      } else {
+        // Erase: remove circles that overlap with the drawn eraser area
+        const eraserCircles = this._convertStrokesToCircles();
+        let remaining = this.fogs.filter(fog => {
+          for (const ec of eraserCircles) {
+            const ecWorld = { x: ec.x, y: ec.y };
+            const fogWorld = this.gridToWorld(fog.x, fog.y);
+            const dist = Math.hypot(ecWorld.x - fogWorld.x, ecWorld.y - fogWorld.y);
+            const eraseRadius = this.fogBrushSize * this.gridPx;
+            if (dist < fog.radius * this.gridPx + eraseRadius) {
+              return false; // overlap, remove this fog
+            }
+          }
+          return true;
+        });
+        this.opts.onFogRemoved?.(remaining);
+      }
+      this.liveFogStrokes = [];
+      this._currentStroke = null;
     this.drag = null;
   }
 
   _onWheel(e) {
     e.preventDefault();
-    if (this.tool === "fog") {
+    if (this.tool === "fog" || this.tool === "draw-fog" || this.tool === "erase-fog") {
       const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      this.setFogCursorSize(this.fogCursorSize * factor);
+      this.setFogBrushSize(this.fogBrushSize * factor);
       return;
     }
     const { x: sx, y: sy } = this._eventPos(e);
@@ -645,8 +839,8 @@ export class VttCanvas {
       ctx.shadowBlur = 0;
     }
 
-    // Fog of war overlay
-    if (this.fogs && this.fogs.length > 0) {
+    // Fog of war overlay (saved circles + live strokes)
+    if ((this.fogs && this.fogs.length > 0) || this.liveFogStrokes?.length > 0) {
       this._drawFogOverlay();
     }
 
@@ -656,31 +850,41 @@ export class VttCanvas {
   _drawFogOverlay() {
     const ctx = this.ctx;
     const isPlayer = !this._isDm;
+
+    // Draw saved fog circles
     for (const fog of this.fogs) {
       const center = this.gridToWorld(fog.x, fog.y);
       const radius = fog.radius * this.gridPx;
       const cx = center.x;
       const cy = center.y;
-      // Skip invalid radii
       if (radius <= 0) continue;
       if (isPlayer) {
-        // Players: nearly opaque black (fog of war)
         ctx.fillStyle = "rgba(0,0,0,0.95)";
         ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
       } else {
-        // DM: very light translucent overlay so the map is still clearly visible
         ctx.fillStyle = "rgba(0,0,0,0.12)";
         ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
-        // Bright gold border so the DM can clearly see fog boundaries
         ctx.strokeStyle = "rgba(224,185,92,0.7)";
         ctx.lineWidth = 2.5 / this.zoom;
         ctx.setLineDash([6 / this.zoom, 4 / this.zoom]);
         ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
         ctx.setLineDash([]);
-        // Outer glow ring
         ctx.strokeStyle = "rgba(224,185,92,0.15)";
         ctx.lineWidth = 8 / this.zoom;
         ctx.beginPath(); ctx.arc(cx, cy, radius + 2 / this.zoom, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    // Draw live drawing strokes (converted to circles for rendering)
+    if (this.liveFogStrokes.length > 0) {
+      const circles = this._convertStrokesToCircles();
+      for (const c of circles) {
+        if (isPlayer) {
+          ctx.fillStyle = "rgba(0,0,0,0.95)";
+        } else {
+          ctx.fillStyle = "rgba(0,0,0,0.12)";
+        }
+        ctx.beginPath(); ctx.arc(c.x, c.y, c.radius * this.gridPx, 0, Math.PI * 2); ctx.fill();
       }
     }
   }
