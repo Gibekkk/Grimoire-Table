@@ -359,19 +359,10 @@ export class VttCanvas {
         this._markDirty();
         return;
       }
-      // Clear ruler when clicking on VTT canvas (non-tool area)
-      if (this.ruler) {
-        this.ruler = null;
-        this._markDirty();
-      }
+      // Ruler only resets on right-click via contextmenu event
       if (!token && !shape) { this.drag = { type: "pan", startScreen: { x: sx, y: sy }, startPan: { ...this.pan } }; return; }
       this.drag = { type: "click", token };
       return;
-    }
-
-    // Clear ruler when clicking elsewhere (non-tool area)
-    if (this.ruler && !token && !shape) {
-      this.ruler = null;
     }
 
     if (this.tool === "ruler") {
@@ -531,7 +522,7 @@ export class VttCanvas {
     } else if (this.drag.type === "click") {
       this.opts.onTokenClicked?.(this.drag.token);
     } else if (this.drag.type === "ruler") {
-      // Keep ruler visible until user clicks elsewhere on VTT canvas
+      // Ruler stays visible until explicitly reset via right-click
       this._markDirty();
     } else if (this.drag.type === "shape-drag") {
       // Persist the moved shape
@@ -683,81 +674,17 @@ export class VttCanvas {
 
         this.opts.onFogPlaced?.(mergedFogs);
       } else {
-        // Erase: clip individual points from existing fogs instead of deleting entire strokes
-        const eraserPts = [];
-        if (this._currentStroke && this._currentStroke.points.length >= 2) {
-          for (let i = 0; i < this._currentStroke.points.length; i++) {
-            eraserPts.push(this._currentStroke.points[i]);
-          }
+        // Erase: paint with destination-out on fogCanvas for visual preview — literal drawing eraser
+        // Don't modify saved entities, just clear pixels on canvas. Saved data persists without changes.
+        for (let i = 0; i < this._currentStroke.points.length; i++) {
+          const p = this._currentStroke.points[i];
+          this.fogCtx.save();
+          this.fogCtx.globalCompositeOperation = 'destination-out';
+          this.fogCtx.beginPath();
+          this.fogCtx.arc(p.x, p.y, this.fogBrushSize * this.gridPx / 2, 0, Math.PI * 2);
+          this.fogCtx.fill();
+          this.fogCtx.restore();
         }
-        const eraseR = this.fogBrushSize * this.gridPx / 2;
-
-        // Process each existing fog — clip points that fall within the erased area
-        let updatedFogs = [];
-        for (const fog of this.fogs) {
-          if (fog.kind === "stroke" && fog.points) {
-            const pts = fog.points.map(p => ({ x: p.x * this.gridPx, y: p.y * this.gridPx }));
-            // Clip each point against eraser area
-            const keptPoints = [];
-            for (let i = 0; i < pts.length; i++) {
-              let inEraser = false;
-              for (const ep of eraserPts) {
-                if (Math.hypot(pts[i].x - ep.x, pts[i].y - ep.y) <= eraseR) {
-                  inEraser = true;
-                  break;
-                }
-              }
-              if (!inEraser) keptPoints.push({ x: pts[i].x / this.gridPx, y: pts[i].y / this.gridPx });
-            }
-
-            // Split into sub-strokes where gaps exceed brush size
-            if (keptPoints.length >= 2) {
-              let currentStroke = [keptPoints[0]];
-              for (let i = 1; i < keptPoints.length; i++) {
-                const dist = Math.hypot(
-                  keptPoints[i].x * this.gridPx - currentStroke[currentStroke.length - 1].x * this.gridPx,
-                  keptPoints[i].y * this.gridPx - currentStroke[currentStroke.length - 1].y * this.gridPx
-                );
-                if (dist > this.fogBrushSize * this.gridPx) {
-                  // Gap — push current stroke and start new one
-                  updatedFogs.push({
-                    id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-                    kind: "stroke",
-                    points: currentStroke.map(p => ({ x: p.x / this.gridPx, y: p.y / this.gridPx })),
-                    size: fog.size || this.fogBrushSize
-                  });
-                  currentStroke = [keptPoints[i]];
-                } else {
-                  currentStroke.push(keptPoints[i]);
-                }
-              }
-              // Push remaining stroke if it has enough points
-              if (currentStroke.length >= 2) {
-                updatedFogs.push({
-                  id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-                  kind: "stroke",
-                  points: currentStroke.map(p => ({ x: p.x / this.gridPx, y: p.y / this.gridPx })),
-                  size: fog.size || this.fogBrushSize
-                });
-              }
-            }
-          } else {
-            // Legacy circle fogs — remove entirely if they overlap the eraser
-            const fogWorld = this.gridToWorld(fog.x, fog.y);
-            const fogR = (fog.radius || 1) * this.gridPx;
-            let fullyErased = false;
-            for (const ep of eraserPts) {
-              const dist = Math.hypot(fogWorld.x - ep.x, fogWorld.y - ep.y);
-              if (dist <= fogR + eraseR) {
-                fullyErased = true;
-                break;
-              }
-            }
-            if (!fullyErased) updatedFogs.push(fog);
-          }
-        }
-
-        this.opts.onFogRemoved?.(updatedFogs);
       }
       this.liveFogStrokes = [];
       this._currentStroke = null;
@@ -815,6 +742,12 @@ export class VttCanvas {
         this.removePersistentShape(shape);
       }
       return;
+    }
+
+    // Reset ruler on right-click
+    if (this.ruler) {
+      this.ruler = null;
+      this._markDirty();
     }
 
     // Shape tools: right-click to remove shapes
@@ -1143,27 +1076,27 @@ export class VttCanvas {
     const dx = Math.cos(shape.angle) * length;
     const dy = Math.sin(shape.angle) * length;
 
-    // Directional cone — half-fan shape (D&D 5e style), fans out from origin to ONE side only
+    // Directional cone — drag origin is at the wide base center, fans out symmetrically
     const tipX = origin.x + dx;
     const tipY = origin.y + dy;
-    const midX = origin.x + dx / 2;
-    const midY = origin.y + dy / 2;
     const perpX = -Math.sin(shape.angle);
     const perpY = Math.cos(shape.angle);
     const halfWidth = length * (Math.sqrt(3) / 4);
-    // Only one side — split the symmetric diamond in half for directional fan
-    const b1x = midX + perpX * halfWidth;
-    const b1y = midY + perpY * halfWidth;
+    // Two base vertices spread around the drag direction from origin
+    const b1x = origin.x + perpX * halfWidth;
+    const b1y = origin.y + perpY * halfWidth;
+    const b2x = origin.x - perpX * halfWidth;
+    const b2y = origin.y - perpY * halfWidth;
 
-    // Draw as one continuous filled shape: origin → base → tip → close (half-triangle)
+    // Draw as one continuous filled shape: wide base → tip (symmetric fan)
     ctx.fillStyle = "rgba(63,143,128,0.25)";
     ctx.strokeStyle = "#56b8a5";
     ctx.lineWidth = 2 / this.zoom;
 
     ctx.beginPath();
-    ctx.moveTo(origin.x, origin.y);   // apex (origin)
-    ctx.lineTo(b1x, b1y);             // single base vertex
-    ctx.lineTo(tipX, tipY);           // far tip
+    ctx.moveTo(b1x, b1y);              // wide base vertex 1
+    ctx.lineTo(b2x, b2y);              // wide base vertex 2
+    ctx.lineTo(tipX, tipY);            // far tip
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -1175,19 +1108,19 @@ export class VttCanvas {
     ctx.beginPath();
     ctx.moveTo(midTipX, midTipY);
     ctx.lineTo(b1x + (tipX - b1x) * 0.15, b1y + (tipY - b1y) * 0.15);
+    ctx.lineTo(b2x + (tipX - b2x) * 0.15, b2y + (tipY - b2y) * 0.15);
     ctx.lineTo(tipX, tipY);
     ctx.closePath();
     ctx.fill();
 
-    // Size label
+    // Size label — distance only, no angle
     const feet = Math.round(shape.distance * FEET_PER_GRID);
-    const degrees = Math.round((shape.angle * 180 / Math.PI));
     const labelX = origin.x + dx * 0.5;
     const labelY = origin.y + dy * 0.5;
     ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
     ctx.textAlign = "center";
     ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-    ctx.fillText(`${feet} ft (${degrees}°)`, labelX, labelY);
+    ctx.fillText(`${feet} ft`, labelX, labelY);
     ctx.shadowBlur = 0;
   }
 
@@ -1260,25 +1193,25 @@ export class VttCanvas {
       const dist = _dist ?? Math.hypot(endWorld.x - origin.x, endWorld.y - origin.y);
       const angle = _angle ?? Math.atan2(endWorld.y - origin.y, endWorld.x - origin.x);
 
-      // Directional cone — half-fan shape (one side of symmetric diamond)
+      // Directional cone — drag origin is at the wide base center, fans out symmetrically
       const tipX = origin.x + Math.cos(angle) * dist;
       const tipY = origin.y + Math.sin(angle) * dist;
-      const midX = origin.x + Math.cos(angle) * dist / 2;
-      const midY = origin.y + Math.sin(angle) * dist / 2;
       const perpX = -Math.sin(angle);
       const perpY = Math.cos(angle);
       const halfWidth = dist * (Math.sqrt(3) / 4);
-      // Only one side — split in half (directional fan instead of symmetric diamond)
-      const b1x = midX + perpX * halfWidth;
-      const b1y = midY + perpY * halfWidth;
+      // Two base vertices spread around the drag direction from origin
+      const b1x = origin.x + perpX * halfWidth;
+      const b1y = origin.y + perpY * halfWidth;
+      const b2x = origin.x - perpX * halfWidth;
+      const b2y = origin.y - perpY * halfWidth;
 
       ctx.fillStyle = "rgba(63,143,128,0.25)";
       ctx.strokeStyle = "#56b8a5";
       ctx.lineWidth = 2 / this.zoom;
       ctx.beginPath();
-      ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(b1x, b1y);
-      ctx.lineTo(tipX, tipY);
+      ctx.moveTo(b1x, b1y);              // wide base vertex 1
+      ctx.lineTo(b2x, b2y);              // wide base vertex 2
+      ctx.lineTo(tipX, tipY);            // far tip
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
@@ -1286,8 +1219,8 @@ export class VttCanvas {
       // Show size in feet (what users care about) + grids as reference
       const feet2 = Math.round(dist / this.gridPx * FEET_PER_GRID);
       const grids = Math.round(dist / this.gridPx * 10) / 10;
-      const labelX = origin.x + Math.cos(angle) * dist * 0.6;
-      const labelY = origin.y + Math.sin(angle) * dist * 0.6;
+      const labelX = origin.x + Math.cos(angle) * dist * 0.65;
+      const labelY = origin.y + Math.sin(angle) * dist * 0.65;
       ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
       ctx.textAlign = "center";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
