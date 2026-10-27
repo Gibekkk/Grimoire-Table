@@ -367,9 +367,8 @@ export class VttCanvas {
     }
 
     if (this.tool === "shape-cone") {
-      const coneAngle = this.opts?.coneAngle ?? 60;
       this.drag = { type: "shape-cone" };
-      this.shape = { kind: "cone", origin: { ...world }, endWorld: { ...world }, coneAngle };
+      this.shape = { kind: "cone", origin: { ...world }, endWorld: { ...world } };
       this._markDirty();
       return;
     }
@@ -432,16 +431,23 @@ export class VttCanvas {
       }
       this._markDirty();
     } else if (this.drag.type === "shape-cone") {
+      // Equilateral triangle: drag sets side length and direction
       const dx = world.x - this.shape.origin.x;
       const dy = world.y - this.shape.origin.y;
       const dist = Math.hypot(dx, dy);
       const angle = Math.atan2(dy, dx);
-      // Use the slider's cone angle for the preview
-      const coneAngleDeg = this.shape.coneAngle || 60;
-      const halfAngleRad = (coneAngleDeg / 2) * (Math.PI / 180);
+      const h = dist * (Math.sqrt(3) / 2); // height of equilateral triangle
+      // Perpendicular direction to the drag angle
+      const px = -Math.sin(angle);
+      const py = Math.cos(angle);
       this.shape._dist = dist;
       this.shape._angle = angle;
-      this.shape._halfAngleRad = halfAngleRad;
+      this.shape._tipWorld = { x: world.x, y: world.y };
+      // Base vertices (at midpoint, offset by half-width)
+      const mx = this.shape.origin.x + Math.cos(angle) * dist / 2;
+      const my = this.shape.origin.y + Math.sin(angle) * dist / 2;
+      this.shape._base1World = { x: mx + px * h / 2, y: my + py * h / 2 };
+      this.shape._base2World = { x: mx - px * h / 2, y: my - py * h / 2 };
       this.shape.endWorld = world;
       this._markDirty();
     } else if (this.drag.type === "draw-fog") {
@@ -554,10 +560,16 @@ export class VttCanvas {
       this.shape = null;
       this._markDirty();
     } else if (this.drag.type === "shape-cone") {
-      // Make persistent cone shape
-      const { origin, endWorld, _dist, _angle, coneAngle } = this.shape;
-      const dist = (_dist || Math.hypot(endWorld.x - origin.x, endWorld.y - origin.y)) / this.gridPx;
-      const angle = _angle ?? Math.atan2(endWorld.y - origin.y, endWorld.x - origin.x);
+      // Make persistent cone shape (equilateral triangle)
+      const { origin, _dist, _angle, _tipWorld, _base1World, _base2World } = this.shape;
+      const dist = _dist || Math.hypot(
+        this.shape.endWorld.x - origin.x,
+        this.shape.endWorld.y - origin.y
+      );
+      const angle = _angle ?? Math.atan2(
+        this.shape.endWorld.y - origin.y,
+        this.shape.endWorld.x - origin.x
+      );
       if (dist > 0.1) {
         this.addPersistentShape({
           id: "shape_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
@@ -566,7 +578,6 @@ export class VttCanvas {
           originY: origin.y / this.gridPx,
           angle: angle,
           distance: dist,
-          angleDeg: coneAngle || 60,
           ownerUid: this.opts.currentUid
         });
       }
@@ -604,6 +615,7 @@ export class VttCanvas {
       }
       this.liveFogStrokes = [];
       this._currentStroke = null;
+    }
     this.drag = null;
   }
 
@@ -688,13 +700,21 @@ export class VttCanvas {
       return Math.hypot(px - pos.x, py - pos.y) <= r;
     }
     if (shape.kind === "cone") {
+      // Equilateral triangle hit test
       const origin = this.gridToWorld(shape.originX, shape.originY);
       const length = shape.distance * this.gridPx;
-      const angleDeg = shape.angleDeg ?? 60;
-      const halfAngleRad = (angleDeg / 2) * (Math.PI / 180);
-      const startAngle = shape.angle - halfAngleRad;
-      const endAngle = shape.angle + halfAngleRad;
-      return this._pointInCone(px, py, origin.x, origin.y, origin.x + Math.cos(shape.angle) * length, origin.y + Math.sin(shape.angle) * length, halfAngleRad);
+      const tipX = origin.x + Math.cos(shape.angle) * length;
+      const tipY = origin.y + Math.sin(shape.angle) * length;
+      const midX = origin.x + Math.cos(shape.angle) * length / 2;
+      const midY = origin.y + Math.sin(shape.angle) * length / 2;
+      const perpX = -Math.sin(shape.angle);
+      const perpY = Math.cos(shape.angle);
+      const halfWidth = length * (Math.sqrt(3) / 4);
+      const b1x = midX + perpX * halfWidth;
+      const b1y = midY + perpY * halfWidth;
+      const b2x = midX - perpX * halfWidth;
+      const b2y = midY - perpY * halfWidth;
+      return this._pointInTriangle(px, py, origin.x, origin.y, tipX, tipY, b1x, b1y);
     }
     return false;
   }
@@ -719,6 +739,15 @@ export class VttCanvas {
     let angleDiff = Math.abs(angle - Math.atan2(dy2, dx2));
     if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
     return angleDiff <= halfAngle;
+  }
+
+  _pointInTriangle(px, py, x1, y1, x2, y2, x3, y3) {
+    const d1 = (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
+    const d2 = (px - x3) * (y2 - y3) - (x2 - x3) * (py - y3);
+    const d3 = (px - x1) * (y3 - y1) - (x3 - x1) * (py - y1);
+    const hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+    const hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+    return !(hasNeg && hasPos);
   }
 
   _getImage(src) {
@@ -938,14 +967,19 @@ export class VttCanvas {
     const length = shape.distance * this.gridPx;
     const dx = Math.cos(shape.angle) * length;
     const dy = Math.sin(shape.angle) * length;
-    const endX = origin.x + dx;
-    const endY = origin.y + dy;
 
-    // Use stored angleDeg, fall back to 60°
-    const angleDeg = shape.angleDeg ?? 60;
-    const halfAngleRad = (angleDeg / 2) * (Math.PI / 180);
-    const startAngle = shape.angle - halfAngleRad;
-    const endAngle = shape.angle + halfAngleRad;
+    // Equilateral triangle: tip at distance, two base vertices perpendicular to midpoint
+    const tipX = origin.x + dx;
+    const tipY = origin.y + dy;
+    const midX = origin.x + dx / 2;
+    const midY = origin.y + dy / 2;
+    const perpX = -Math.sin(shape.angle);
+    const perpY = Math.cos(shape.angle);
+    const halfWidth = length * (Math.sqrt(3) / 4);
+    const b1x = midX + perpX * halfWidth;
+    const b1y = midY + perpY * halfWidth;
+    const b2x = midX - perpX * halfWidth;
+    const b2y = midY - perpY * halfWidth;
 
     ctx.fillStyle = "rgba(63,143,128,0.25)";
     ctx.strokeStyle = "#56b8a5";
@@ -953,20 +987,27 @@ export class VttCanvas {
 
     ctx.beginPath();
     ctx.moveTo(origin.x, origin.y);
-    ctx.lineTo(origin.x + Math.cos(startAngle) * length, origin.y + Math.sin(startAngle) * length);
-    ctx.arc(origin.x, origin.y, length, startAngle, endAngle);
+    ctx.lineTo(tipX, tipY);
+    ctx.lineTo(b1x, b1y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(b2x, b2y);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Size label
+    // Size label — distance (side length) and angle
     const feet = Math.round(shape.distance * FEET_PER_GRID);
-    const labelX = origin.x + Math.cos(shape.angle) * length * 0.6;
-    const labelY = origin.y + Math.sin(shape.angle) * length * 0.6;
+    const degrees = Math.round((shape.angle * 180 / Math.PI));
+    const labelX = origin.x + dx * 0.6;
+    const labelY = origin.y + dy * 0.6;
     ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
     ctx.textAlign = "center";
     ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-    ctx.fillText(`${feet} ft, ${angleDeg}°`, labelX, labelY);
+    ctx.fillText(`${feet} ft (${degrees}°)`, labelX, labelY);
     ctx.shadowBlur = 0;
   }
 
@@ -987,14 +1028,26 @@ export class VttCanvas {
     } else if (shape.kind === "cone") {
       const origin = this.gridToWorld(shape.originX, shape.originY);
       const length = shape.distance * this.gridPx;
-      const angleDeg = shape.angleDeg ?? 60;
-      const halfAngleRad = (angleDeg / 2) * (Math.PI / 180);
-      const startAngle = shape.angle - halfAngleRad;
-      const endAngle = shape.angle + halfAngleRad;
+      const tipX = origin.x + Math.cos(shape.angle) * length;
+      const tipY = origin.y + Math.sin(shape.angle) * length;
+      const midX = origin.x + Math.cos(shape.angle) * length / 2;
+      const midY = origin.y + Math.sin(shape.angle) * length / 2;
+      const perpX = -Math.sin(shape.angle);
+      const perpY = Math.cos(shape.angle);
+      const halfWidth = length * (Math.sqrt(3) / 4);
+      const b1x = midX + perpX * halfWidth;
+      const b1y = midY + perpY * halfWidth;
+      const b2x = midX - perpX * halfWidth;
+      const b2y = midY - perpY * halfWidth;
       ctx.beginPath();
       ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(origin.x + Math.cos(startAngle) * (length + 4 / this.zoom), origin.y + Math.sin(startAngle) * (length + 4 / this.zoom));
-      ctx.arc(origin.x, origin.y, length + 4 / this.zoom, startAngle, endAngle);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(b1x, b1y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(b2x, b2y);
       ctx.closePath();
       ctx.stroke();
     }
@@ -1031,32 +1084,47 @@ export class VttCanvas {
       ctx.fillText(`${feet} ft radius`, center.x, center.y + r + 16 / this.zoom);
       ctx.shadowBlur = 0;
     } else if (kind === "cone") {
-      const { origin, endWorld, coneAngle, _dist, _angle, _halfAngleRad } = this.shape;
+      const { origin, endWorld, _dist, _angle } = this.shape;
       const dist = _dist ?? Math.hypot(endWorld.x - origin.x, endWorld.y - origin.y);
       const angle = _angle ?? Math.atan2(endWorld.y - origin.y, endWorld.x - origin.x);
-      const halfAngleRad = _halfAngleRad ?? ((coneAngle || 60) / 2) * (Math.PI / 180);
-      const startAngle = angle - halfAngleRad;
-      const endAngle = angle + halfAngleRad;
+
+      // Equilateral triangle preview
+      const tipX = origin.x + Math.cos(angle) * dist;
+      const tipY = origin.y + Math.sin(angle) * dist;
+      const midX = origin.x + Math.cos(angle) * dist / 2;
+      const midY = origin.y + Math.sin(angle) * dist / 2;
+      const perpX = -Math.sin(angle);
+      const perpY = Math.cos(angle);
+      const halfWidth = dist * (Math.sqrt(3) / 4);
+      const b1x = midX + perpX * halfWidth;
+      const b1y = midY + perpY * halfWidth;
+      const b2x = midX - perpX * halfWidth;
+      const b2y = midY - perpY * halfWidth;
 
       ctx.fillStyle = "rgba(63,143,128,0.25)";
       ctx.strokeStyle = "#56b8a5";
       ctx.lineWidth = 2 / this.zoom;
       ctx.beginPath();
       ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(origin.x + Math.cos(startAngle) * dist, origin.y + Math.sin(startAngle) * dist);
-      ctx.arc(origin.x, origin.y, dist, startAngle, endAngle);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(b1x, b1y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(b2x, b2y);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
       const feet = Math.round((dist / this.gridPx) * FEET_PER_GRID);
-      const degrees = coneAngle || 60;
       const labelX = origin.x + Math.cos(angle) * dist * 0.6;
       const labelY = origin.y + Math.sin(angle) * dist * 0.6;
       ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
       ctx.textAlign = "center";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-      ctx.fillText(`${feet} ft, ${degrees}°`, labelX, labelY);
+      ctx.fillText(`${feet} ft`, labelX, labelY);
       ctx.shadowBlur = 0;
     }
   }
