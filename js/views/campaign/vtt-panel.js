@@ -295,6 +295,13 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   async function handleShapeMoved(shape) {
     if (!currentMap) return;
+    // Sync the moved shape position into currentShapes first, then save
+    const idx = currentShapes.findIndex(s => s.id === shape.id);
+    if (idx !== -1) {
+      Object.assign(currentShapes[idx], shape);
+    } else {
+      currentShapes.push({ ...shape });
+    }
     await db.maps.updatePersistentShapes(campaignId, currentMap.id, currentShapes);
   }
 
