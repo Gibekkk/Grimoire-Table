@@ -35,6 +35,9 @@ export class VttCanvas {
 
     // --- Fog of war ---
     this.fogs = [];
+    this.fogCursorSize = 3;
+    this.fogCursorMin = 1;
+    this.fogCursorMax = 15;
     this.fogBrushSize = 3;
     this.fogBrushMin = 1;
     this.fogBrushMax = 15;
@@ -1118,13 +1121,15 @@ export class VttCanvas {
       ctx.fill();
       ctx.stroke();
 
-      const feet = Math.round((dist / this.gridPx) * FEET_PER_GRID);
+      // dist is in world pixels — show grids and feet for clarity
+      const grids = Math.round((dist / this.gridPx) * 10) / 10;
+      const feet2 = Math.round(dist / this.gridPx * FEET_PER_GRID);
       const labelX = origin.x + Math.cos(angle) * dist * 0.6;
       const labelY = origin.y + Math.sin(angle) * dist * 0.6;
       ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
       ctx.textAlign = "center";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-      ctx.fillText(`${feet} ft`, labelX, labelY);
+      ctx.fillText(`${grids} grids (${feet2} ft)`, labelX, labelY);
       ctx.shadowBlur = 0;
     }
   }

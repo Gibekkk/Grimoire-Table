@@ -43,7 +43,6 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
     isDm: isDm,
     currentUid: user.uid,
-    coneAngle: 60,
     onFogPlaced: (fog) => handleFogPlaced(fog),
     onFogRemoved: (fog) => handleFogRemoved(fog),
     onPersistentShapeAdded: (shape) => handleShapeAdded(shape),
@@ -62,17 +61,6 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   fogSliderWrap.appendChild(fogSliderLabel);
   fogSliderWrap.appendChild(fogSlider);
 
-  // Shape size/angle slider (for rect/circle width or cone angle)
-  const shapeSliderWrap = h("div", { class: "fog-slider-wrap", style: "display:none;" });
-  const shapeSliderLabel = h("span", { class: "fog-slider-label" }, "Angle:");
-  const shapeSlider = h("input", { type: "range", min: 15, max: 180, value: 60, class: "fog-slider" });
-  shapeSlider.addEventListener("input", () => {
-    shapeSliderLabel.textContent = `Angle: ${shapeSlider.value}°`;
-    canvas.opts.coneAngle = parseInt(shapeSlider.value);
-  });
-  shapeSliderWrap.appendChild(shapeSliderLabel);
-  shapeSliderWrap.appendChild(shapeSlider);
-
   // Fullscreen state
   let vttFullscreen = false;
 
@@ -90,7 +78,6 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     });
 
     toolbar.appendChild(fogSliderWrap);
-    toolbar.appendChild(shapeSliderWrap);
 
     // Separator
     toolbar.appendChild(h("span", { style: "display:inline-block;width:1px;height:20px;background:var(--line);margin:0 4px;" }));
@@ -134,10 +121,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       fogSlider.value = canvas.getFogBrushSize();
       fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
     }
-    shapeSliderWrap.style.display = (canvas.tool === "shape-cone") ? "flex" : "none";
-    if (canvas.tool === "shape-cone") {
-      shapeSliderLabel.textContent = `Angle: ${shapeSlider.value}°`;
-    }
+    // Cone angle slider is removed — cones are now equilateral triangles with fixed geometry
   }
 
   // ---------------- FAB (DM adds tokens) ----------------
