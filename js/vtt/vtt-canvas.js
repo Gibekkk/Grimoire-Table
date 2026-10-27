@@ -567,11 +567,13 @@ export class VttCanvas {
       this._markDirty();
     } else if (this.drag.type === "shape-cone") {
       // Make persistent cone shape (equilateral triangle)
-      const { origin, _dist, _angle, _tipWorld, _base1World, _base2World } = this.shape;
-      const dist = _dist || Math.hypot(
+      const { origin, _dist, _angle } = this.shape;
+      const distPixels = _dist || Math.hypot(
         this.shape.endWorld.x - origin.x,
         this.shape.endWorld.y - origin.y
       );
+      // Store distance in grid units so renderer's *gridPx conversion works correctly
+      const dist = distPixels / this.gridPx;
       const angle = _angle ?? Math.atan2(
         this.shape.endWorld.y - origin.y,
         this.shape.endWorld.x - origin.x

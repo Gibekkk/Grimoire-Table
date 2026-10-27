@@ -210,6 +210,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   async function showTokenPopup(token) {
     popup.style.display = "block";
     popup.innerHTML = `<div class="spinner" style="margin:20px auto;"></div>`;
+    if (!token || !token.kind) return; // guard against null from shape clicks
     if (token.kind === "component") {
       popup.innerHTML = `<h4>${escapeHtml(token.name)}</h4>${token.isCover ? `<p>${COVER_LABELS[token.coverType] || "Cover"}</p>` : "<p>Scenery</p>"}<button class="btn sm" id="popup-close">Close</button>`;
     } else {
