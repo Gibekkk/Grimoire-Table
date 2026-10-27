@@ -51,10 +51,11 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   });
 
   // ---------------- Toolbar ----------------
-  const fogSliderWrap = h("div", { class: "fog-slider-wrap", style: "display:none;" });
+  const fogSliderWrap = h("div", { class: "fog-slider-wrap", style: isDm ? "display:flex;" : "display:none;" });
   const fogSliderLabel = h("span", { class: "fog-slider-label" }, "Size:");
   const fogSlider = h("input", { type: "range", min: canvas.getFogBrushMin(), max: canvas.getFogBrushMax(), value: canvas.getFogBrushSize(), class: "fog-slider" });
   fogSlider.addEventListener("input", () => {
+    if (!isDm) return;
     canvas.setFogBrushSize(parseInt(fogSlider.value));
     fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
   });
@@ -71,7 +72,11 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toggleBtn.addEventListener("click", () => { sidebarOpen = !sidebarOpen; sidebar.style.display = sidebarOpen ? "flex" : "none"; });
     toolbar.appendChild(toggleBtn);
 
-    [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"], ["shape-cone", "Cone AoE"], ["draw-fog", "Draw Fog"], ["erase-fog", "Erase Fog"], ["fog", "Fog Circles"]].forEach(([tool, label]) => {
+    const allTools = [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"], ["shape-cone", "Cone AoE"]];
+    if (isDm) {
+      allTools.push(["draw-fog", "Draw Fog"], ["erase-fog", "Erase Fog"], ["fog", "Fog Circles"]);
+    }
+    allTools.forEach(([tool, label]) => {
       const btn = h("button", { class: `btn sm ${canvas.tool === tool ? "primary" : ""}`, title: label }, label);
       btn.addEventListener("click", () => { canvas.setTool(tool); buildToolbar(); });
       toolbar.appendChild(btn);
@@ -115,11 +120,16 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     }
 
     // Update sliders visibility based on active tool
-    const isFogTool = canvas.tool === "fog" || canvas.tool === "draw-fog" || canvas.tool === "erase-fog";
-    fogSliderWrap.style.display = isFogTool ? "flex" : "none";
-    if (isFogTool) {
-      fogSlider.value = canvas.getFogBrushSize();
-      fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
+    if (isDm) {
+      const isFogTool = canvas.tool === "fog" || canvas.tool === "draw-fog" || canvas.tool === "erase-fog";
+      fogSliderWrap.style.display = isFogTool ? "flex" : "none";
+      if (isFogTool) {
+        fogSlider.value = canvas.getFogBrushSize();
+        fogSliderLabel.textContent = `Size: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
+      }
+    } else {
+      // Non-DM: never show fog controls
+      fogSliderWrap.style.display = "none";
     }
     // Cone angle slider is removed — cones are now equilateral triangles with fixed geometry
   }
@@ -251,7 +261,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   let unsubFogs = null;
 
   async function handleFogPlaced(fog) {
-    if (!currentMap) return;
+    if (!currentMap || !isDm) return; // Non-DM can't modify fog
     // fog can be a single object (circle tool) or an array (draw-fog tool)
     const newFogs = Array.isArray(fog) ? fog : [...currentFogs, fog];
     await db.maps.updateFogs(campaignId, currentMap.id, newFogs);
@@ -259,7 +269,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   }
 
   async function handleFogRemoved(fogs) {
-    if (!currentMap) return;
+    if (!currentMap || !isDm) return; // Non-DM can't modify fog
     // fogs is the remaining array (from erase-fog) or a single fog to remove
     currentFogs = Array.isArray(fogs) ? fogs : currentFogs.filter(f => f.id !== fogs.id);
     await db.maps.updateFogs(campaignId, currentMap.id, currentFogs);

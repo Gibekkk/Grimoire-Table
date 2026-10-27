@@ -41,6 +41,9 @@ export class VttCanvas {
     this.fogBrushSize = 3;
     this.fogBrushMin = 1;
     this.fogBrushMax = 15;
+
+    // --- Default grid size (set by map load, but defaults to 5ft grid) ---
+    this.gridPx = 70;
     this._isDm = !!opts.isDm;
     this._fogCursorWorld = null;
 
@@ -891,7 +894,8 @@ export class VttCanvas {
       const cy = center.y;
       if (radius <= 0) continue;
       if (isPlayer) {
-        ctx.fillStyle = "rgba(0,0,0,0.95)";
+        // Players: fully opaque black — no borders, no glows, no translucency
+        ctx.fillStyle = "rgba(0,0,0,1)";
         ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
       } else {
         ctx.fillStyle = "rgba(0,0,0,0.12)";
@@ -912,7 +916,7 @@ export class VttCanvas {
       const circles = this._convertStrokesToCircles();
       for (const c of circles) {
         if (isPlayer) {
-          ctx.fillStyle = "rgba(0,0,0,0.95)";
+          ctx.fillStyle = "rgba(0,0,0,1)"; // players: pitch black, no transparency
         } else {
           ctx.fillStyle = "rgba(0,0,0,0.12)";
         }
@@ -1121,15 +1125,15 @@ export class VttCanvas {
       ctx.fill();
       ctx.stroke();
 
-      // dist is in world pixels — show grids and feet for clarity
-      const grids = Math.round((dist / this.gridPx) * 10) / 10;
+      // Show size in feet (what users care about) + grids as reference
       const feet2 = Math.round(dist / this.gridPx * FEET_PER_GRID);
+      const grids = Math.round(dist / this.gridPx * 10) / 10;
       const labelX = origin.x + Math.cos(angle) * dist * 0.6;
       const labelY = origin.y + Math.sin(angle) * dist * 0.6;
       ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
       ctx.textAlign = "center";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-      ctx.fillText(`${grids} grids (${feet2} ft)`, labelX, labelY);
+      ctx.fillText(`${feet2} ft (${grids} grids)`, labelX, labelY);
       ctx.shadowBlur = 0;
     }
   }
