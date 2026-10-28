@@ -761,9 +761,11 @@ export class VttCanvas {
           ctx.textBaseline = "alphabetic";
         }
         // Token name — improved contrast with text shadow
-        ctx.fillStyle = "#fff"; ctx.font = `bold ${Math.max(10, r * 0.4)}px sans-serif`; ctx.textAlign = "center";
+        // Label size is capped so Huge/Gargantuan tokens don't get giant names
+        const labelPx = Math.max(10, Math.min(r * 0.4, this.gridPx * 0.3));
+        ctx.fillStyle = "#fff"; ctx.font = `bold ${labelPx}px sans-serif`; ctx.textAlign = "center";
         ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 4;
-        ctx.fillText(t.name || "", cx, pos.y + size.y + r * 0.5);
+        ctx.fillText(t.name || "", cx, pos.y + size.y + labelPx);
         ctx.shadowBlur = 0;
       }
     });

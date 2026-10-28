@@ -450,6 +450,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
   transition: transform .1s ease;
 }
 .vtt-fab:hover { transform: scale(1.06); }
+.vtt-fab-monster { bottom: 148px; background: linear-gradient(180deg, #d56a6a, #9a3838); color: #fff; font-size: 1.3rem; }
+.modal-box.monster-picker { max-width: 720px; text-align: left; max-height: 85vh; display: flex; flex-direction: column; }
+.monster-picker-body { overflow-y: auto; min-height: 0; }
 .vtt-fab-secondary { bottom: 84px; background: linear-gradient(180deg, var(--rune-bright), var(--rune)); color: #06231d; font-size: 1.2rem; }
 .vtt-token-popup {
   position: absolute; top: 16px; right: 16px; background: var(--ink-raised); border: 1px solid var(--gold);
