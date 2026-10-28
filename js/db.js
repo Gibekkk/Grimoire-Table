@@ -119,6 +119,11 @@ const localDb = {
       Object.keys(tokens).forEach(key => { if (key.startsWith(`${campaignId}:`)) { delete tokens[key]; tokensChanged = true; } });
       if (tokensChanged) writeTable("tokens", tokens);
 
+      const masks = readTable("fogMasks");
+      let masksChanged = false;
+      Object.keys(masks).forEach(key => { if (key.startsWith(`${campaignId}:`)) { delete masks[key]; masksChanged = true; } });
+      if (masksChanged) writeTable("fogMasks", masks);
+
       const chars = readTable("characters");
       let charsChanged = false;
       Object.values(chars).forEach(c => {
@@ -316,6 +321,8 @@ const localDb = {
       const tokens = readTable("tokens");
       delete tokens[`${campaignId}:${mapId}`];
       writeTable("tokens", tokens);
+      const masks = readTable("fogMasks");
+      if (masks[`${campaignId}:${mapId}`]) { delete masks[`${campaignId}:${mapId}`]; writeTable("fogMasks", masks); }
     },
     async get(campaignId, mapId) {
       const maps = readTable("maps");
@@ -389,6 +396,20 @@ const localDb = {
     subscribe(campaignId, mapId, cb) {
       const key = `${campaignId}:${mapId}`;
       return subscribeTable("roomInventory", () => cb(readTable("roomInventory")[key] || []));
+    }
+  },
+
+  // Fog of war: one bitmap mask per map (PNG data URL), kept out of the map doc
+  // so a brush stroke doesn't re-send the map background to every client.
+  fogMask: {
+    async set(campaignId, mapId, dataUrl) {
+      const masks = readTable("fogMasks");
+      masks[`${campaignId}:${mapId}`] = { dataUrl: dataUrl || null, updatedAt: Date.now() };
+      writeTable("fogMasks", masks);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("fogMasks", () => cb(readTable("fogMasks")[key] || null));
     }
   },
 
@@ -600,6 +621,7 @@ const firestoreDb = {
       const mapsSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps"));
       for (const mapDoc of mapsSnap.docs) {
         await deleteAllDocs("campaigns", campaignId, "maps", mapDoc.id, "tokens");
+        await deleteAllDocs("campaigns", campaignId, "maps", mapDoc.id, "fogs");
         await fx.deleteDoc(mapDoc.ref);
       }
       await deleteAllDocs("campaigns", campaignId, "log");
@@ -804,6 +826,7 @@ const firestoreDb = {
       const { db, fx } = await initFirebase();
       const tokSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"));
       await Promise.all(tokSnap.docs.map(d => fx.deleteDoc(d.ref)));
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask")).catch(() => {});
       await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId));
     },
     async get(campaignId, mapId) {
@@ -879,6 +902,20 @@ const firestoreDb = {
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps", mapId, "roomInventory"), fx.orderBy("createdAt", "asc"));
         unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  fogMask: {
+    async set(campaignId, mapId, dataUrl) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask"), { dataUrl: dataUrl || null, updatedAt: fx.serverTimestamp() });
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask"), (snap) => cb(snap.exists() ? snap.data() : null), onSnapshotError);
       });
       return () => unsub();
     }

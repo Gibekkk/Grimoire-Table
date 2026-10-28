@@ -11,10 +11,23 @@
 // Everything is drawn inside a single ctx.translate/scale so grid lines and
 // tokens don't need per-shape zoom math — only pointer hit-testing does.
 //
+// Mouse: left button selects/drags tokens and shapes (or uses the active tool),
+// right button drags to pan — a right click that doesn't move opens the context
+// action instead (remove shape, reset ruler, token menu).
+//
+// Fog of war is a single offscreen bitmap mask (one layer): the Draw Fog brush
+// paints into it, the Erase Fog brush clears pixels out of it, so overlapping
+// strokes merge into one shape and erasing removes only what the brush touches.
+// The mask is exported as a PNG data URL for persistence.
+//
 // Performance: rendering is event-driven via a dirty flag rather than a
 // continuous rAF loop. The canvas only redraws when something changes.
 
 const FEET_PER_GRID = 5;
+const FOG_MASK_PX_PER_GRID = 16; // mask resolution — fog edges are smoothed when scaled up
+const FOG_MASK_MAX_DIM = 2048;
+const DRAG_THRESHOLD_PX = 4;     // pointer travel below this counts as a click, not a drag
+const DEFAULT_MAP_SIZE = { w: 1200, h: 800 };
 
 export class VttCanvas {
   constructor(container, opts) {
@@ -33,25 +46,21 @@ export class VttCanvas {
     // --- Shape selection ---
     this.selectedShape = null;
 
-    // --- Fog of war ---
-    this.fogs = [];
-    this.fogCursorSize = 3;
-    this.fogCursorMin = 1;
-    this.fogCursorMax = 15;
-    this.fogBrushSize = 3;
+    // --- Fog of war (single bitmap mask) ---
+    this.fogBrushSize = 3; // brush diameter in grid squares
     this.fogBrushMin = 1;
     this.fogBrushMax = 15;
+    this.fogMask = null;
+    this.fogMaskCtx = null;
+    this._fogMaskSrc = null;     // data URL currently shown in the mask (skips re-applying our own save)
+    this._pendingFog = null;     // remote fog update that arrived mid-stroke
+    this._fogLoadToken = 0;
+    this._hoverWorld = null;
 
     // --- Default grid size (set by map load, but defaults to 5ft grid) ---
     this.gridPx = 70;
+    this.mapSize = null;
     this._isDm = !!opts.isDm;
-    this._fogCursorWorld = null;
-
-    // Live fog drawing layer
-    this.fogCanvas = null;
-    this.fogCtx = null;
-    this.liveFogStrokes = []; // [{ points: [{x,y}, ...] }]
-    this._currentStroke = null;
 
     // --- Persistent AoE shapes (like tokens, stay until removed) ---
     this.persistentShapes = [];
@@ -71,6 +80,7 @@ export class VttCanvas {
     this._onPointerUp = this._onPointerUp.bind(this);
     this._onWheel = this._onWheel.bind(this);
     this._onContextMenu = this._onContextMenu.bind(this);
+    this._onPointerLeave = this._onPointerLeave.bind(this);
 
     this._resizeObserver = new ResizeObserver(this._resize);
     this._resizeObserver.observe(this.container);
@@ -79,11 +89,11 @@ export class VttCanvas {
     this.canvas.addEventListener("pointerdown", this._onPointerDown);
     window.addEventListener("pointermove", this._onPointerMove);
     window.addEventListener("pointerup", this._onPointerUp);
+    this.canvas.addEventListener("pointerleave", this._onPointerLeave);
     this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
     this.canvas.addEventListener("contextmenu", this._onContextMenu);
 
-    // Fog drawing canvas — separate layer for live freeform fog
-    this._initFogCanvas();
+    this._ensureFogMask();
 
     // Start event-driven render loop
     this._markDirty();
@@ -99,102 +109,6 @@ export class VttCanvas {
     });
   }
 
-  _initFogCanvas() {
-    const fc = document.createElement("canvas");
-    fc.style.position = "absolute";
-    fc.style.top = "0";
-    fc.style.left = "0";
-    fc.style.pointerEvents = "none";
-    fc.style.touchAction = "none";
-    this.container.appendChild(fc);
-    this.fogCanvas = fc;
-    this.fogCtx = fc.getContext("2d");
-    this._resizeFogCanvas();
-  }
-
-  _resizeFogCanvas() {
-    if (!this.fogCanvas) return;
-    const { clientWidth: w, clientHeight: h } = this.container;
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    this.fogCanvas.width = w * dpr;
-    this.fogCanvas.height = h * dpr;
-    this.fogCanvas.style.width = w + "px";
-    this.fogCanvas.style.height = h + "px";
-    this.fogCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-
-  // Convert live drawing strokes to non-overlapping circles
-  _convertStrokesToCircles() {
-    const circles = [];
-    const brushPx = this.fogBrushSize * this.gridPx;
-    const dedupDist = brushPx;
-
-    for (const stroke of this.liveFogStrokes) {
-      const pts = stroke.points;
-      if (pts.length < 2) continue;
-
-      for (let i = 0; i < pts.length; i += 2) { // sample every other point
-        const p = pts[i];
-        // Check if this point overlaps any existing circle
-        let overlaps = false;
-        for (const c of circles) {
-          const dx = p.x - c.x;
-          const dy = p.y - c.y;
-          if (Math.hypot(dx, dy) < dedupDist) {
-            overlaps = true;
-            break;
-          }
-        }
-        if (!overlaps) {
-          circles.push({ x: p.x, y: p.y, radius: this.fogBrushSize });
-        }
-      }
-    }
-    return circles;
-  }
-
-  // Clear live fog and reset
-  clearLiveFog() {
-    this.liveFogStrokes = [];
-    this._currentStroke = null;
-    if (this.fogCtx) {
-      this.fogCtx.clearRect(0, 0, this.fogCanvas.width, this.fogCanvas.height);
-    }
-    this._markDirty();
-  }
-
-  // Get brush size in world pixels
-  _getBrushWorldRadius() {
-    return this.fogBrushSize * this.gridPx;
-  }
-
-  // Draw fog at a point using the fog canvas (for live preview)
-  _drawFogOnCanvas(worldX, worldY) {
-    if (!this.fogCtx) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const screenX = worldX * this.zoom + this.pan.x + rect.left;
-    const screenY = worldY * this.zoom + this.pan.y + rect.top;
-    const brushPx = this.fogBrushSize * this.gridPx * this.zoom;
-    this.fogCtx.fillStyle = "rgba(0,0,0,1)";
-    this.fogCtx.beginPath();
-    this.fogCtx.arc(screenX, screenY, brushPx / 2, 0, Math.PI * 2);
-    this.fogCtx.fill();
-  }
-
-  // Erase fog from the fog canvas
-  _eraseFogOnCanvas(worldX, worldY) {
-    if (!this.fogCtx) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const screenX = worldX * this.zoom + this.pan.x + rect.left;
-    const screenY = worldY * this.zoom + this.pan.y + rect.top;
-    const brushPx = this.fogBrushSize * this.gridPx * this.zoom;
-    this.fogCtx.globalCompositeOperation = "destination-out";
-    this.fogCtx.beginPath();
-    this.fogCtx.arc(screenX, screenY, brushPx / 2, 0, Math.PI * 2);
-    this.fogCtx.fill();
-    this.fogCtx.globalCompositeOperation = "source-over";
-  }
-
   _resize() {
     const { clientWidth: w, clientHeight: h } = this.container;
     if (!w || !h) return;
@@ -204,73 +118,179 @@ export class VttCanvas {
     this.canvas.style.width = w + "px";
     this.canvas.style.height = h + "px";
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this._resizeFogCanvas();
     this._markDirty();
   }
 
   setBackground(base64) {
     if (!base64) { this.bgImage = null; this._markDirty(); return; }
     const img = new Image();
-    img.onload = () => { this.bgImage = img; this._fitToView(); };
+    img.onload = () => { this.bgImage = img; this._ensureFogMask(); this._fitToView(); };
     img.src = base64;
   }
 
   setBackgroundImage(img) {
     this.bgImage = img || null;
+    this._ensureFogMask();
     if (img) this._fitToView();
     this._markDirty();
   }
 
   setTokens(tokens) { this.tokens = tokens; this._markDirty(); }
-  setGridPx(px) { this.gridPx = px || 70; this._markDirty(); }
+  setGridPx(px) { this.gridPx = px || 70; this._ensureFogMask(); this._markDirty(); }
+  setMapSize(w, h) {
+    this.mapSize = w && h ? { w, h } : null;
+    this._ensureFogMask();
+    this._markDirty();
+  }
   setTool(tool) {
     this.tool = tool;
     this.shape = null;
     this.ruler = null;
-    // Clear live fog stroke if switching away from fog tools
-    if (tool !== "fog" && tool !== "draw-fog" && tool !== "erase-fog") {
-      if (this._currentStroke && this._currentStroke.points.length > 0) {
-        // Auto-save the current stroke
-        this.liveFogStrokes.push(this._currentStroke);
-        this._currentStroke = null;
-      }
-    }
     this._updateCursor();
     this._markDirty();
   }
 
   // --- Fog API ---
-  setFogs(fogs) { this.fogs = fogs || []; this._markDirty(); }
-  setFogCursorSize(size) {
-    this.fogCursorSize = Math.max(this.fogCursorMin, Math.min(this.fogCursorMax, size));
-    this._updateCursor();
-    this._markDirty();
-  }
-  getFogCursorSize() { return this.fogCursorSize; }
-  getFogCursorMin() { return this.fogCursorMin; }
-  getFogCursorMax() { return this.fogCursorMax; }
-
-  // Brush size for draw-fog and erase-fog tools
   getFogBrushSize() { return this.fogBrushSize; }
   getFogBrushMin() { return this.fogBrushMin; }
   getFogBrushMax() { return this.fogBrushMax; }
   setFogBrushSize(size) {
     this.fogBrushSize = Math.max(this.fogBrushMin, Math.min(this.fogBrushMax, size));
-    this._updateCursor();
     this._markDirty();
   }
   isDm() { return this._isDm; }
 
+  _isFogTool(tool = this.tool) { return tool === "draw-fog" || tool === "erase-fog"; }
+
+  // World size the fog mask covers: the background image, else the map's stored size.
+  _worldSize() {
+    if (this.bgImage) return { w: this.bgImage.width, h: this.bgImage.height };
+    return this.mapSize || DEFAULT_MAP_SIZE;
+  }
+
+  // (Re)creates the mask canvas to match the current world size. Existing fog is
+  // carried over (stretched) so a late-loading background doesn't wipe it.
+  _ensureFogMask() {
+    const world = this._worldSize();
+    let scale = FOG_MASK_PX_PER_GRID / (this.gridPx || 70);
+    scale = Math.min(scale, FOG_MASK_MAX_DIM / Math.max(world.w, world.h));
+    const mw = Math.max(1, Math.round(world.w * scale));
+    const mh = Math.max(1, Math.round(world.h * scale));
+    if (this.fogMask && this.fogMask.width === mw && this.fogMask.height === mh) {
+      this._fogScale = scale;
+      return;
+    }
+    const next = document.createElement("canvas");
+    next.width = mw; next.height = mh;
+    const nctx = next.getContext("2d");
+    if (this.fogMask) nctx.drawImage(this.fogMask, 0, 0, mw, mh);
+    this.fogMask = next;
+    this.fogMaskCtx = nctx;
+    this._fogScale = scale;
+  }
+
+  // Replaces the fog with a saved mask (PNG data URL). Legacy maps stored fog as
+  // an array of circles/strokes; when there's no mask yet those are rasterized in.
+  setFogMask(dataUrl, legacyFogs = []) {
+    if (this.drag && this._isFogTool(this.drag.type)) {
+      this._pendingFog = { dataUrl, legacyFogs };
+      return;
+    }
+    if (dataUrl && dataUrl === this._fogMaskSrc) return;
+    this._ensureFogMask();
+    const ctx = this.fogMaskCtx;
+    const loadToken = ++this._fogLoadToken;
+    this._fogMaskSrc = dataUrl || null;
+    if (!dataUrl) {
+      ctx.clearRect(0, 0, this.fogMask.width, this.fogMask.height);
+      this._rasterizeLegacyFogs(legacyFogs);
+      this._markDirty();
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      if (loadToken !== this._fogLoadToken) return; // a newer update superseded this one
+      ctx.clearRect(0, 0, this.fogMask.width, this.fogMask.height);
+      ctx.drawImage(img, 0, 0, this.fogMask.width, this.fogMask.height);
+      this._markDirty();
+    };
+    img.src = dataUrl;
+  }
+
+  _rasterizeLegacyFogs(fogs) {
+    if (!fogs?.length) return;
+    const ctx = this.fogMaskCtx;
+    const s = this.gridPx * this._fogScale; // grid units -> mask px
+    ctx.save();
+    ctx.fillStyle = ctx.strokeStyle = "#000";
+    ctx.lineCap = ctx.lineJoin = "round";
+    for (const f of fogs) {
+      if (f.kind === "stroke") {
+        if (!f.points?.length) continue;
+        ctx.lineWidth = (f.size || this.fogBrushSize) * s;
+        ctx.beginPath();
+        ctx.moveTo(f.points[0].x * s, f.points[0].y * s);
+        f.points.forEach(p => ctx.lineTo(p.x * s, p.y * s));
+        ctx.stroke();
+      } else if (f.radius > 0) {
+        ctx.beginPath(); ctx.arc(f.x * s, f.y * s, f.radius * s, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  clearFog() {
+    this._fogLoadToken++;
+    this._fogMaskSrc = null;
+    this.fogMaskCtx?.clearRect(0, 0, this.fogMask.width, this.fogMask.height);
+    this._markDirty();
+  }
+
+  exportFogMask() {
+    if (!this.fogMask) return null;
+    const dataUrl = this.fogMask.toDataURL("image/png");
+    this._fogMaskSrc = dataUrl;
+    return dataUrl;
+  }
+
+  // Paints (or erases) one brush segment into the mask, in world coordinates.
+  _paintFog(from, to, erase) {
+    const ctx = this.fogMaskCtx;
+    if (!ctx) return;
+    const s = this._fogScale;
+    ctx.save();
+    ctx.globalCompositeOperation = erase ? "destination-out" : "source-over";
+    ctx.fillStyle = ctx.strokeStyle = "#000";
+    ctx.lineWidth = this.fogBrushSize * this.gridPx * s;
+    ctx.lineCap = ctx.lineJoin = "round";
+    ctx.beginPath();
+    if (from.x === to.x && from.y === to.y) {
+      ctx.arc(to.x * s, to.y * s, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.moveTo(from.x * s, from.y * s);
+      ctx.lineTo(to.x * s, to.y * s);
+      ctx.stroke();
+    }
+    ctx.restore();
+    this._markDirty();
+  }
+
+  // True when the world point is covered by fog (used to hide fogged tokens from players).
+  _isFogged(worldX, worldY) {
+    if (!this.fogMaskCtx) return false;
+    const mx = Math.floor(worldX * this._fogScale), my = Math.floor(worldY * this._fogScale);
+    if (mx < 0 || my < 0 || mx >= this.fogMask.width || my >= this.fogMask.height) return false;
+    return this.fogMaskCtx.getImageData(mx, my, 1, 1).data[3] > 127;
+  }
+
   _updateCursor() {
     if (!this.canvas) return;
-    if (this.drag) {
-      // In drag mode — crosshair for fog tools, grab for others
-      const isFogTool = this.tool === "fog" || this.tool === "draw-fog" || this.tool === "erase-fog";
-      this.canvas.style.cursor = isFogTool ? "crosshair" : "grab";
-    } else {
-      // Not dragging — revert to default cursor
-      this.canvas.style.cursor = "";
-    }
+    if (this.drag?.type === "pan") this.canvas.style.cursor = "grabbing";
+    else if (this.drag?.type === "token" || this.drag?.type === "shape-drag") this.canvas.style.cursor = "grabbing";
+    else if (this._isFogTool()) this.canvas.style.cursor = "none"; // brush outline is drawn instead
+    else if (this.tool !== "select") this.canvas.style.cursor = "crosshair";
+    else this.canvas.style.cursor = "";
   }
 
   // --- Persistent shapes API ---
@@ -282,6 +302,7 @@ export class VttCanvas {
   }
   removePersistentShape(shape) {
     this.persistentShapes = this.persistentShapes.filter(s => s.id !== shape.id);
+    if (this.selectedShape?.id === shape.id) this.selectedShape = null;
     this._markDirty();
     this.opts.onPersistentShapeRemoved?.(shape);
   }
@@ -306,6 +327,8 @@ export class VttCanvas {
   }
 
   _tokenAt(worldX, worldY) {
+    // Players can't pick (or discover) tokens hidden under fog
+    if (!this._isDm && this._isFogged(worldX, worldY)) return null;
     for (let i = this.tokens.length - 1; i >= 0; i--) {
       const t = this.tokens[i];
       const tw = this.gridToWorld(t.x, t.y);
@@ -327,41 +350,47 @@ export class VttCanvas {
   // --- Pointer handlers ---
 
   _onPointerDown(e) {
-    if (e.button === 2) return;
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
 
+    // Right (or middle) button: drag to pan; a click without movement becomes a context action
+    if (e.button === 2 || e.button === 1) {
+      this.drag = { type: "pan", button: e.button, startScreen: { x: sx, y: sy }, startPan: { ...this.pan }, moved: false };
+      return;
+    }
+    if (e.button !== 0) return;
+
     if (this.tool === "select") {
       const token = this._tokenAt(world.x, world.y);
-      if (token && this.opts.canMoveToken(token)) {
-        this.drag = { type: "token", token, startWorld: world, origGrid: { x: token.x, y: token.y } };
-        return;
-      }
-      // Check for shape hit
-      const shape = this._shapeAt(world.x, world.y);
-      if (shape && this._canMoveShape(shape)) {
-        this.selectedShape = shape;
-        // Store the correct origin/center grid coords for each shape type
-        let origGrid;
-        if (shape.kind === "cone") {
-          origGrid = { x: shape.originX, y: shape.originY };
-        } else {
-          origGrid = { x: shape.x, y: shape.y };
-        }
-        this.drag = { type: "shape-drag", shape, startWorld: world, origGrid };
-        // For circle: store click offset within the circle
-        if (shape.kind === "circle") {
-          this.drag._clickGrid = {
-            x: world.x / this.gridPx - shape.x,
-            y: world.y / this.gridPx - shape.y
+      if (token) {
+        this.selectedShape = null;
+        if (this.opts.canMoveToken(token)) {
+          // Remember where inside the token it was grabbed so it doesn't snap its corner to the pointer
+          const tw = this.gridToWorld(token.x, token.y);
+          this.drag = {
+            type: "token", token, startScreen: { x: sx, y: sy }, moved: false,
+            grabOffset: { x: world.x - tw.x, y: world.y - tw.y }
           };
+        } else {
+          this.drag = { type: "click", token };
         }
         this._markDirty();
         return;
       }
-      // Ruler only resets on right-click via contextmenu event
-      if (!token && !shape) { this.drag = { type: "pan", startScreen: { x: sx, y: sy }, startPan: { ...this.pan } }; return; }
-      this.drag = { type: "click", token };
+      const shape = this._shapeAt(world.x, world.y);
+      if (shape && this._canMoveShape(shape)) {
+        this.selectedShape = shape;
+        const origGrid = shape.kind === "cone" ? { x: shape.originX, y: shape.originY } : { x: shape.x, y: shape.y };
+        this.drag = { type: "shape-drag", shape, startWorld: world, startScreen: { x: sx, y: sy }, origGrid, moved: false };
+        this._markDirty();
+        return;
+      }
+      this.selectedShape = null;
+      // Touch has no right button, so a finger on empty map still pans
+      if (e.pointerType === "touch") {
+        this.drag = { type: "pan", button: 0, startScreen: { x: sx, y: sy }, startPan: { ...this.pan }, moved: false };
+      }
+      this._markDirty();
       return;
     }
 
@@ -386,43 +415,37 @@ export class VttCanvas {
       return;
     }
 
-    if (this.tool === "draw-fog") {
-      this.drag = { type: "draw-fog" };
-      this._currentStroke = { points: [{ x: world.x, y: world.y }] };
-      this.liveFogStrokes.push(this._currentStroke);
-      this._drawFogOnCanvas(world.x, world.y);
-      this._markDirty();
-      return;
-    }
-
-    if (this.tool === "erase-fog") {
-      this.drag = { type: "erase-fog" };
-      this._currentStroke = { points: [{ x: world.x, y: world.y }] };
-      this.liveFogStrokes.push(this._currentStroke);
-      this._eraseFogOnCanvas(world.x, world.y);
-      this._markDirty();
-      return;
-    }
-
-    if (this.tool === "fog") {
-      const grid = this.worldToGrid(world.x, world.y);
-      const id = "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
-      this.drag = { type: "fog-place", fog: { id, x: grid.x, y: grid.y, radius: this.fogCursorSize } };
-      this._markDirty();
+    if (this._isFogTool() && this._isDm) {
+      this.drag = { type: this.tool, last: world };
+      this._paintFog(world, world, this.tool === "erase-fog");
       return;
     }
   }
 
   _onPointerMove(e) {
-    if (!this.drag) return;
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
 
+    if (this._isFogTool()) {
+      this._hoverWorld = world;
+      this._markDirty();
+    }
+    if (!this.drag) return;
+
+    if (this.drag.startScreen && !this.drag.moved &&
+        Math.hypot(sx - this.drag.startScreen.x, sy - this.drag.startScreen.y) > DRAG_THRESHOLD_PX) {
+      this.drag.moved = true;
+      this._updateCursor();
+    }
+
     if (this.drag.type === "pan") {
+      if (!this.drag.moved) return;
       this.pan = { x: this.drag.startPan.x + (sx - this.drag.startScreen.x), y: this.drag.startPan.y + (sy - this.drag.startScreen.y) };
       this._markDirty();
     } else if (this.drag.type === "token") {
-      const grid = this.worldToGrid(world.x, world.y);
+      if (!this.drag.moved) return;
+      const { grabOffset } = this.drag;
+      const grid = this.worldToGrid(world.x - grabOffset.x, world.y - grabOffset.y);
       this.drag.token._previewX = grid.x;
       this.drag.token._previewY = grid.y;
       this._markDirty();
@@ -444,57 +467,23 @@ export class VttCanvas {
       }
       this._markDirty();
     } else if (this.drag.type === "shape-cone") {
-      // Equilateral triangle: drag sets side length and direction
-      const dx = world.x - this.shape.origin.x;
-      const dy = world.y - this.shape.origin.y;
-      const dist = Math.hypot(dx, dy);
-      const angle = Math.atan2(dy, dx);
-      const h = dist * (Math.sqrt(3) / 2); // height of equilateral triangle
-      // Perpendicular direction to the drag angle
-      const px = -Math.sin(angle);
-      const py = Math.cos(angle);
-      this.shape._dist = dist;
-      this.shape._angle = angle;
-      this.shape._tipWorld = { x: world.x, y: world.y };
-      // Base vertices (at midpoint, offset by half-width)
-      const mx = this.shape.origin.x + Math.cos(angle) * dist / 2;
-      const my = this.shape.origin.y + Math.sin(angle) * dist / 2;
-      this.shape._base1World = { x: mx + px * h / 2, y: my + py * h / 2 };
-      this.shape._base2World = { x: mx - px * h / 2, y: my - py * h / 2 };
+      // Equilateral triangle: apex at the drag start, drag length = side length, drag direction = axis
+      this.shape._dist = Math.hypot(world.x - this.shape.origin.x, world.y - this.shape.origin.y);
+      this.shape._angle = Math.atan2(world.y - this.shape.origin.y, world.x - this.shape.origin.x);
       this.shape.endWorld = world;
       this._markDirty();
-    } else if (this.drag.type === "draw-fog") {
-      // Record stroke point
-      const lastPt = this._currentStroke.points[this._currentStroke.points.length - 1];
-      const dx = world.x - lastPt.x;
-      const dy = world.y - lastPt.y;
-      const dist = Math.hypot(dx, dy);
-      // Only add point if moved enough (avoid too many points)
-      if (dist > 2) {
-        this._currentStroke.points.push({ x: world.x, y: world.y });
-        this._drawFogOnCanvas(world.x, world.y);
-        this._markDirty();
-      }
-    } else if (this.drag.type === "erase-fog") {
-      const lastPt = this._currentStroke.points[this._currentStroke.points.length - 1];
-      const dx = world.x - lastPt.x;
-      const dy = world.y - lastPt.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 2) {
-        this._currentStroke.points.push({ x: world.x, y: world.y });
-        this._eraseFogOnCanvas(world.x, world.y);
-        this._markDirty();
+    } else if (this.drag.type === "draw-fog" || this.drag.type === "erase-fog") {
+      const last = this.drag.last;
+      if (Math.hypot(world.x - last.x, world.y - last.y) > 1) {
+        this._paintFog(last, world, this.drag.type === "erase-fog");
+        this.drag.last = world;
       }
     } else if (this.drag.type === "shape-drag") {
+      if (!this.drag.moved) return;
       const { shape, startWorld, origGrid } = this.drag;
-      const startGrid = this.worldToGrid(startWorld.x, startWorld.y);
-      const endGrid = this.worldToGrid(world.x, world.y);
-      const dx = endGrid.x - startGrid.x;
-      const dy = endGrid.y - startGrid.y;
-      if (shape.kind === "circle") {
-        shape.x = origGrid.x + dx;
-        shape.y = origGrid.y + dy;
-      } else if (shape.kind === "cone") {
+      const dx = (world.x - startWorld.x) / this.gridPx;
+      const dy = (world.y - startWorld.y) / this.gridPx;
+      if (shape.kind === "cone") {
         shape.originX = origGrid.x + dx;
         shape.originY = origGrid.y + dy;
       } else {
@@ -502,39 +491,40 @@ export class VttCanvas {
         shape.y = origGrid.y + dy;
       }
       this._markDirty();
-    } else if (this.tool === "fog") {
-      this._fogCursorWorld = world;
-      this._markDirty();
     }
   }
 
-  _onPointerUp() {
-    if (!this.drag) return;
+  _onPointerLeave() {
+    if (this._hoverWorld) { this._hoverWorld = null; this._markDirty(); }
+  }
 
-    if (this.drag.type === "token") {
-      const t = this.drag.token;
-      const finalX = Math.round((t._previewX ?? t.x) * 4) / 4;
-      const finalY = Math.round((t._previewY ?? t.y) * 4) / 4;
-      delete t._previewX; delete t._previewY;
-      t.x = finalX; t.y = finalY;
-      this.opts.onTokenMoved?.(t, finalX, finalY);
-      this._markDirty();
-    } else if (this.drag.type === "click") {
-      this.opts.onTokenClicked?.(this.drag.token);
-    } else if (this.drag.type === "ruler") {
-      // Ruler stays visible until explicitly reset via right-click
-      this._markDirty();
-    } else if (this.drag.type === "shape-drag") {
-      // Persist the moved shape
-      const { shape } = this.drag;
-      if (shape.kind === "cone") {
-        this.opts.onPersistentShapeMoved?.(shape);
+  _onPointerUp(e) {
+    if (!this.drag) return;
+    const drag = this.drag;
+    this.drag = null;
+
+    if (drag.type === "pan") {
+      if (!drag.moved && drag.button === 2) this._handleContextClick(e);
+    } else if (drag.type === "token") {
+      const t = drag.token;
+      if (!drag.moved) {
+        this.opts.onTokenClicked?.(t);
       } else {
-        this.opts.onPersistentShapeMoved?.(shape);
+        const finalX = Math.round((t._previewX ?? t.x) * 4) / 4;
+        const finalY = Math.round((t._previewY ?? t.y) * 4) / 4;
+        delete t._previewX; delete t._previewY;
+        t.x = finalX; t.y = finalY;
+        this.opts.onTokenMoved?.(t, finalX, finalY);
       }
-      this.selectedShape = null;
-      this._markDirty();
-    } else if (this.drag.type === "shape") {
+    } else if (drag.type === "click") {
+      this.opts.onTokenClicked?.(drag.token);
+    } else if (drag.type === "shape-drag") {
+      // A plain click keeps the shape selected (Delete removes it); a drag persists the move
+      if (drag.moved) {
+        this.opts.onPersistentShapeMoved?.(drag.shape);
+        this.selectedShape = null;
+      }
+    } else if (drag.type === "shape") {
       // Make persistent shape (rect or circle)
       const { kind, startWorld, endWorld } = this.shape;
       if (kind === "rect") {
@@ -571,134 +561,36 @@ export class VttCanvas {
         }
       }
       this.shape = null;
-      this._markDirty();
-    } else if (this.drag.type === "shape-cone") {
-      // Make persistent cone shape (equilateral triangle)
+    } else if (drag.type === "shape-cone") {
+      // Make persistent cone shape (equilateral triangle, side length stored in grid units)
       const { origin, _dist, _angle } = this.shape;
-      const distPixels = _dist || Math.hypot(
-        this.shape.endWorld.x - origin.x,
-        this.shape.endWorld.y - origin.y
-      );
-      // Store distance in grid units so renderer's *gridPx conversion works correctly
-      const dist = distPixels / this.gridPx;
-      const angle = _angle ?? Math.atan2(
-        this.shape.endWorld.y - origin.y,
-        this.shape.endWorld.x - origin.x
-      );
+      const dist = (_dist || 0) / this.gridPx;
       if (dist > 0.1) {
         this.addPersistentShape({
           id: "shape_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
           kind: "cone",
           originX: origin.x / this.gridPx,
           originY: origin.y / this.gridPx,
-          angle: angle,
+          angle: _angle ?? 0,
           distance: dist,
           ownerUid: this.opts.currentUid
         });
       }
       this.shape = null;
-      this._markDirty();
-    } else if (this.drag.type === "fog-place") {
-      this.opts.onFogPlaced?.(this.drag.fog);
-    } else if (this.drag.type === "draw-fog" || this.drag.type === "erase-fog") {
-      if (this.drag.type === "draw-fog") {
-        // Merge new strokes with existing fog — remove overlapping segments, keep only unique
-        const mergedFogs = [...this.fogs];
-
-        for (const stroke of this.liveFogStrokes) {
-          const pts = stroke.points;
-          if (pts.length < 2) continue;
-          const brushPx = (stroke.size || this.fogBrushSize) * this.gridPx;
-
-          // Filter out points/segments that already exist in saved fog (prevent stacking)
-          const keptPoints = [];
-          for (let i = 0; i < pts.length; i++) {
-            const p = pts[i];
-            let shouldKeep = true;
-
-            for (const existing of mergedFogs) {
-              if (!shouldKeep) break;
-              // Check against circle fogs
-              if (existing.kind !== "stroke") {
-                const cx = existing.x * this.gridPx;
-                const cy = existing.y * this.gridPx;
-                const cr = (existing.radius || 1) * this.gridPx;
-                const dist = Math.hypot(p.x - cx, p.y - cy);
-                if (dist < cr + brushPx / 2) { shouldKeep = false; break; }
-              } else {
-                // Check against existing stroke segments
-                const ePts = existing.points.map(ep => ({ x: ep.x * this.gridPx, y: ep.y * this.gridPx }));
-                for (let j = 0; j < ePts.length && shouldKeep; j++) {
-                  const dist = Math.hypot(p.x - ePts[j].x, p.y - ePts[j].y);
-                  if (dist < brushPx) { shouldKeep = false; break; }
-                }
-              }
-            }
-            // Also check against kept points from previous points in this stroke
-            for (const kp of keptPoints) {
-              const dist = Math.hypot(p.x - kp.x, p.y - kp.y);
-              if (dist < brushPx / 2) { shouldKeep = false; break; }
-            }
-            if (shouldKeep) keptPoints.push({ x: p.x, y: p.y });
-          }
-
-          // Split into sub-strokes where points are too far apart
-          if (keptPoints.length >= 2) {
-            const subStrokes = [keptPoints[0]];
-            for (let i = 1; i < keptPoints.length; i++) {
-              const dist = Math.hypot(
-                keptPoints[i].x - keptPoints[i - 1].x,
-                keptPoints[i].y - keptPoints[i - 1].y
-              );
-              if (dist > this.fogBrushSize * this.gridPx) {
-                // Gap detected — start new sub-stroke
-                mergedFogs.push({
-                  id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-                  kind: "stroke",
-                  points: [subStrokes.pop()],
-                  size: this.fogBrushSize
-                });
-                subStrokes.push(keptPoints[i]);
-              } else {
-                subStrokes.push(keptPoints[i]);
-              }
-            }
-            mergedFogs.push({
-              id: "fog_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-              kind: "stroke",
-              points: subStrokes.map(p => ({ x: p.x / this.gridPx, y: p.y / this.gridPx })),
-              size: this.fogBrushSize
-            });
-          }
-        }
-
-        this.opts.onFogPlaced?.(mergedFogs);
-      } else {
-        // Erase: paint with destination-out on fogCanvas for visual preview — literal drawing eraser
-        // Don't modify saved entities, just clear pixels on canvas. Saved data persists without changes.
-        for (let i = 0; i < this._currentStroke.points.length; i++) {
-          const p = this._currentStroke.points[i];
-          this.fogCtx.save();
-          this.fogCtx.globalCompositeOperation = 'destination-out';
-          this.fogCtx.beginPath();
-          this.fogCtx.arc(p.x, p.y, this.fogBrushSize * this.gridPx / 2, 0, Math.PI * 2);
-          this.fogCtx.fill();
-          this.fogCtx.restore();
-        }
+    } else if (drag.type === "draw-fog" || drag.type === "erase-fog") {
+      this.opts.onFogChanged?.(this.exportFogMask());
+      if (this._pendingFog) {
+        const { dataUrl, legacyFogs } = this._pendingFog;
+        this._pendingFog = null;
+        this.setFogMask(dataUrl, legacyFogs);
       }
-      this.liveFogStrokes = [];
-      this._currentStroke = null;
     }
-    this.drag = null;
+    this._updateCursor();
+    this._markDirty();
   }
 
   _onWheel(e) {
     e.preventDefault();
-    if (this.tool === "fog" || this.tool === "draw-fog" || this.tool === "erase-fog") {
-      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      this.setFogBrushSize(this.fogBrushSize * factor);
-      return;
-    }
     const { x: sx, y: sy } = this._eventPos(e);
     const worldBefore = this.screenToWorld(sx, sy);
     const factor = e.deltaY < 0 ? 1.1 : 0.9;
@@ -715,32 +607,20 @@ export class VttCanvas {
     this._markDirty();
   }
 
+  // The native menu is always suppressed: right button is pan, and a right
+  // click that doesn't move is handled on pointerup (_handleContextClick).
   _onContextMenu(e) {
     e.preventDefault();
+  }
+
+  _handleContextClick(e) {
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
 
-    // Fog tool: right-click on fog to remove
-    if (this.tool === "fog") {
-      for (let i = this.fogs.length - 1; i >= 0; i--) {
-        const f = this.fogs[i];
-        const fx = this.gridToWorld(f.x, 0);
-        const fy = this.gridToWorld(f.y, 0);
-        const fr = this.gridToWorld(f.radius, 0);
-        if (Math.hypot(world.x - fx, world.y - fy) <= fr) {
-          this.opts.onFogRemoved?.(f);
-          return;
-        }
-      }
-      return;
-    }
-
-    // Persistent shapes: right-click to remove (any tool or select mode)
+    // Persistent shapes: right-click to remove (any tool)
     const shape = this._shapeAt(world.x, world.y);
-    if (shape) {
-      if (this.opts.canMoveShape?.(shape)) {
-        this.removePersistentShape(shape);
-      }
+    if (shape && this._canMoveShape(shape)) {
+      this.removePersistentShape(shape);
       return;
     }
 
@@ -748,22 +628,27 @@ export class VttCanvas {
     if (this.ruler) {
       this.ruler = null;
       this._markDirty();
-    }
-
-    // Shape tools: right-click to remove shapes
-    if (this.tool === "shape-rect" || this.tool === "shape-circle" || this.tool === "shape-cone") {
-      for (let i = this.persistentShapes.length - 1; i >= 0; i--) {
-        const s = this.persistentShapes[i];
-        if (this._pointInShape(world.x, world.y, s)) {
-          this.removePersistentShape(s);
-          return;
-        }
-      }
       return;
     }
 
     const token = this._tokenAt(world.x, world.y);
     if (token) this.opts.onTokenContextMenu?.(token, e.clientX, e.clientY);
+  }
+
+  // Equilateral cone: apex at the origin, both edges `length` long at ±30° from
+  // the aim direction, so the far edge is `length` long too — all three sides equal.
+  _coneVertices(ox, oy, angle, length) {
+    const a1 = angle - Math.PI / 6, a2 = angle + Math.PI / 6;
+    return [
+      { x: ox, y: oy },
+      { x: ox + Math.cos(a1) * length, y: oy + Math.sin(a1) * length },
+      { x: ox + Math.cos(a2) * length, y: oy + Math.sin(a2) * length }
+    ];
+  }
+
+  _shapeCone(shape) {
+    const origin = this.gridToWorld(shape.originX, shape.originY);
+    return this._coneVertices(origin.x, origin.y, shape.angle, shape.distance * this.gridPx);
   }
 
   // Check if a point is inside a persistent shape
@@ -779,21 +664,8 @@ export class VttCanvas {
       return Math.hypot(px - pos.x, py - pos.y) <= r;
     }
     if (shape.kind === "cone") {
-      // Equilateral triangle hit test
-      const origin = this.gridToWorld(shape.originX, shape.originY);
-      const length = shape.distance * this.gridPx;
-      const tipX = origin.x + Math.cos(shape.angle) * length;
-      const tipY = origin.y + Math.sin(shape.angle) * length;
-      const midX = origin.x + Math.cos(shape.angle) * length / 2;
-      const midY = origin.y + Math.sin(shape.angle) * length / 2;
-      const perpX = -Math.sin(shape.angle);
-      const perpY = Math.cos(shape.angle);
-      const halfWidth = length * (Math.sqrt(3) / 4);
-      const b1x = midX + perpX * halfWidth;
-      const b1y = midY + perpY * halfWidth;
-      const b2x = midX - perpX * halfWidth;
-      const b2y = midY - perpY * halfWidth;
-      return this._pointInTriangle(px, py, origin.x, origin.y, tipX, tipY, b1x, b1y);
+      const [a, b, c] = this._shapeCone(shape);
+      return this._pointInTriangle(px, py, a.x, a.y, b.x, b.y, c.x, c.y);
     }
     return false;
   }
@@ -804,20 +676,6 @@ export class VttCanvas {
     // Legacy shapes without ownerUid are treated as DM-owned (player can move them)
     if (shape.ownerUid == null) return true;
     return shape.ownerUid === this.opts.currentUid;
-  }
-
-  _pointInCone(px, py, ox, oy, ex, ey, halfAngle) {
-    const dx = ex - ox;
-    const dy = ey - oy;
-    const dist = Math.hypot(dx, dy);
-    const angle = Math.atan2(dy, dx);
-    const dx2 = px - ox;
-    const dy2 = py - oy;
-    const d2 = Math.hypot(dx2, dy2);
-    if (d2 > dist * 1.1) return false;
-    let angleDiff = Math.abs(angle - Math.atan2(dy2, dx2));
-    if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
-    return angleDiff <= halfAngle;
   }
 
   _pointInTriangle(px, py, x1, y1, x2, y2, x3, y3) {
@@ -833,6 +691,7 @@ export class VttCanvas {
     if (!src) return null;
     if (this._images.has(src)) return this._images.get(src);
     const img = new Image();
+    img.onload = () => this._markDirty();
     img.src = src;
     this._images.set(src, img);
     return img;
@@ -899,6 +758,7 @@ export class VttCanvas {
         if (!img || !img.naturalWidth) {
           ctx.fillStyle = "#fff"; ctx.font = `${r}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
           ctx.fillText((t.name || "?")[0].toUpperCase(), cx, cy);
+          ctx.textBaseline = "alphabetic";
         }
         // Token name — improved contrast with text shadow
         ctx.fillStyle = "#fff"; ctx.font = `bold ${Math.max(10, r * 0.4)}px sans-serif`; ctx.textAlign = "center";
@@ -908,6 +768,16 @@ export class VttCanvas {
       }
     });
 
+    // Fog of war — one merged layer above tokens. Opaque for players, see-through for the DM.
+    if (this.fogMask) {
+      const world = this._worldSize();
+      ctx.save();
+      ctx.globalAlpha = this._isDm ? 0.5 : 1;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(this.fogMask, 0, 0, world.w, world.h);
+      ctx.restore();
+    }
+
     // Ruler
     if (this.ruler) {
       const { startWorld, endWorld } = this.ruler;
@@ -915,7 +785,7 @@ export class VttCanvas {
       ctx.beginPath(); ctx.moveTo(startWorld.x, startWorld.y); ctx.lineTo(endWorld.x, endWorld.y); ctx.stroke();
       ctx.setLineDash([]);
       const dist = Math.hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y) / this.gridPx * FEET_PER_GRID;
-      ctx.fillStyle = "#e0b95c"; ctx.font = `bold ${14 / this.zoom}px sans-serif`;
+      ctx.fillStyle = "#e0b95c"; ctx.font = `bold ${14 / this.zoom}px sans-serif`; ctx.textAlign = "left";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
       ctx.fillText(`${Math.round(dist)} ft`, endWorld.x + 8 / this.zoom, endWorld.y);
       ctx.shadowBlur = 0;
@@ -929,101 +799,18 @@ export class VttCanvas {
       this._drawShapePreview();
     }
 
-    // Fog cursor
-    if (this.tool === "fog" && this._fogCursorWorld) {
-      const cx = this._fogCursorWorld.x;
-      const cy = this._fogCursorWorld.y;
-      const r = this.gridToWorld(this.fogCursorSize, 0);
-      ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    // Fog brush outline
+    if (this._isFogTool() && this._hoverWorld && this._isDm) {
+      const { x: cx, y: cy } = this._hoverWorld;
+      const r = this.fogBrushSize * this.gridPx / 2;
+      ctx.strokeStyle = this.tool === "erase-fog" ? "rgba(255,120,120,0.9)" : "rgba(255,255,255,0.85)";
       ctx.lineWidth = 1.5 / this.zoom;
       ctx.setLineDash([4 / this.zoom, 4 / this.zoom]);
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
-      const feet = Math.round(this.fogCursorSize * FEET_PER_GRID);
-      ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = `bold ${11 / this.zoom}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 3;
-      ctx.fillText(`${feet} ft`, cx, cy + r + 14 / this.zoom);
-      ctx.shadowBlur = 0;
-    }
-
-    // Fog of war overlay (saved circles + live strokes)
-    if ((this.fogs && this.fogs.length > 0) || this.liveFogStrokes?.length > 0) {
-      this._drawFogOverlay();
     }
 
     ctx.restore();
-  }
-
-  _drawFogOverlay() {
-    const ctx = this.ctx;
-    const isPlayer = !this._isDm;
-
-    // Draw saved fog circles (legacy circle-based fogs)
-    for (const fog of this.fogs) {
-      if (fog.kind === "stroke") continue; // drawn below as unified paths
-      const center = this.gridToWorld(fog.x, fog.y);
-      const radius = fog.radius * this.gridPx;
-      const cx = center.x;
-      const cy = center.y;
-      if (radius <= 0) continue;
-      if (isPlayer) {
-        // Players: fully opaque black — no borders, no glows, no translucency
-        ctx.fillStyle = "rgba(0,0,0,1)";
-        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
-      } else {
-        ctx.fillStyle = "rgba(0,0,0,0.12)";
-        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = "rgba(224,185,92,0.7)";
-        ctx.lineWidth = 2.5 / this.zoom;
-        ctx.setLineDash([6 / this.zoom, 4 / this.zoom]);
-        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.strokeStyle = "rgba(224,185,92,0.15)";
-        ctx.lineWidth = 8 / this.zoom;
-        ctx.beginPath(); ctx.arc(cx, cy, radius + 2 / this.zoom, 0, Math.PI * 2); ctx.stroke();
-      }
-    }
-
-    // Draw saved stroke fogs as unified continuous thick paths (paint-like)
-    for (const fog of this.fogs) {
-      if (fog.kind !== "stroke" || !fog.points || fog.points.length < 2) continue;
-      const pts = fog.points.map(p => ({ x: p.x * this.gridPx, y: p.y * this.gridPx }));
-      const brushPx = (fog.size || this.fogBrushSize) * this.gridPx;
-      ctx.fillStyle = isPlayer ? "rgba(0,0,0,1)" : "rgba(0,0,0,0.12)";
-      // Connected thick path — strokes merge into one solid shape when overlapping
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) {
-        ctx.lineTo(pts[i].x, pts[i].y);
-      }
-      // Stroke with doubled width so it fills as a solid blob (not thin line)
-      ctx.lineWidth = brushPx * 2;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = ctx.fillStyle;
-      ctx.stroke();
-    }
-
-    // Draw live drawing strokes as unified continuous thick paths (paint-like)
-    if (this.liveFogStrokes.length > 0) {
-      for (const stroke of this.liveFogStrokes) {
-        const pts = stroke.points;
-        if (pts.length < 2) continue;
-        const brushPx = (stroke.size || this.fogBrushSize) * this.gridPx;
-        ctx.fillStyle = isPlayer ? "rgba(0,0,0,1)" : "rgba(0,0,0,0.12)";
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) {
-          ctx.lineTo(pts[i].x, pts[i].y);
-        }
-        ctx.lineWidth = brushPx * 2;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = ctx.fillStyle;
-        ctx.stroke();
-      }
-    }
   }
 
   _drawPersistentShapes() {
@@ -1044,11 +831,7 @@ export class VttCanvas {
         // Size label
         const feetW = Math.round(shape.w * FEET_PER_GRID);
         const feetH = Math.round(shape.h * FEET_PER_GRID);
-        ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-        ctx.fillText(`${feetW}×${feetH} ft`, pos.x + size.x / 2, pos.y + size.y + 16 / this.zoom);
-        ctx.shadowBlur = 0;
+        this._shapeLabel(`${feetW}×${feetH} ft`, pos.x + size.x / 2, pos.y + size.y + 16 / this.zoom);
       } else if (shape.kind === "circle") {
         const pos = this.gridToWorld(shape.x, shape.y);
         const r = shape.radius * this.gridPx;
@@ -1058,70 +841,36 @@ export class VttCanvas {
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         // Size label
         const feet = Math.round(shape.radius * FEET_PER_GRID);
-        ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-        ctx.fillText(`${feet} ft radius`, pos.x, pos.y + r + 16 / this.zoom);
-        ctx.shadowBlur = 0;
+        this._shapeLabel(`${feet} ft radius`, pos.x, pos.y + r + 16 / this.zoom);
       } else if (shape.kind === "cone") {
-        this._drawCone(shape);
+        this._drawConeTriangle(this._shapeCone(shape), `${Math.round(shape.distance * FEET_PER_GRID)} ft`);
       }
     }
   }
 
-  _drawCone(shape) {
+  _shapeLabel(text, x, y) {
     const ctx = this.ctx;
-    const origin = this.gridToWorld(shape.originX, shape.originY);
-    const length = shape.distance * this.gridPx;
-    const dx = Math.cos(shape.angle) * length;
-    const dy = Math.sin(shape.angle) * length;
-
-    // Directional cone — drag origin is at the wide base center, fans out symmetrically
-    const tipX = origin.x + dx;
-    const tipY = origin.y + dy;
-    const perpX = -Math.sin(shape.angle);
-    const perpY = Math.cos(shape.angle);
-    const halfWidth = length * (Math.sqrt(3) / 4);
-    // Two base vertices spread around the drag direction from origin
-    const b1x = origin.x + perpX * halfWidth;
-    const b1y = origin.y + perpY * halfWidth;
-    const b2x = origin.x - perpX * halfWidth;
-    const b2y = origin.y - perpY * halfWidth;
-
-    // Draw as one continuous filled shape: wide base → tip (symmetric fan)
-    ctx.fillStyle = "rgba(63,143,128,0.25)";
-    ctx.strokeStyle = "#56b8a5";
-    ctx.lineWidth = 2 / this.zoom;
-
-    ctx.beginPath();
-    ctx.moveTo(b1x, b1y);              // wide base vertex 1
-    ctx.lineTo(b2x, b2y);              // wide base vertex 2
-    ctx.lineTo(tipX, tipY);            // far tip
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Subtle inner fill for depth
-    const midTipX = origin.x + dx * 0.35;
-    const midTipY = origin.y + dy * 0.35;
-    ctx.fillStyle = "rgba(63,143,128,0.08)";
-    ctx.beginPath();
-    ctx.moveTo(midTipX, midTipY);
-    ctx.lineTo(b1x + (tipX - b1x) * 0.15, b1y + (tipY - b1y) * 0.15);
-    ctx.lineTo(b2x + (tipX - b2x) * 0.15, b2y + (tipY - b2y) * 0.15);
-    ctx.lineTo(tipX, tipY);
-    ctx.closePath();
-    ctx.fill();
-
-    // Size label — distance only, no angle
-    const feet = Math.round(shape.distance * FEET_PER_GRID);
-    const labelX = origin.x + dx * 0.5;
-    const labelY = origin.y + dy * 0.5;
     ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
     ctx.textAlign = "center";
     ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-    ctx.fillText(`${feet} ft`, labelX, labelY);
+    ctx.fillText(text, x, y);
     ctx.shadowBlur = 0;
+  }
+
+  _drawConeTriangle([a, b, c], label) {
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(63,143,128,0.25)";
+    ctx.strokeStyle = "#56b8a5";
+    ctx.lineWidth = 2 / this.zoom;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(c.x, c.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Label at the centroid
+    this._shapeLabel(label, (a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3);
   }
 
   _drawShapeHighlight(shape) {
@@ -1130,30 +879,23 @@ export class VttCanvas {
     ctx.setLineDash([4 / this.zoom, 4 / this.zoom]);
     ctx.strokeStyle = "#e0b95c";
     ctx.lineWidth = 2 / this.zoom;
+    const pad = 3 / this.zoom;
     if (shape.kind === "rect") {
       const pos = this.gridToWorld(shape.x, shape.y);
       const size = this.gridToWorld(shape.w, shape.h);
-      ctx.strokeRect(pos.x - 2 / this.zoom, pos.y - 2 / this.zoom, size.x + 4 / this.zoom, size.y + 4 / this.zoom);
+      ctx.strokeRect(pos.x - pad, pos.y - pad, size.x + pad * 2, size.y + pad * 2);
     } else if (shape.kind === "circle") {
       const pos = this.gridToWorld(shape.x, shape.y);
       const r = shape.radius * this.gridPx;
-      ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 2 / this.zoom, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, r + pad, 0, Math.PI * 2); ctx.stroke();
     } else if (shape.kind === "cone") {
-      const origin = this.gridToWorld(shape.originX, shape.originY);
-      const length = shape.distance * this.gridPx;
-      const tipX = origin.x + Math.cos(shape.angle) * length;
-      const tipY = origin.y + Math.sin(shape.angle) * length;
-      // Directional cone — fans out from origin (30° half-angle)
-      const v1x = origin.x + Math.cos(shape.angle - Math.PI / 6) * length;
-      const v1y = origin.y + Math.sin(shape.angle - Math.PI / 6) * length;
-      const v2x = origin.x + Math.cos(shape.angle + Math.PI / 6) * length;
-      const v2y = origin.y + Math.sin(shape.angle + Math.PI / 6) * length;
+      const [a, b, c] = this._shapeCone(shape);
       ctx.beginPath();
-      ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(v1x, v1y);
-      ctx.lineTo(tipX, tipY);
-      ctx.lineTo(v2x, v2y);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
       ctx.closePath();
+      ctx.lineWidth = 4 / this.zoom;
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -1171,11 +913,7 @@ export class VttCanvas {
       ctx.fillRect(x, y, w2, h2); ctx.strokeRect(x, y, w2, h2);
       const feetW = Math.round((w2 / this.gridPx) * FEET_PER_GRID);
       const feetH = Math.round((h2 / this.gridPx) * FEET_PER_GRID);
-      ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-      ctx.fillText(`${feetW}×${feetH} ft`, x + w2 / 2, y + h2 + 16 / this.zoom);
-      ctx.shadowBlur = 0;
+      this._shapeLabel(`${feetW}×${feetH} ft`, x + w2 / 2, y + h2 + 16 / this.zoom);
     } else if (kind === "circle") {
       const diameter = this.shape._diameter || 0;
       const center = this.shape._centerWorld || startWorld;
@@ -1183,49 +921,11 @@ export class VttCanvas {
       ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
       ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       const feet = Math.round((r / this.gridPx) * FEET_PER_GRID);
-      ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-      ctx.fillText(`${feet} ft radius`, center.x, center.y + r + 16 / this.zoom);
-      ctx.shadowBlur = 0;
+      this._shapeLabel(`${feet} ft radius`, center.x, center.y + r + 16 / this.zoom);
     } else if (kind === "cone") {
-      const { origin, endWorld, _dist, _angle } = this.shape;
-      const dist = _dist ?? Math.hypot(endWorld.x - origin.x, endWorld.y - origin.y);
-      const angle = _angle ?? Math.atan2(endWorld.y - origin.y, endWorld.x - origin.x);
-
-      // Directional cone — drag origin is at the wide base center, fans out symmetrically
-      const tipX = origin.x + Math.cos(angle) * dist;
-      const tipY = origin.y + Math.sin(angle) * dist;
-      const perpX = -Math.sin(angle);
-      const perpY = Math.cos(angle);
-      const halfWidth = dist * (Math.sqrt(3) / 4);
-      // Two base vertices spread around the drag direction from origin
-      const b1x = origin.x + perpX * halfWidth;
-      const b1y = origin.y + perpY * halfWidth;
-      const b2x = origin.x - perpX * halfWidth;
-      const b2y = origin.y - perpY * halfWidth;
-
-      ctx.fillStyle = "rgba(63,143,128,0.25)";
-      ctx.strokeStyle = "#56b8a5";
-      ctx.lineWidth = 2 / this.zoom;
-      ctx.beginPath();
-      ctx.moveTo(b1x, b1y);              // wide base vertex 1
-      ctx.lineTo(b2x, b2y);              // wide base vertex 2
-      ctx.lineTo(tipX, tipY);            // far tip
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Show size in feet (what users care about) + grids as reference
-      const feet2 = Math.round(dist / this.gridPx * FEET_PER_GRID);
-      const grids = Math.round(dist / this.gridPx * 10) / 10;
-      const labelX = origin.x + Math.cos(angle) * dist * 0.65;
-      const labelY = origin.y + Math.sin(angle) * dist * 0.65;
-      ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-      ctx.fillText(`${feet2} ft (${grids} grids)`, labelX, labelY);
-      ctx.shadowBlur = 0;
+      const { origin, _dist = 0, _angle = 0 } = this.shape;
+      const feet = Math.round(_dist / this.gridPx * FEET_PER_GRID);
+      this._drawConeTriangle(this._coneVertices(origin.x, origin.y, _angle, _dist), `${feet} ft`);
     }
   }
 

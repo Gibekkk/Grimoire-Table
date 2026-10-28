@@ -2,3 +2,4 @@
 *.log
 scripts/service-account.json
 scripts/node_modules
+*.pdf
