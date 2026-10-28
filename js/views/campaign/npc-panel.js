@@ -3,6 +3,7 @@ import { mountCharacterSheet } from "../../character-sheet.js";
 import { loadRuleset, findById } from "../../data-loader.js";
 import { h, toast, escapeHtml } from "../../util.js";
 import { ABILITIES, ABILITY_NAMES } from "../../rules-engine.js";
+import { createNpcFromMonster, renderMonsterList } from "../../monsters.js";
 
 export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvMode }) {
   if (!isDm) {
@@ -70,98 +71,14 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
     const card = h("div", { class: "card" });
     card.appendChild(h("h3", {}, "Monster Catalog"));
     card.appendChild(h("p", {}, "Pick a stat block to instantly create an enemy NPC \u2014 ability scores, AC, HP, and attacks (as ready-to-roll weapons) are filled in for you. Traits and reactions land in Notes for quick reference."));
-    const monsters = [...(ruleset.monsters || [])].sort((a, b) => a.name.localeCompare(b.name));
-    const search = h("input", { type: "search", placeholder: `Search ${monsters.length} monsters by name, type, or CR (e.g. "dragon", "cr 5")\u2026`, style: "margin-bottom:10px;" });
-    const countLine = h("div", { class: "meta", style: "margin-bottom:8px; opacity:0.7;" });
-    const grid = h("div", { class: "grid cols-2" });
-    card.appendChild(search);
-    card.appendChild(countLine);
-    card.appendChild(grid);
-
-    // Rendering every card at once is slow with the full Monster Manual, so cap the list
-    const MAX_SHOWN = 60;
-    function renderList() {
-      const q = search.value.trim().toLowerCase();
-      const crMatch = q.match(/^cr\s*(\S+)$/);
-      const matches = monsters.filter(m => crMatch
-        ? String(m.cr) === crMatch[1]
-        : !q || `${m.name} ${m.creatureType} ${m.size}`.toLowerCase().includes(q));
-      grid.innerHTML = "";
-      matches.slice(0, MAX_SHOWN).forEach(m => {
-        const card2 = h("div", { class: "choice-card" });
-        card2.innerHTML = `
-          <h4>${escapeHtml(m.name)}</h4>
-          <div class="meta">${escapeHtml(`${m.size} ${m.creatureType}`)} \u2022 CR ${escapeHtml(String(m.cr))} \u2022 AC ${m.ac} \u2022 HP ${m.hpAverage}</div>
-          <div class="meta" style="opacity:0.7; margin-top:4px;">${escapeHtml(m.source || "")}</div>
-        `;
-        card2.addEventListener("click", () => createFromMonster(m));
-        grid.appendChild(card2);
-      });
-      countLine.textContent = matches.length > MAX_SHOWN
-        ? `Showing ${MAX_SHOWN} of ${matches.length} \u2014 type to narrow it down.`
-        : `${matches.length} monster${matches.length === 1 ? "" : "s"}`;
-      if (!monsters.length) grid.appendChild(h("p", {}, "No monsters in the catalog yet."));
-    }
-    search.addEventListener("input", renderList);
-    renderList();
-    setTimeout(() => search.focus(), 0);
+    renderMonsterList(card, ruleset.monsters || [], createFromMonster);
     return card;
-  }
-
-  function formatMonsterNotes(m) {
-    const lines = [`Source: ${m.source || "Monster Catalog"}`, `${m.size} ${m.creatureType}, ${m.alignment}`, `Speed ${m.speed} \u2022 CR ${m.cr} (XP ${m.xp})`];
-    if (m.senses) lines.push(`Senses: ${m.senses}`);
-    if (m.languages) lines.push(`Languages: ${m.languages}`);
-    if (m.skills) lines.push(`Skills: ${m.skills}`);
-    if (m.saves) lines.push(`Saves: ${m.saves}`);
-    if (m.vulnerabilities) lines.push(`Vulnerable: ${m.vulnerabilities}`);
-    if (m.resistances) lines.push(`Resist: ${m.resistances}`);
-    if (m.immunities) lines.push(`Immune: ${m.immunities}`);
-    if (m.gear) lines.push(`Gear: ${m.gear}`);
-    (m.traits || []).forEach(t => lines.push(`\nTrait \u2014 ${t.name}: ${t.description}`));
-    // Attacks become ready-to-roll weapons; everything else (Multiattack, breath weapons, spellcasting) is listed here
-    (m.actions || []).filter(a => !(a.attackBonus != null && a.damageDice) && a.description).forEach(a => lines.push(`\nAction \u2014 ${a.name}: ${a.description}`));
-    (m.bonusActions || []).forEach(t => lines.push(`\nBonus Action \u2014 ${t.name}: ${t.description}`));
-    (m.reactions || []).forEach(t => lines.push(`\nReaction \u2014 ${t.name}: ${t.description}`));
-    if (m.legendaryActions?.length) {
-      lines.push(`\nLegendary Actions${m.legendaryUses ? ` (${m.legendaryUses})` : ""}:`);
-      m.legendaryActions.forEach(t => lines.push(`  ${t.name}: ${t.description}`));
-    }
-    (m.actions || []).filter(a => a.note).forEach(a => lines.push(`\n${a.name} note: ${a.note}`));
-    if (m.spellcasting) lines.push(`\nSpellcasting (${m.spellcasting.ability?.toUpperCase()}, DC ${m.spellcasting.saveDc}): At will \u2014 ${(m.spellcasting.atWill || []).join(", ")}. 1/Day each \u2014 ${(m.spellcasting.perDay1 || []).join(", ")}.`);
-    return lines.join("\n");
   }
 
   async function createFromMonster(m) {
     const name = prompt("Name this NPC:", m.name);
     if (!name) return;
-    const npc = {
-      ownerUid: user.uid, ownerName: user.displayName, isNpc: true,
-      name, portraitBase64: null,
-      classId: null, classes: [], speciesId: null, backgroundId: null,
-      alignment: m.alignment || "", backstory: "",
-      appearance: {}, level: 1, xp: 0,
-      abilityScores: { ...m.abilityScores }, abilityOverrides: {}, skillOverrides: {}, savingThrowOverrides: {},
-      skillProficiencies: [], skillExpertise: [], savingThrowProficiencies: [],
-      equipmentChoice: "A", weaponMasteries: [], featChoices: {},
-      hp: { current: m.hpAverage, max: m.hpAverage, temp: 0 }, hitDiceUsed: 0,
-      armorClassOverride: m.ac || null,
-      acAdjustments: [], inspiration: false,
-      currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
-      resourcesUsed: {}, spellsPrepared: [], spellSlotsUsed: {}, pactSlotsUsed: 0,
-      campaignId, personality: "", notes: formatMonsterNotes(m), monsterId: m.id
-    };
-    const id = await db.characters.create(npc);
-    for (const action of (m.actions || []).filter(a => a.attackBonus != null && a.damageDice)) {
-      await db.inventory.add(id, {
-        type: "weapon", name: action.name, quantity: 1, equipped: true, isCustom: true,
-        weaponData: {
-          damageDice: action.damageDice || "1d4", damageType: action.damageType || "bludgeoning",
-          ability: "str", ranged: /range/i.test(action.range || ""), ammoType: null,
-          range: action.range || null, flatAttackBonus: action.attackBonus, flatDamageBonus: action.damageBonus
-        }
-      });
-    }
+    const id = await createNpcFromMonster(m, { name, user, campaignId });
     toast(`${name} created from ${m.name}`);
     openNpc(id);
   }

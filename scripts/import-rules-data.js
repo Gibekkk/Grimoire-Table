@@ -12,6 +12,8 @@
 //      Save the downloaded file as scripts/service-account.json (already .gitignored).
 //   2. cd scripts && npm install
 //   3. node import-rules-data.js
+//      (or `node import-rules-data.js --only monsters` to seed just one collection;
+//      names are the collection suffix: species, classes, monsters, meta, ...)
 //
 // Every document is written with `merge: true` and a deterministic ID (the item's
 // own "id" field), so running this again after editing data/*.json updates existing
@@ -25,6 +27,9 @@ import admin from "firebase-admin";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
 const SERVICE_ACCOUNT_PATH = path.join(__dirname, "service-account.json");
+// `--only monsters,spells` limits the run to those collections (default: everything)
+const onlyIdx = process.argv.indexOf("--only");
+const ONLY = onlyIdx !== -1 ? (process.argv[onlyIdx + 1] || "").split(",").map(x => x.trim()).filter(Boolean) : null;
 
 async function loadServiceAccount() {
   try {
@@ -105,16 +110,17 @@ async function main() {
     loadJson("equipment.json")
   ]);
 
-  await seedCollection(db, "rules_species", species);
-  await seedCollection(db, "rules_classes", classesForFirestore(classes));
-  await seedCollection(db, "rules_backgrounds", backgrounds);
-  await seedCollection(db, "rules_skills", skills);
-  await seedCollection(db, "rules_feats", feats);
-  await seedCollection(db, "rules_spells", spells);
-  await seedCollection(db, "rules_class_features", classFeatures);
-  await seedCollection(db, "rules_monsters", monsters);
-  await seedSingleDoc(db, "rules_meta", "alignments", { list: alignments });
-  await seedSingleDoc(db, "rules_meta", "equipment", equipment);
+  const want = (name) => !ONLY || ONLY.includes(name);
+  if (want("species")) await seedCollection(db, "rules_species", species);
+  if (want("classes")) await seedCollection(db, "rules_classes", classesForFirestore(classes));
+  if (want("backgrounds")) await seedCollection(db, "rules_backgrounds", backgrounds);
+  if (want("skills")) await seedCollection(db, "rules_skills", skills);
+  if (want("feats")) await seedCollection(db, "rules_feats", feats);
+  if (want("spells")) await seedCollection(db, "rules_spells", spells);
+  if (want("class_features")) await seedCollection(db, "rules_class_features", classFeatures);
+  if (want("monsters")) await seedCollection(db, "rules_monsters", monsters);
+  if (want("meta")) await seedSingleDoc(db, "rules_meta", "alignments", { list: alignments });
+  if (want("meta")) await seedSingleDoc(db, "rules_meta", "equipment", equipment);
 
   console.log("\nDone. The live app will now read rules data from Firestore automatically.");
   process.exit(0);

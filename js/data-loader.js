@@ -67,7 +67,9 @@ async function loadFirestoreRuleset() {
     return loadLocalRuleset();
   }
   const classes = unwrapStartingEquipmentItems(rawClasses);
-  return { species, classes, backgrounds, skills, alignments: alignmentsDoc.list, feats, equipment: equipmentDoc, spells, classFeatures, monsters };
+  // Monsters were added after the first seed; until rules_monsters is seeded, use the bundled catalog
+  const monsterList = monsters.length ? monsters : await loadJson("monsters.json");
+  return { species, classes, backgrounds, skills, alignments: alignmentsDoc.list, feats, equipment: equipmentDoc, spells, classFeatures, monsters: monsterList };
 }
 
 export async function loadRuleset() {

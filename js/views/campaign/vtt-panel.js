@@ -4,6 +4,8 @@ import { VttCanvas } from "../../vtt/vtt-canvas.js";
 import { mountCharacterSheet } from "../../character-sheet.js";
 import { COVER_AC_BONUS, COVER_LABELS, estimateArmorClass } from "../../rules-engine.js";
 import { navigate } from "../../router.js";
+import { loadRuleset } from "../../data-loader.js";
+import { createNpcFromMonster, pickMonster, tokenSquaresForSize } from "../../monsters.js";
 
 // Module-level (not per-mount) so a background image, once decoded, stays
 // cached for the rest of the browser session — switching maps back and forth
@@ -138,7 +140,39 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   fabCharacters.title = "Add a character or NPC token";
   const fabComponents = h("button", { class: "vtt-fab vtt-fab-secondary" }, "\u25a2");
   fabComponents.title = "Add a component token";
-  if (isDm) { stage.appendChild(fabCharacters); stage.appendChild(fabComponents); }
+  const fabMonsters = h("button", { class: "vtt-fab vtt-fab-monster" }, "\u{1F409}");
+  fabMonsters.title = "Add a monster from the Monster Manual";
+  if (isDm) { stage.appendChild(fabCharacters); stage.appendChild(fabComponents); stage.appendChild(fabMonsters); }
+
+  // Grid position that centers a token of the given size in the current view
+  function viewCenterSpot(w, h) {
+    const c = canvas.screenToWorld(canvasHost.clientWidth / 2, canvasHost.clientHeight / 2);
+    const g = canvas.worldToGrid(c.x, c.y);
+    return { x: Math.max(0, Math.round(g.x - w / 2)), y: Math.max(0, Math.round(g.y - h / 2)) };
+  }
+
+  // Token footprint for an NPC: its own stored size, else its catalog monster's size
+  async function npcTokenSquares(npc) {
+    let size = npc.size;
+    if (!size && npc.monsterId) {
+      const ruleset = await loadRuleset();
+      size = ruleset.monsters?.find(m => m.id === npc.monsterId)?.size;
+    }
+    return tokenSquaresForSize(size);
+  }
+
+  fabMonsters.addEventListener("click", async () => {
+    if (!currentMap) { toast("Create a map first", "error"); return; }
+    const ruleset = await loadRuleset();
+    const monster = await pickMonster(ruleset.monsters || []);
+    if (!monster) return;
+    const name = prompt("Name this monster:", monster.name);
+    if (!name) return;
+    const npcId = await createNpcFromMonster(monster, { name, user, campaignId });
+    const sq = tokenSquaresForSize(monster.size);
+    await addToken({ kind: "npc", refId: npcId, name, imageBase64: null, ...viewCenterSpot(sq, sq), w: sq, h: sq });
+    toast(`${name} added to the map (also listed under NPCs)`);
+  });
 
   fabCharacters.addEventListener("click", async () => {
     const [party, npcs] = await Promise.all([
@@ -152,7 +186,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     items.push("---");
     items.push({ header: "NPCs" });
     if (npcs.length === 0) items.push({ label: "No NPCs yet \u2014 create one in the NPCs tab", action: () => {} });
-    npcs.forEach(c => items.push({ label: c.name, action: () => addToken({ kind: "npc", refId: c.id, name: c.name, imageBase64: c.portraitBase64 || null, x: 2, y: 2, w: 1, h: 1 }) }));
+    npcs.forEach(c => items.push({ label: c.name, action: async () => {
+      const sq = await npcTokenSquares(c);
+      addToken({ kind: "npc", refId: c.id, name: c.name, imageBase64: c.portraitBase64 || null, ...viewCenterSpot(sq, sq), w: sq, h: sq });
+    } }));
     const rect = fabCharacters.getBoundingClientRect();
     showContextMenu(rect.left, rect.top - 10, items);
   });
