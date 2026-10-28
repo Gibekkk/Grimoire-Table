@@ -3,27 +3,28 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
+    function campaignExists(campaignId) {
+      return exists(/databases/$(database)/documents/campaigns/$(campaignId));
+    }
     function isDm(campaignId) {
-      return signedIn() &&
+      return signedIn() && campaignExists(campaignId) &&
         get(/databases/$(database)/documents/campaigns/$(campaignId)).data.dmUid == request.auth.uid;
     }
     function isMember(campaignId) {
-      return signedIn() &&
+      return signedIn() && campaignExists(campaignId) &&
         request.auth.uid in get(/databases/$(database)/documents/campaigns/$(campaignId)).data.memberUids;
     }
 
     match /campaigns/{campaignId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.dmUid == request.auth.uid;
-      // Starter rule: any signed-in user can update (covers joining by invite code
-      // and the DM editing campaign fields). Tighten this once your player list is stable.
       allow update: if signedIn();
       allow delete: if isDm(campaignId);
 
       match /log/{entryId} {
         allow read, create: if isMember(campaignId);
         allow update: if false;
-        allow delete: if isDm(campaignId); // needed so a DM can cascade-delete the campaign
+        allow delete: if isDm(campaignId);
       }
 
       match /partyInventory/{itemId} {
@@ -36,27 +37,47 @@ service cloud.firestore {
 
       match /maps/{mapId} {
         allow read: if isMember(campaignId);
-        allow write: if isDm(campaignId);
+        allow create, delete: if isDm(campaignId);
+        // Any member (player or DM) can update map content including shapes and fog.
+        allow update: if isMember(campaignId);
 
         match /tokens/{tokenId} {
           function tokenOwnerUid() {
-            return get(/databases/$(database)/documents/characters/$(resource.data.refId)).data.ownerUid;
+            return exists(/databases/$(database)/documents/characters/$(resource.data.refId))
+              ? get(/databases/$(database)/documents/characters/$(resource.data.refId)).data.ownerUid
+              : null;
           }
           allow read: if isMember(campaignId);
           allow create, delete: if isDm(campaignId);
-          // A player may move only their own PC's token; the DM may move any token.
-          allow update: if isDm(campaignId) || (isMember(campaignId) && resource.data.kind == "pc" && tokenOwnerUid() == request.auth.uid);
+          allow update: if isDm(campaignId) || (
+            isMember(campaignId) && (
+              (resource.data.kind == "pc" && tokenOwnerUid() == request.auth.uid) ||
+              resource.data.kind == "loot"
+            )
+          );
+        }
+
+        match /aoeShapes/{shapeId} {
+          allow read: if isMember(campaignId);
+          allow create, update, delete: if isMember(campaignId) || isDm(campaignId);
+        }
+
+        match /fogs/{fogId} {
+          allow read: if isMember(campaignId);
+          allow create, update, delete: if isMember(campaignId) || isDm(campaignId);
+        }
+
+        match /roomInventory/{itemId} {
+          allow read, write: if isMember(campaignId);
         }
       }
 
+      match /campaignItems/{itemId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /componentFolders/{folderId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /componentLibrary/{componentId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /relationships/{relId} { allow read, write: if isDm(campaignId); }
 
       match /combat/{docId} {
-        // Starter rule: any member can update (players toggle their own action
-        // economy and roll their own initiative). Tighten with per-field
-        // validation later if a player misusing this becomes a real problem.
         allow read: if isMember(campaignId);
         allow write: if isMember(campaignId);
       }
@@ -75,18 +96,19 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       match /inventory/{itemId} {
+        function characterExists() { return exists(/databases/$(database)/documents/characters/$(characterId)); }
         function character() { return get(/databases/$(database)/documents/characters/$(characterId)).data; }
-        allow read: if signedIn() && (
+        allow read: if signedIn() && characterExists() && (
           character().ownerUid == request.auth.uid ||
           (character().campaignId != null && isMember(character().campaignId))
         );
-        allow write: if signedIn() && character().ownerUid == request.auth.uid;
+        allow write: if signedIn() && characterExists() && (
+          character().ownerUid == request.auth.uid ||
+          (character().campaignId != null && isDm(character().campaignId))
+        );
       }
     }
 
-    // Rulebook reference data (species/classes/backgrounds/skills/feats/equipment).
-    // Public read so the app works for signed-in players; write only via the
-    // Admin SDK import script (scripts/import-rules-data.js), never the browser.
     match /rules_species/{id}      { allow read: if signedIn(); allow write: if false; }
     match /rules_classes/{id}      { allow read: if signedIn(); allow write: if false; }
     match /rules_backgrounds/{id}  { allow read: if signedIn(); allow write: if false; }
@@ -94,7 +116,7 @@ service cloud.firestore {
     match /rules_feats/{id}        { allow read: if signedIn(); allow write: if false; }
     match /rules_spells/{id}       { allow read: if signedIn(); allow write: if false; }
     match /rules_class_features/{id} { allow read: if signedIn(); allow write: if false; }
-    match /rules_monsters/{id}       { allow read: if signedIn(); allow write: if false; }
+    match /rules_monsters/{id}     { allow read: if signedIn(); allow write: if false; }
     match /rules_meta/{id}         { allow read: if signedIn(); allow write: if false; }
   }
 }

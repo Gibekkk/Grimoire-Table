@@ -456,6 +456,53 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
   border-radius: 10px; padding: 14px; width: 220px; box-shadow: var(--shadow); z-index: 20;
 }
 .vtt-token-popup h4 { margin: 0 0 6px; color: var(--gold-bright); }
+
+/* ---------- Fog of war slider ---------- */
+.fog-slider-wrap {
+  display: flex; align-items: center; gap: 6px; padding: 2px 8px;
+  background: var(--ink); border-radius: 6px; border: 1px solid var(--line);
+}
+.fog-slider-label {
+  font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase;
+  letter-spacing: 0.04em; white-space: nowrap;
+}
+.fog-slider {
+  width: 80px; height: 4px; -webkit-appearance: none; appearance: none;
+  background: var(--line); border-radius: 2px; outline: none; cursor: pointer;
+}
+.fog-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--gold); border: 2px solid var(--gold-bright); cursor: pointer;
+}
+.fog-slider::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--gold); border: 2px solid var(--gold-bright); cursor: pointer;
+}
+.fog-slider::-webkit-slider-runnable-track {
+  height: 4px; background: var(--line); border-radius: 2px;
+}
+
+/* ---------- VTT Fullscreen ---------- */
+.vtt-shell--fullscreen {
+  position: fixed; inset: 0; z-index: 1000;
+  border-radius: 0; margin: 0; height: 100vh;
+}
+.vtt-shell--fullscreen .vtt-sidebar {
+  display: none !important;
+}
+.vtt-shell--fullscreen .vtt-toolbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  background: rgba(16,16,24,0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.vtt-shell--fullscreen .vtt-canvas-host {
+  flex: 1;
+  background: #0c0d14;
+}
 @media (max-width: 900px) {
   .vtt-shell { flex-direction: column; height: auto; }
   .vtt-sidebar { width: auto; max-height: 260px; }

@@ -37,12 +37,33 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   const canvas = new VttCanvas(canvasHost, {
     canMoveToken: (token) => isDm || (token.kind === "pc" && token.refId === myCharacter?.id),
+    canMoveShape: (shape) => isDm || shape.ownerUid === user.uid,
     onTokenMoved: (token, x, y) => handleTokenMoved(token, x, y),
     onTokenClicked: (token) => showTokenPopup(token),
-    onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy)
+    onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
+    isDm: isDm,
+    currentUid: user.uid,
+    onFogChanged: (dataUrl) => handleFogChanged(dataUrl),
+    onPersistentShapeAdded: (shape) => handleShapeAdded(shape),
+    onPersistentShapeRemoved: (shape) => handleShapeRemoved(shape),
+    onPersistentShapeMoved: (shape) => handleShapeMoved(shape)
   });
 
   // ---------------- Toolbar ----------------
+  const fogSliderWrap = h("div", { class: "fog-slider-wrap", style: isDm ? "display:flex;" : "display:none;" });
+  const fogSliderLabel = h("span", { class: "fog-slider-label" }, "Brush:");
+  const fogSlider = h("input", { type: "range", min: canvas.getFogBrushMin(), max: canvas.getFogBrushMax(), value: canvas.getFogBrushSize(), class: "fog-slider" });
+  fogSlider.addEventListener("input", () => {
+    if (!isDm) return;
+    canvas.setFogBrushSize(parseInt(fogSlider.value));
+    fogSliderLabel.textContent = `Brush: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
+  });
+  fogSliderWrap.appendChild(fogSliderLabel);
+  fogSliderWrap.appendChild(fogSlider);
+
+  // Fullscreen state
+  let vttFullscreen = false;
+
   function buildToolbar() {
     toolbar.innerHTML = "";
     const toggleBtn = h("button", { class: "icon-btn" }, "\u2630");
@@ -50,11 +71,27 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toggleBtn.addEventListener("click", () => { sidebarOpen = !sidebarOpen; sidebar.style.display = sidebarOpen ? "flex" : "none"; });
     toolbar.appendChild(toggleBtn);
 
-    [["select", "Select / Pan"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"]].forEach(([tool, label]) => {
-      const btn = h("button", { class: `btn sm ${canvas.tool === tool ? "primary" : ""}` }, label);
+    const allTools = [["select", "Select"], ["ruler", "Ruler"], ["shape-rect", "Rect AoE"], ["shape-circle", "Circle AoE"], ["shape-cone", "Cone AoE"]];
+    if (isDm) {
+      allTools.push(["draw-fog", "Draw Fog"], ["erase-fog", "Erase Fog"]);
+    }
+    allTools.forEach(([tool, label]) => {
+      const title = tool === "select" ? "Left-click: select / drag tokens and shapes \u2022 Right-drag: pan the map" : label;
+      const btn = h("button", { class: `btn sm ${canvas.tool === tool ? "primary" : ""}`, title }, label);
       btn.addEventListener("click", () => { canvas.setTool(tool); buildToolbar(); });
       toolbar.appendChild(btn);
     });
+
+    toolbar.appendChild(fogSliderWrap);
+
+    // Separator
+    toolbar.appendChild(h("span", { style: "display:inline-block;width:1px;height:20px;background:var(--line);margin:0 4px;" }));
+
+    // Fullscreen toggle
+    const fsBtn = h("button", { class: "icon-btn", title: "Toggle fullscreen (Esc)" }, "⛶");
+    fsBtn.addEventListener("click", toggleVttFullscreen);
+    toolbar.appendChild(fsBtn);
+
     const zoomOut = h("button", { class: "icon-btn" }, "\u2212");
     zoomOut.addEventListener("click", () => canvas.zoomBy(0.85));
     const zoomIn = h("button", { class: "icon-btn" }, "+");
@@ -64,11 +101,36 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toolbar.appendChild(zoomOut); toolbar.appendChild(zoomIn); toolbar.appendChild(fitBtn);
 
     if (isDm) {
+      // Fog management buttons
+      const clearFogBtn = h("button", { class: "btn sm danger", title: "Clear all fog" }, "✕ Fog");
+      clearFogBtn.addEventListener("click", () => {
+        if (!currentMap) return;
+        if (!confirm("Clear all fog on this map?")) return;
+        canvas.clearFog();
+        handleFogChanged(null);
+        toast("All fog cleared");
+      });
+      toolbar.appendChild(clearFogBtn);
+
       const mapSel = h("select", { style: "max-width:200px; margin:0;" });
       allMaps.forEach(m => mapSel.appendChild(h("option", { value: m.id, selected: currentMap?.id === m.id ? "selected" : null }, m.name)));
       mapSel.addEventListener("change", () => loadMap(mapSel.value));
       toolbar.appendChild(mapSel);
     }
+
+    // Update sliders visibility based on active tool
+    if (isDm) {
+      const isFogTool = canvas.tool === "draw-fog" || canvas.tool === "erase-fog";
+      fogSliderWrap.style.display = isFogTool ? "flex" : "none";
+      if (isFogTool) {
+        fogSlider.value = canvas.getFogBrushSize();
+        fogSliderLabel.textContent = `Brush: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
+      }
+    } else {
+      // Non-DM: never show fog controls
+      fogSliderWrap.style.display = "none";
+    }
+    // Cone angle slider is removed — cones are now equilateral triangles with fixed geometry
   }
 
   // ---------------- FAB (DM adds tokens) ----------------
@@ -147,6 +209,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   async function showTokenPopup(token) {
     popup.style.display = "block";
     popup.innerHTML = `<div class="spinner" style="margin:20px auto;"></div>`;
+    if (!token || !token.kind) return; // guard against null from shape clicks
     if (token.kind === "component") {
       popup.innerHTML = `<h4>${escapeHtml(token.name)}</h4>${token.isCover ? `<p>${COVER_LABELS[token.coverType] || "Cover"}</p>` : "<p>Scenery</p>"}<button class="btn sm" id="popup-close">Close</button>`;
     } else {
@@ -193,6 +256,98 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     db.tokens.update(campaignId, currentMap.id, token.id, { w, h });
   }
 
+  // ---------------- Fog of war handlers ----------------
+  // Fog is one bitmap mask per map (maps/{mapId}/fogs/mask). Older maps stored
+  // fog as an array of circles/strokes on the map doc (`fogs`); those are drawn
+  // into the mask until the DM's first edit saves a mask and clears them.
+  let legacyFogs = [];
+  let fogMaskDoc;            // undefined until the first snapshot arrives
+  let lastFogKey = null;
+  let unsubFogs = null, unsubFogMask = null;
+
+  function applyFog() {
+    if (fogMaskDoc === undefined) return;
+    const dataUrl = fogMaskDoc?.dataUrl || null;
+    const legacy = dataUrl ? [] : legacyFogs;
+    const key = (dataUrl || "") + "|" + (legacy.length ? JSON.stringify(legacy) : "");
+    if (key === lastFogKey) return; // unrelated map-doc updates mustn't reset the fog
+    lastFogKey = key;
+    canvas.setFogMask(dataUrl, legacy);
+  }
+
+  async function handleFogChanged(dataUrl) {
+    if (!currentMap || !isDm) return; // Non-DM can't modify fog
+    const mapId = currentMap.id;
+    lastFogKey = (dataUrl || "") + "|";
+    await db.fogMask.set(campaignId, mapId, dataUrl);
+    if (legacyFogs.length) {
+      legacyFogs = [];
+      await db.maps.updateFogs(campaignId, mapId, []);
+    }
+  }
+
+  // ---------------- Persistent AoE shapes handlers ----------------
+  let currentShapes = [];
+
+  async function handleShapeAdded(shape) {
+    if (!currentMap) return;
+    const newShapes = [...currentShapes, shape];
+    await db.maps.updatePersistentShapes(campaignId, currentMap.id, newShapes);
+    currentShapes = newShapes;
+  }
+
+  async function handleShapeRemoved(shape) {
+    if (!currentMap) return;
+    const newShapes = currentShapes.filter(s => s.id !== shape.id);
+    await db.maps.updatePersistentShapes(campaignId, currentMap.id, newShapes);
+    currentShapes = newShapes;
+  }
+
+  async function handleShapeMoved(shape) {
+    if (!currentMap) return;
+    // Sync the moved shape position into currentShapes first, then save
+    const idx = currentShapes.findIndex(s => s.id === shape.id);
+    if (idx !== -1) {
+      Object.assign(currentShapes[idx], shape);
+    } else {
+      currentShapes.push({ ...shape });
+    }
+    await db.maps.updatePersistentShapes(campaignId, currentMap.id, currentShapes);
+  }
+
+  // ---------------- VTT Fullscreen ----------------
+  function toggleVttFullscreen() {
+    vttFullscreen = !vttFullscreen;
+    if (vttFullscreen) {
+      shell.classList.add("vtt-shell--fullscreen");
+      stage.style.flex = "1";
+      stage.style.minHeight = "0";
+    } else {
+      shell.classList.remove("vtt-shell--fullscreen");
+      stage.style.flex = "";
+      stage.style.minHeight = "";
+    }
+    setTimeout(() => {
+      canvas._resize();
+      canvas._fitToView();
+    }, 50);
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && vttFullscreen) {
+      toggleVttFullscreen();
+    }
+    // Delete selected shape
+    if ((e.key === "Delete" || e.key === "Backspace") && canvas.selectedShape && !e.target.closest?.("input, textarea, select, [contenteditable]")) {
+      const shape = canvas.selectedShape;
+      // Only allow deletion if user owns it or is DM
+      if (isDm || shape.ownerUid === user.uid) {
+        canvas.removePersistentShape(shape);
+        canvas.selectedShape = null;
+      }
+    }
+  });
+
   // ---------------- Sidebar content ----------------
   let sheetUnsub = null;
   function buildSidebar() {
@@ -215,9 +370,12 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   // ---------------- Map loading ----------------
   async function loadMap(mapId) {
-    unsubTokens?.(); unsubMap?.();
+    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.();
     currentMap = allMaps.find(m => m.id === mapId) || null;
     if (!currentMap) return;
+    legacyFogs = []; fogMaskDoc = undefined; lastFogKey = null;
+    canvas.clearFog();
+    canvas.setMapSize(currentMap.widthPx, currentMap.heightPx);
     const bg = currentMap.backgroundBase64;
     if (!bg) {
       canvas.setBackgroundImage(null);
@@ -226,10 +384,25 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     } else {
       const img = new Image();
       img.onload = () => { bgImageCache.set(bg, img); canvas.setBackgroundImage(img); };
+      img.onerror = () => {
+        console.error("[VTT] Failed to load background image for map:", mapId, "bg length:", bg?.length);
+        toast("Failed to load map background", "error");
+      };
       img.src = bg;
     }
     canvas.setGridPx(currentMap.gridPx);
     unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; canvas.setTokens(tokens); });
+    unsubFogs = db.maps.subscribe(campaignId, mapId, (map) => {
+      currentMap = map || currentMap;
+      legacyFogs = map?.fogs || [];
+      currentShapes = map?.persistentShapes || [];
+      canvas.setPersistentShapes(currentShapes);
+      applyFog();
+    });
+    unsubFogMask = db.fogMask.subscribe(campaignId, mapId, (doc) => {
+      fogMaskDoc = doc;
+      applyFog();
+    });
     buildToolbar();
     buildSidebar();
   }
@@ -258,10 +431,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       }
     });
     buildToolbar();
-    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubTokens?.(); unsubMap?.(); sheetUnsub?.(); canvas.dispose(); };
+    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); sheetUnsub?.(); canvas.dispose(); };
   }
 
   buildToolbar();
   buildSidebar();
-  return () => { unsubMaps(); unsubCombat(); unsubTokens?.(); unsubMap?.(); canvas.dispose(); };
+  return () => { unsubMaps(); unsubCombat(); unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); canvas.dispose(); };
 }
