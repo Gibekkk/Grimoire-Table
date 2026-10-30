@@ -1,11 +1,22 @@
-import { h, toast } from "../util.js";
+import { h, toast, escapeHtml } from "../util.js";
 import { findById } from "../data-loader.js";
-import { getClassEntries, totalLevel, proficiencyBonus } from "../rules-engine.js";
+import { getClassEntries, totalLevel, proficiencyBonus, subclassSlug, ABILITY_NAMES } from "../rules-engine.js";
 
-function lockedCard(name, desc, unlocked, extraTag) {
-  const card = h("div", { class: `lore-card ${unlocked ? "" : "locked"}` });
-  card.innerHTML = `<div class="lore-title"><span>${name}</span>${extraTag || ""}</div><div class="lore-desc">${desc}</div>`;
+function textHtml(text) {
+  return escapeHtml(text || "").split("\n").map(p => p.replace(/^([A-Z][A-Za-z' ,\-()/]{1,48}\.)(\s)/, "<strong>$1</strong>$2")).map(p => `<p>${p}</p>`).join("");
+}
+
+// Collapsible feature card: title row always visible, rules text on click.
+function featureCard(name, desc, { unlocked = true, tag = "", open = false } = {}) {
+  const card = h("details", { class: `lore-card feature ${unlocked ? "" : "locked"}` });
+  if (open) card.open = true;
+  card.appendChild(h("summary", { class: "lore-title" }, `<span>${escapeHtml(name)}</span>${tag}`));
+  card.appendChild(h("div", { class: "lore-desc" }, textHtml(desc)));
   return card;
+}
+
+function progressionValue(cls, label, level) {
+  return cls?.progression?.find(p => p.label === label)?.values?.[Math.max(0, Math.min(19, level - 1))];
 }
 
 export function renderFeatsTab(ctx) {
@@ -14,47 +25,61 @@ export function renderFeatsTab(ctx) {
   const level = totalLevel(character);
   const bg = findById(ruleset.backgrounds, character.backgroundId);
   const sp = findById(ruleset.species, character.speciesId);
-  const feat = bg ? findById(ruleset.feats, bg.featId) : null;
+  const entries = getClassEntries(character);
 
-  // ---- Origin feat ----
+  // ---- Feats ----
   const featCard = h("div", { class: "card" });
-  featCard.appendChild(h("h3", {}, "Origin Feat"));
+  featCard.appendChild(h("h3", {}, "Feats"));
   if (character.isNpc && canEditCore) {
     const bgSelect = h("select", {});
-    bgSelect.appendChild(h("option", { value: "" }, "\u2014 No background \u2014"));
+    bgSelect.appendChild(h("option", { value: "" }, "— No background —"));
     ruleset.backgrounds.forEach(b => bgSelect.appendChild(h("option", { value: b.id, selected: character.backgroundId === b.id ? "selected" : null }, b.name)));
     bgSelect.addEventListener("change", () => patch({ backgroundId: bgSelect.value || null }));
-    featCard.appendChild(h("label", {}, "Background (sets the origin feat below)"));
+    featCard.appendChild(h("label", {}, "Background (sets the origin feat)"));
     featCard.appendChild(bgSelect);
   }
-  if (feat) {
-    featCard.appendChild(lockedCard(feat.name, feat.summary, true));
-    if (feat.id === "skilled") {
-      const chosen = character.featChoices?.skilled?.skills || [];
-      featCard.appendChild(h("p", { style: "margin-top:10px;" }, "Choose 3 skills for Skilled:"));
-      const skillGrid = h("div", { class: "grid cols-3" });
-      ruleset.skills.forEach(skill => {
-        const selected = chosen.includes(skill.id);
-        const card = h("div", { class: `choice-card ${selected ? "selected" : ""}`, style: "padding:8px;" });
-        card.innerHTML = `<span style="font-size:0.8rem;">${skill.name}</span>`;
-        if (canEditCore) {
-          card.addEventListener("click", () => {
-            let next = new Set(chosen);
-            if (next.has(skill.id)) next.delete(skill.id);
-            else { if (next.size >= 3) { toast("Choose only 3", "error"); return; } next.add(skill.id); }
-            const skillsArr = [...next];
-            patch({
-              featChoices: { ...character.featChoices, skilled: { skills: skillsArr } },
-              skillProficiencies: [...new Set([...(character.skillProficiencies || []), ...skillsArr])]
-            });
-          });
-        }
-        skillGrid.appendChild(card);
+  // Characters from the old builder have no feats[]; their origin feat comes from the background.
+  const records = character.feats?.length ? [...character.feats] : (bg?.featId ? [{ featId: bg.featId, source: "background", choices: character.featChoices?.skilled ? { skills: character.featChoices.skilled.skills } : {} }] : []);
+  if (character.speciesChoices?.versatile && !records.some(r => r.source === "versatile")) records.push({ featId: character.speciesChoices.versatile, source: "versatile", choices: {} });
+  const sourceLabel = (src) => src === "background" ? `Background${bg ? ` (${bg.name})` : ""}` : src === "versatile" ? "Human: Versatile" : (src || "").replace(/^class-(\w+)-(\d+)$/, (_, c, l) => `${findById(ruleset.classes, c)?.name || c} ${l}`);
+  if (!records.length) featCard.appendChild(h("p", {}, "No feats yet."));
+  records.forEach((rec, idx) => {
+    const feat = findById(ruleset.feats, rec.featId) || findById(ruleset.feats, (rec.featId || "").replace(/-(cleric|druid|wizard)$/, ""));
+    if (!feat) return;
+    const c = rec.choices || {};
+    const bits = [];
+    if (c.increases) bits.push(Object.entries(c.increases).map(([a, n]) => `${ABILITY_NAMES[a]} +${n}`).join(", "));
+    if (c.ability) bits.push(`+1 ${ABILITY_NAMES[c.ability]}`);
+    if (c.skills?.length) bits.push(`Skills: ${c.skills.map(s => findById(ruleset.skills, s)?.name || s).join(", ")}`);
+    if (c.tools?.length) bits.push(`Tools: ${c.tools.map(t => findById(ruleset.equipment.gear, t)?.name || t).join(", ")}`);
+    if (c.list) bits.push(`${c.list[0].toUpperCase() + c.list.slice(1)} list (${ABILITY_NAMES[c.ability] || "?"})`);
+    if (c.cantrips?.length) bits.push(`Cantrips: ${c.cantrips.map(id => findById(ruleset.spells, id)?.name || id).join(", ")}`);
+    if (c.spell) bits.push(`Spell: ${findById(ruleset.spells, c.spell)?.name || c.spell}`);
+    const card = featureCard(feat.name, (bits.length ? bits.join(" • ") + "\n" : "") + feat.description, { tag: `<span class="badge">${escapeHtml(sourceLabel(rec.source))}</span>` });
+    if (canEditCore && character.feats?.length && rec.source?.startsWith("class-")) {
+      const rm = h("button", { class: "btn sm ghost", style: "margin-top:6px;" }, "Remove feat");
+      rm.addEventListener("click", () => {
+        if (!confirm(`Remove ${feat.name}? Ability score changes it made are not reverted automatically.`)) return;
+        patch({ feats: character.feats.filter((_, i) => i !== idx) });
       });
-      featCard.appendChild(skillGrid);
+      card.appendChild(rm);
     }
-  } else {
-    featCard.appendChild(h("p", {}, "No background selected."));
+    featCard.appendChild(card);
+  });
+  if (canEditCore) {
+    const addRow = h("div", { class: "field-row", style: "margin-top:10px;" });
+    const sel = h("select", {});
+    sel.appendChild(h("option", { value: "" }, "Add a feat manually (DM award, homebrew)…"));
+    ruleset.feats.forEach(f => sel.appendChild(h("option", { value: f.id }, `${f.name} — ${f.category.replace("-", " ")}`)));
+    const addBtn = h("button", { class: "btn sm", style: "flex:0 0 auto;" }, "Add");
+    addBtn.addEventListener("click", () => {
+      if (!sel.value) return;
+      const base = character.feats?.length ? character.feats : records;
+      patch({ feats: [...base, { featId: sel.value, source: `class-manual-${level}`, choices: {} }] });
+      toast("Feat added");
+    });
+    addRow.appendChild(sel); addRow.appendChild(addBtn);
+    featCard.appendChild(addRow);
   }
   wrap.appendChild(featCard);
 
@@ -63,63 +88,122 @@ export function renderFeatsTab(ctx) {
   spCard.appendChild(h("h3", {}, `${sp?.name || "Species"} Traits`));
   if (character.isNpc && canEditCore) {
     const spSelect = h("select", {});
-    spSelect.appendChild(h("option", { value: "" }, "\u2014 No species set \u2014"));
+    spSelect.appendChild(h("option", { value: "" }, "— No species set —"));
     ruleset.species.forEach(s => spSelect.appendChild(h("option", { value: s.id, selected: character.speciesId === s.id ? "selected" : null }, s.name)));
     spSelect.addEventListener("change", () => patch({ speciesId: spSelect.value || null }));
     spCard.appendChild(spSelect);
   }
+  if (sp) {
+    const chosen = (sp.choices || []).map(ch => {
+      const v = character.speciesChoices?.[ch.id];
+      if (!v) return null;
+      if (ch.type === "option") return `${ch.label}: ${ch.options.find(o => o.id === v)?.name || v}`;
+      if (ch.type === "ability") return `${ch.label}: ${ABILITY_NAMES[v]}`;
+      if (ch.type === "skill") return `${ch.label}: ${findById(ruleset.skills, v)?.name || v}`;
+      if (ch.type === "feat") return `${ch.label}: ${findById(ruleset.feats, v)?.name || v}`;
+      return null;
+    }).filter(Boolean);
+    const meta = [`Size ${character.size || sp.size.join("/")}`, `Speed ${sp.speed} ft.`, sp.darkvision ? `Darkvision ${sp.darkvision} ft.` : null, ...chosen].filter(Boolean);
+    spCard.appendChild(h("p", { class: "meta" }, escapeHtml(meta.join(" • "))));
+    (sp.choices || []).filter(ch => ch.type === "option").forEach(ch => {
+      const opt = ch.options.find(o => o.id === character.speciesChoices?.[ch.id]);
+      if (opt?.description) spCard.appendChild(featureCard(opt.name, opt.description));
+    });
+  }
   (sp?.traits || []).forEach(t => {
     const unlocked = level >= (t.unlockLevel || 1);
-    spCard.appendChild(lockedCard(t.name, t.description || "", unlocked, unlocked ? "" : `<span class="badge">Lv ${t.unlockLevel}</span>`));
+    spCard.appendChild(featureCard(t.name, t.description || "", { unlocked, tag: unlocked ? "" : `<span class="badge">Lv ${t.unlockLevel}</span>` }));
   });
   wrap.appendChild(spCard);
 
   // ---- Class features per class (multiclass-aware) ----
-  const entries = getClassEntries(character);
   entries.forEach(entry => {
     const cls = findById(ruleset.classes, entry.classId);
     if (!cls) return;
     const clsCard = h("div", { class: "card" });
-    clsCard.appendChild(h("h3", {}, `${cls.name} Features`));
-    const features = ruleset.classFeatures.filter(f => f.classId === entry.classId).sort((a, b) => a.level - b.level);
-    features.forEach(f => {
-      const unlocked = entry.level >= f.level;
-      clsCard.appendChild(lockedCard(f.name, f.description, unlocked, unlocked ? (f.toggleable ? '<span class="badge rune">Actions tab</span>' : "") : `<span class="badge">Lv ${f.level}</span>`));
-    });
+    const sub = (cls.subclasses || []).find(s => (s.id || subclassSlug(s.name || s)) === subclassSlug(entry.subclassId));
+    clsCard.appendChild(h("h3", {}, `${cls.name} ${entry.level}${sub ? ` — ${sub.name}` : ""}`));
+    const prog = (cls.progression || []).map(p => `${p.label}: ${p.values[Math.min(19, entry.level - 1)]}`).join(" • ");
+    if (prog) clsCard.appendChild(h("p", { class: "meta" }, escapeHtml(prog)));
 
-    // Subclass selection — NPCs can set a subclass regardless of level (a DM
-    // building a one-off "Level 1 goblin shaman" shouldn't need to level them
-    // up to 3 first just to tag a subclass for flavor/reference).
+    // Subclass selection — NPCs can set one regardless of level.
     if (entry.level >= cls.subclassLevel || character.isNpc) {
-      clsCard.appendChild(h("hr", { class: "divider" }));
       clsCard.appendChild(h("label", {}, cls.subclassLabel));
       const sel = h("select", {});
-      sel.appendChild(h("option", { value: "" }, "\u2014 Not yet chosen \u2014"));
-      cls.subclasses.forEach(sc => sel.appendChild(h("option", { value: sc, selected: entry.subclassId === sc ? "selected" : null }, sc)));
+      sel.appendChild(h("option", { value: "" }, "— Not yet chosen —"));
+      (cls.subclasses || []).forEach(sc => {
+        const id = sc.id || subclassSlug(sc);
+        sel.appendChild(h("option", { value: id, selected: subclassSlug(entry.subclassId) === id ? "selected" : null }, sc.name || sc));
+      });
       sel.disabled = !canEditCore;
       sel.addEventListener("change", () => {
         const newEntries = getClassEntries(character).map(e => e.classId === entry.classId ? { ...e, subclassId: sel.value || null } : e);
         patch({ classes: newEntries, subclassId: newEntries[0]?.subclassId || null });
       });
       clsCard.appendChild(sel);
+    } else {
+      clsCard.appendChild(h("p", { class: "meta" }, `${cls.subclassLabel} at level ${cls.subclassLevel}: ${(cls.subclasses || []).map(s => s.name || s).join(", ")}`));
     }
 
-    // Weapon Mastery selection
-    if (cls.weaponMasteryCount > 0) {
+    // Level-1 class choices made in the builder
+    const cc = character.classChoices?.[cls.id] || {};
+    if (cc.divineOrder) clsCard.appendChild(h("p", {}, `<strong>Divine Order:</strong> ${escapeHtml(cc.divineOrder[0].toUpperCase() + cc.divineOrder.slice(1))}`));
+    if (cc.primalOrder) clsCard.appendChild(h("p", {}, `<strong>Primal Order:</strong> ${escapeHtml(cc.primalOrder[0].toUpperCase() + cc.primalOrder.slice(1))}`));
+
+    const subId = subclassSlug(entry.subclassId);
+    const features = ruleset.classFeatures.filter(f => f.classId === entry.classId && (!f.subclassId || f.subclassId === subId)).sort((a, b) => a.level - b.level);
+    const unlocked = features.filter(f => entry.level >= f.level);
+    const upcoming = features.filter(f => entry.level < f.level);
+    unlocked.forEach(f => clsCard.appendChild(featureCard(`${f.name}`, f.description, { tag: `<span class="badge">Lv ${f.level}</span>${f.resource ? '<span class="badge rune">Actions tab</span>' : ""}` })));
+    if (upcoming.length) {
+      const more = h("details", { class: "upcoming" });
+      more.appendChild(h("summary", {}, `Upcoming features (${upcoming.length})`));
+      upcoming.forEach(f => more.appendChild(featureCard(f.name, f.description, { unlocked: false, tag: `<span class="badge">Lv ${f.level}</span>` })));
+      clsCard.appendChild(more);
+    }
+
+    // Eldritch Invocations
+    if (cls.id === "warlock") {
+      const max = progressionValue(cls, "Invocations", entry.level) || 1;
+      const chosen = cc.invocations || [];
       clsCard.appendChild(h("hr", { class: "divider" }));
-      clsCard.appendChild(h("label", {}, `Weapon Mastery (choose ${cls.weaponMasteryCount})`));
+      clsCard.appendChild(h("label", {}, `Eldritch Invocations (${chosen.length} / ${max})`));
+      const options = (ruleset.classOptions?.invocations || []);
+      const grid = h("div", { class: "grid cols-2" });
+      options.forEach(inv => {
+        const on = chosen.includes(inv.id);
+        const eligible = inv.minLevel <= entry.level;
+        if (!on && !eligible) return;
+        const card = h("div", { class: `choice-card compact ${on ? "selected" : ""}` });
+        card.innerHTML = `<h4>${escapeHtml(inv.name)}</h4><div class="meta">${inv.minLevel > 1 ? `Level ${inv.minLevel}+ • ` : ""}${inv.requires ? escapeHtml(inv.requires) + " • " : ""}${escapeHtml(inv.description.slice(0, 150))}${inv.description.length > 150 ? "…" : ""}</div>`;
+        card.title = inv.description;
+        if (canEditCore) card.addEventListener("click", () => {
+          let next = [...chosen];
+          if (on) next = next.filter(x => x !== inv.id);
+          else { if (next.length >= max) { toast(`You have ${max} invocations at this level`, "error"); return; } next.push(inv.id); }
+          patch({ classChoices: { ...(character.classChoices || {}), [cls.id]: { ...cc, invocations: next } } });
+        });
+        grid.appendChild(card);
+      });
+      clsCard.appendChild(grid);
+    }
+
+    // Weapon Mastery (count grows with level per the class table)
+    const masteryCount = progressionValue(cls, "Weapon Mastery", entry.level) ?? (cls.weaponMastery?.[entry.level - 1] || cls.weaponMasteryCount || 0);
+    if (masteryCount > 0) {
+      clsCard.appendChild(h("hr", { class: "divider" }));
       const chosen = character.weaponMasteries || [];
-      const allWeapons = ruleset.equipment.weapons;
-      const msRow = h("div", { class: "grid cols-3" });
-      allWeapons.forEach(w => {
+      clsCard.appendChild(h("label", {}, `Weapon Mastery (${chosen.length} / ${masteryCount})`));
+      const msRow = h("div", { class: "grid cols-4" });
+      ruleset.equipment.weapons.forEach(w => {
         const selected = chosen.includes(w.id);
-        const card = h("div", { class: `choice-card ${selected ? "selected" : ""}`, style: "padding:8px;" });
-        card.innerHTML = `<span style="font-size:0.78rem;">${w.name}</span><div class="meta">${w.mastery}</div>`;
+        const card = h("div", { class: `choice-card compact ${selected ? "selected" : ""}` });
+        card.innerHTML = `<h4>${w.name}</h4><div class="meta">${w.mastery}</div>`;
         if (canEditCore) {
           card.addEventListener("click", () => {
-            let next = new Set(chosen);
+            const next = new Set(chosen);
             if (next.has(w.id)) next.delete(w.id);
-            else { if (next.size >= cls.weaponMasteryCount) { toast(`Choose only ${cls.weaponMasteryCount}`, "error"); return; } next.add(w.id); }
+            else { if (next.size >= masteryCount) { toast(`Choose only ${masteryCount}`, "error"); return; } next.add(w.id); }
             patch({ weaponMasteries: [...next] });
           });
         }
@@ -127,43 +211,26 @@ export function renderFeatsTab(ctx) {
       });
       clsCard.appendChild(msRow);
     }
-
     wrap.appendChild(clsCard);
   });
 
-  // ---- Multiclassing ----
+  // ---- Leveling & multiclassing ----
   if (canEditCore) {
     const mcCard = h("div", { class: "card" });
-    mcCard.appendChild(h("h3", {}, "Multiclassing"));
-    const takenIds = entries.map(e => e.classId);
-    const available = ruleset.classes.filter(c => !takenIds.includes(c.id));
-    if (available.length > 0) {
-      const primaryCls = findById(ruleset.classes, entries[0]?.classId);
-      mcCard.appendChild(h("p", {}, `Total level ${level}, Proficiency Bonus +${proficiencyBonus(level)}. Multiclassing needs 13+ in both your current class's key ability and the new class's key ability.`));
-      const row = h("div", { class: "field-row" });
-      const sel = h("select", {});
-      available.forEach(c => sel.appendChild(h("option", { value: c.id }, `${c.name} (needs ${c.multiclassPrereq.map(a => a.toUpperCase()).join("/")} 13+)`)));
-      const addBtn = h("button", { class: "btn" }, "Add Class");
-      addBtn.addEventListener("click", () => {
-        const newCls = findById(ruleset.classes, sel.value);
-        const meetsNew = newCls.multiclassPrereq.some(a => character.abilityScores[a] >= 13);
-        const meetsCurrent = !primaryCls || primaryCls.multiclassPrereq.some(a => character.abilityScores[a] >= 13);
-        if (!meetsNew || !meetsCurrent) { toast("Ability score prerequisites not met", "error"); return; }
-        ctx.onClassesChanged([...entries, { classId: newCls.id, level: 1, subclassId: null }]);
-        toast(`${newCls.name} added as a multiclass`);
-      });
-      row.appendChild(sel); row.appendChild(addBtn);
-      mcCard.appendChild(row);
-    } else {
-      mcCard.appendChild(h("p", {}, "All classes taken \u2014 quite the polymath."));
-    }
-    if (entries.length > 1) {
+    mcCard.appendChild(h("h3", {}, "Leveling & Multiclassing"));
+    mcCard.appendChild(h("p", {}, `Total level ${level}, Proficiency Bonus +${proficiencyBonus(level)}. Level Up lets you advance any of your classes or start a new one (needs 13+ in the key abilities of both your current classes and the new one).`));
+    const lvlBtn = h("button", { class: "btn primary" }, "Level Up…");
+    lvlBtn.disabled = level >= 20;
+    lvlBtn.addEventListener("click", () => ctx.openLevelUp(1));
+    mcCard.appendChild(lvlBtn);
+    if (entries.length) {
       mcCard.appendChild(h("hr", { class: "divider" }));
-      entries.forEach(entry => {
+      mcCard.appendChild(h("p", { class: "meta" }, "Manual level edits (fix mistakes) — lowering a level doesn't undo feats or ability increases."));
+      entries.forEach((entry, idx) => {
         const cls = findById(ruleset.classes, entry.classId);
         const row = h("div", { class: "field-row", style: "align-items:flex-end;" });
         const lvlField = h("div", {});
-        lvlField.appendChild(h("label", {}, `${cls.name} Level`));
+        lvlField.appendChild(h("label", {}, `${cls?.name || entry.classId} Level`));
         const lvlInput = h("input", { type: "number", min: "1", max: "20", value: String(entry.level) });
         lvlInput.addEventListener("change", () => {
           const newLevel = Math.max(1, Math.min(20, parseInt(lvlInput.value, 10) || 1));
@@ -171,6 +238,14 @@ export function renderFeatsTab(ctx) {
         });
         lvlField.appendChild(lvlInput);
         row.appendChild(lvlField);
+        if (idx > 0) {
+          const rm = h("button", { class: "btn sm ghost" }, "Remove class");
+          rm.addEventListener("click", () => {
+            if (!confirm(`Remove ${cls?.name} from this character?`)) return;
+            ctx.onClassesChanged(entries.filter(e => e.classId !== entry.classId));
+          });
+          row.appendChild(rm);
+        }
         mcCard.appendChild(row);
       });
     }

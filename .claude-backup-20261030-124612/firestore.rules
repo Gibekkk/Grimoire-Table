@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function campaignExists(campaignId) {
+      return exists(/databases/$(database)/documents/campaigns/$(campaignId));
+    }
+    function isDm(campaignId) {
+      return signedIn() && campaignExists(campaignId) &&
+        get(/databases/$(database)/documents/campaigns/$(campaignId)).data.dmUid == request.auth.uid;
+    }
+    function isMember(campaignId) {
+      return signedIn() && campaignExists(campaignId) &&
+        request.auth.uid in get(/databases/$(database)/documents/campaigns/$(campaignId)).data.memberUids;
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.dmUid == request.auth.uid;
+      allow update: if signedIn();
+      allow delete: if isDm(campaignId);
+
+      match /log/{entryId} {
+        allow read, create: if isMember(campaignId);
+        allow update: if false;
+        allow delete: if isDm(campaignId);
+      }
+
+      match /partyInventory/{itemId} {
+        allow read, write: if isMember(campaignId);
+      }
+
+      match /notes/{noteId} {
+        allow read, write: if isDm(campaignId);
+      }
+
+      match /maps/{mapId} {
+        allow read: if isMember(campaignId);
+        allow create, delete: if isDm(campaignId);
+        // Any member (player or DM) can update map content including shapes and fog.
+        allow update: if isMember(campaignId);
+
+        match /tokens/{tokenId} {
+          function tokenOwnerUid() {
+            return exists(/databases/$(database)/documents/characters/$(resource.data.refId))
+              ? get(/databases/$(database)/documents/characters/$(resource.data.refId)).data.ownerUid
+              : null;
+          }
+          allow read: if isMember(campaignId);
+          allow create, delete: if isDm(campaignId);
+          allow update: if isDm(campaignId) || (
+            isMember(campaignId) && (
+              (resource.data.kind == "pc" && tokenOwnerUid() == request.auth.uid) ||
+              resource.data.kind == "loot"
+            )
+          );
+        }
+
+        match /aoeShapes/{shapeId} {
+          allow read: if isMember(campaignId);
+          allow create, update, delete: if isMember(campaignId) || isDm(campaignId);
+        }
+
+        match /fogs/{fogId} {
+          allow read: if isMember(campaignId);
+          allow create, update, delete: if isMember(campaignId) || isDm(campaignId);
+        }
+
+        match /roomInventory/{itemId} {
+          allow read, write: if isMember(campaignId);
+        }
+      }
+
+      match /campaignItems/{itemId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
+      match /componentFolders/{folderId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
+      match /componentLibrary/{componentId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
+      match /relationships/{relId} { allow read, write: if isDm(campaignId); }
+
+      match /combat/{docId} {
+        allow read: if isMember(campaignId);
+        allow write: if isMember(campaignId);
+      }
+    }
+
+    match /characters/{characterId} {
+      allow read: if signedIn() && (
+        resource.data.ownerUid == request.auth.uid ||
+        (resource.data.campaignId != null && isMember(resource.data.campaignId))
+      );
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && (
+        resource.data.ownerUid == request.auth.uid ||
+        (resource.data.campaignId != null && isDm(resource.data.campaignId))
+      );
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /inventory/{itemId} {
+        function characterExists() { return exists(/databases/$(database)/documents/characters/$(characterId)); }
+        function character() { return get(/databases/$(database)/documents/characters/$(characterId)).data; }
+        allow read: if signedIn() && characterExists() && (
+          character().ownerUid == request.auth.uid ||
+          (character().campaignId != null && isMember(character().campaignId))
+        );
+        allow write: if signedIn() && characterExists() && (
+          character().ownerUid == request.auth.uid ||
+          (character().campaignId != null && isDm(character().campaignId))
+        );
+      }
+    }
+
+    match /rules_species/{id}      { allow read: if signedIn(); allow write: if false; }
+    match /rules_classes/{id}      { allow read: if signedIn(); allow write: if false; }
+    match /rules_backgrounds/{id}  { allow read: if signedIn(); allow write: if false; }
+    match /rules_skills/{id}       { allow read: if signedIn(); allow write: if false; }
+    match /rules_feats/{id}        { allow read: if signedIn(); allow write: if false; }
+    match /rules_spells/{id}       { allow read: if signedIn(); allow write: if false; }
+    match /rules_class_features/{id} { allow read: if signedIn(); allow write: if false; }
+    match /rules_monsters/{id}     { allow read: if signedIn(); allow write: if false; }
+    match /rules_meta/{id}         { allow read: if signedIn(); allow write: if false; }
+  }
+}

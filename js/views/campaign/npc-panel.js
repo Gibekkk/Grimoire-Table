@@ -3,7 +3,7 @@ import { mountCharacterSheet } from "../../character-sheet.js";
 import { loadRuleset, findById } from "../../data-loader.js";
 import { h, toast, escapeHtml } from "../../util.js";
 import { ABILITIES, ABILITY_NAMES } from "../../rules-engine.js";
-import { createNpcFromMonster, renderMonsterList } from "../../monsters.js";
+import { createNpcFromMonster, renderMonsterList, nextMonsterName, monsterImageFor } from "../../monsters.js";
 
 export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvMode }) {
   if (!isDm) {
@@ -28,12 +28,14 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
   let activeId = null;
   let sheetUnsub = null;
   let creating = false;
+  let pickerCleanup = null; // stops the monster catalog's live image subscription
 
   function openNpc(id) {
     creating = false;
     activeId = id;
     [...rosterTabs.children].forEach(t => t.classList.toggle("active", t.dataset.id === id));
     sheetUnsub?.();
+    pickerCleanup?.(); pickerCleanup = null;
     sheetHost.innerHTML = "";
     mountCharacterSheet(sheetHost, id, {
       viewerUid: user.uid, isDm: true, getAdvMode,
@@ -52,6 +54,7 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
     activeId = null;
     [...rosterTabs.children].forEach(t => t.classList.remove("active"));
     sheetUnsub?.();
+    pickerCleanup?.(); pickerCleanup = null;
     sheetHost.innerHTML = "";
     sheetHost.appendChild(buildCreateForm());
   }
@@ -62,6 +65,7 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
     activeId = null;
     [...rosterTabs.children].forEach(t => t.classList.remove("active"));
     sheetUnsub?.();
+    pickerCleanup?.(); pickerCleanup = null;
     sheetHost.innerHTML = "";
     sheetHost.appendChild(buildMonsterPicker());
   }
@@ -70,15 +74,14 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
   function buildMonsterPicker() {
     const card = h("div", { class: "card" });
     card.appendChild(h("h3", {}, "Monster Catalog"));
-    card.appendChild(h("p", {}, "Pick a stat block to instantly create an enemy NPC \u2014 ability scores, AC, HP, and attacks (as ready-to-roll weapons) are filled in for you. Traits and reactions land in Notes for quick reference."));
-    renderMonsterList(card, ruleset.monsters || [], createFromMonster);
+    card.appendChild(h("p", {}, "Pick a stat block to instantly create an enemy NPC \u2014 ability scores, AC, HP, and attacks (as ready-to-roll weapons) are filled in for you. Traits and reactions land in Notes for quick reference. Use \u{1F5BC} on a monster to give it an image; every copy of it in this campaign uses that image."));
+    pickerCleanup = renderMonsterList(card, ruleset.monsters || [], createFromMonster, { campaignId });
     return card;
   }
 
   async function createFromMonster(m) {
-    const name = prompt("Name this NPC:", m.name);
-    if (!name) return;
-    const id = await createNpcFromMonster(m, { name, user, campaignId });
+    const [name, portraitBase64] = await Promise.all([nextMonsterName(campaignId, m.name), monsterImageFor(campaignId, m.id)]);
+    const id = await createNpcFromMonster(m, { name, user, campaignId, portraitBase64 });
     toast(`${name} created from ${m.name}`);
     openNpc(id);
   }
@@ -187,7 +190,8 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
       rosterTabs.appendChild(tab);
     });
     if (npcs.length === 0 && !creating) {
-      sheetHost.innerHTML = "";
+      pickerCleanup?.(); pickerCleanup = null;
+    sheetHost.innerHTML = "";
       sheetHost.appendChild(h("p", {}, "No NPCs yet. Click \u201c+ New NPC\u201d to create your first one."));
     } else if (!activeId && !creating && npcs.length > 0) {
       openNpc(npcs[0].id);

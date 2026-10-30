@@ -1,0 +1,14 @@
+[
+  { "id": "alert", "name": "Alert", "summary": "Add your Proficiency Bonus to Initiative rolls, and you can swap your rolled Initiative with a willing ally's." },
+  { "id": "crafter", "name": "Crafter", "summary": "Proficiency with three Artisan's Tools, a 20% discount on nonmagical items, and the ability to craft temporary gear on a Long Rest." },
+  { "id": "healer", "name": "Healer", "summary": "Spend a Healer's Kit charge to let a nearby creature spend a Hit Die and heal extra HP; reroll 1s on healing dice." },
+  { "id": "lucky", "name": "Lucky", "summary": "Spend Luck Points (equal to Proficiency Bonus) to gain Advantage on your own d20 Test or impose Disadvantage on an attack against you." },
+  { "id": "magic-initiate-cleric", "name": "Magic Initiate (Cleric)", "summary": "Learn two Cleric cantrips and one 1st-level Cleric spell, castable once per Long Rest without a slot." },
+  { "id": "magic-initiate-druid", "name": "Magic Initiate (Druid)", "summary": "Learn two Druid cantrips and one 1st-level Druid spell, castable once per Long Rest without a slot." },
+  { "id": "magic-initiate-wizard", "name": "Magic Initiate (Wizard)", "summary": "Learn two Wizard cantrips and one 1st-level Wizard spell, castable once per Long Rest without a slot." },
+  { "id": "musician", "name": "Musician", "summary": "Proficiency with three Musical Instruments; play a song after a rest to grant Heroic Inspiration to allies who hear it." },
+  { "id": "savage-attacker", "name": "Savage Attacker", "summary": "Once per turn on a hit, roll the weapon's damage dice twice and use either result." },
+  { "id": "skilled", "name": "Skilled", "summary": "Gain proficiency in any combination of three skills or tools of your choice." },
+  { "id": "tavern-brawler", "name": "Tavern Brawler", "summary": "Unarmed Strikes deal 1d4 + Strength modifier Bludgeoning damage, reroll 1s, and you can push a creature you hit 5 feet." },
+  { "id": "tough", "name": "Tough", "summary": "Hit Point maximum increases by twice your level immediately, then by 2 extra every level thereafter." }
+]

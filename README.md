@@ -10,13 +10,20 @@ No build step. No framework. Plain HTML/CSS/JS modules + Firebase.
 ## What's inside
 
 **Character creation & sheet**
-- Guided wizard: Class → Species → Background → Ability Scores → Skills → Equipment → Details → Review, pulling every option from `data/*.json` (or Firestore) so it's impossible to build an off-rules character.
-- Starting equipment and gold are actually added to your inventory on creation, not just shown as text.
+- Guided 2024 builder: Class → Background → Species → Abilities → Skills & Languages → Features → Spells → Equipment → Details → Review. Every option comes from `data/*.json` (built from the 2024 Player's Handbook — all 12 classes and 48 subclasses with level 1–20 features, 10 species with lineages/ancestries, 16 backgrounds, 75 feats, 391 spells, the full equipment list), and each step checks the choices it needs: species lineage + spellcasting ability, Human skill/Origin feat, background tool, origin-feat picks (Skilled, Magic Initiate, Musician, Crafter), Fighting Style, Divine/Primal Order, Eldritch Invocation, Expertise, Weapon Mastery, cantrips, prepared spells and the Wizard spellbook.
+- Start at any level 1–20 (fixed or rolled HP): a Level Choices step asks for the subclass and each Ability Score Improvement or feat (Epic Boon at 19), and skill/expertise/invocation/weapon-mastery/cantrip/prepared-spell/spellbook counts scale with the starting level. Details include personality traits, ideals, bonds, flaws, lifestyle and full appearance.
+- An unfinished character is kept as a draft in the browser, so a refresh doesn't lose progress. Clickable step pills jump back to any step.
+- Starting equipment (class option A/B/C + background option A/B) goes into your inventory: packs become a backpack with their contents inside, and armor you're trained with is equipped.
 - Tabbed sheet — **Core** (abilities/saves/skills with passive scores), **Actions** (unarmed strike, equipped weapon attacks, toggleable class resources), **Spells** (slot tracking incl. Warlock Pact Magic, prepared-spell list, a spell picker), **Feats & Traits** (origin feat with sub-choices, level-gated species traits, class features, subclass, multiclassing, weapon mastery), **Inventory** (currency, weight/value, containers), **Description**.
 - Click AC or HP in the Vitals panel for a full breakdown (armor/Dex/shield/manual adjustments; hit dice and a "spend a Hit Die" heal action).
 - Short Rest / Long Rest buttons that recharge the right resources and spell slots automatically.
 - Right-click any d20 modifier (ability check, save, skill) for a quick Advantage/Disadvantage roll, or to set a manual override.
-- XP tracker with automatic leveling (PHB 2024 thresholds), or set level directly for milestone tables.
+- XP tracker (PHB 2024 thresholds) and a **Level Up** dialog: choose which class gains the level (multiclassing checks the 13+ prerequisites), average or rolled HP, subclass at its level, Ability Score Improvement or a feat (prerequisites checked; Epic Boon at 19), and Fighting Style for Paladin/Ranger.
+- Vitals panel in the style of D&D Beyond: quick Damage / Heal / Temp HP (temp absorbs first, massive damage and damage at 0 HP handled), death saving throws at 0 HP, the 2024 conditions, Exhaustion levels (−2 to D20 Tests and −5 ft. speed per level, applied to rolls automatically), Concentration tracking (set when you cast, with the DC prompt when you take damage), speed and passive Perception.
+- Actions tab: an attack table (weapons, unarmed strike, attack/damage spells with to-hit or save DC) and your features sorted into Actions / Bonus Actions / Reactions with their limited-use trackers, plus filters. Fighting Styles (Archery, Dueling, Thrown Weapon Fighting) apply to attack and damage.
+- Inventory shop: add or **buy** gear, weapons, armor and ammo (coins are deducted with change), packs arrive as a backpack with their contents, and 346 magic items from the 2024 DMG can be added — magic weapons and armor are built on the base item you choose (e.g. Longsword +2), with attunement (max 3), charges, Potions of Healing you can drink, and AC/save bonuses (Cloak/Ring of Protection, Bracers of Defense) applied automatically.
+- Subclass spells (Domain, Oath, Circle, Patron, Sorcery, Fey Wanderer/Gloom Stalker) are shown as always prepared and don't count against your limit.
+- Spells tab: per-class cantrip / prepared limits, a searchable spell list with full descriptions, Wizard spellbook, species and Magic Initiate spells with their free once-per-Long-Rest casts, and Cast buttons that spend a slot (pick the level to upcast) and roll attack, damage (cantrips scale at 5/11/17) or healing.
 
 **Campaigns**
 - DM creates a campaign, gets a 6-character invite code; players join with it and attach a character.
@@ -25,7 +32,7 @@ No build step. No framework. Plain HTML/CSS/JS modules + Firebase.
 - **Party Loot** — a shared inventory and 5-coin currency pool anyone can send items/gold to or take from.
 - **DM Notes** — private to the DM.
 - Characters can quit a campaign and join another anytime from the sidebar's **⋮** menu (also where character deletion lives).
-- **Demo Mode** — no Firebase needed to try everything: data lives in `localStorage` + `BroadcastChannel`, so a second browser tab acts like a second player in real time.
+- **Demo Mode** — no Firebase needed to try everything: data lives in `localStorage` + `BroadcastChannel`, and each browser tab has its own sign-in, so a second tab can be a second player in real time.
 
 **DM tools**
 - **NPCs** — lightweight roster entries (name + portrait; class/species/background are optional, so an NPC can be a fully-statted spellcaster or just "a regular person"). Each NPC gets the same inventory, notes, and stat tools as a player character.
@@ -34,6 +41,9 @@ No build step. No framework. Plain HTML/CSS/JS modules + Firebase.
 - **Combat tracker** — start combat with any mix of party + NPCs, roll initiative for NPCs directly, or send a roll request that pops up a modal on the right player's screen (wherever they are in the app) showing their bonus. Turn order shows portraits; Action/Bonus Action/Reaction/Movement toggle per turn and auto-clear on End Turn. Attacking and moving on the VTT auto-mark Action/Movement used.
 - **Map Workshop** — upload map backgrounds and build a folder-organized library of reusable furniture/props, each optionally flagged as Half/Three-Quarters/Total Cover.
 - **VTT** — a grid-based 2D tabletop per map: left-click to select/drag your own token (players) or any token/object (DM), right-drag to pan, a ruler in feet, rectangle/circle/cone (equilateral) AoE markers, a fog-of-war brush and eraser for the DM (one merged layer, stored at `maps/{mapId}/fogs/mask`), click a token for an HP/AC popup, right-click (DM) to open a sheet, resize, or move a token to a different map in real time. Cover AC bonuses apply and clear automatically as tokens cross a cover object's footprint. Players toggle their docked mini-sheet from the toolbar; the DM's toggle shows a map switcher instead.
+  - *Fog first:* players see the map fully fogged until that map's saved fog has loaded, so reloading, switching maps or a sync update never reveals what's underneath.
+  - *Caching:* decoded map backgrounds and token portraits, round token sprites, each map's last fog and each map's pan/zoom are cached in memory for the session. With Firebase, Firestore's offline cache (IndexedDB) makes reloads instant and queues changes made while offline.
+  - *Sync:* the toolbar badge shows Synced / Syncing / Offline (with the number of queued changes). A token you just moved keeps its new spot while the server catches up, and each AoE shape is its own document (`maps/{mapId}/aoeShapes/{shapeId}`), so two people editing at once no longer overwrite each other.
 - **No Firebase Storage needed** — portraits, map backgrounds, and component art are compressed client-side and stored as base64 directly in Firestore documents (see `js/image-utils.js`), since Storage typically isn't part of a free-tier setup.
 
 
@@ -68,7 +78,14 @@ Paste `firestore.rules` into **Firestore Database → Rules** and publish. Playe
 can only edit their own characters and inventory; the DM can adjust HP/XP for the
 party; DM Notes are DM-only; `rules_*` collections are public read-only.
 
-### Seed the rulebook data into Firestore
+### Rules data (optional Firestore seeding)
+
+The app reads the rules from the bundled `data/*.json` files (cached by the browser, no
+Firestore reads). Seeding Firestore is only needed if you switch `RULES_SOURCE` in
+`js/data-loader.js` to `"firestore"`. To rebuild the JSON from your own copy of the 2024
+Player's Handbook and Dungeon Master's Guide, put the PDFs in `docs/` and run `scripts/rules-build/build.sh`.
+
+#### Seed the rulebook data into Firestore
 
 `js/firebase-config.js` is your **public web config** — safe to commit, but it can
 only do what a signed-in user is allowed to do under your security rules. Seeding

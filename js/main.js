@@ -28,6 +28,7 @@ function iconD20() {
 
 let charListEl = null;
 let campaignListEl = null;
+let shellListenersBound = false;
 
 function buildShell() {
   appRoot.innerHTML = "";
@@ -74,7 +75,15 @@ function buildShell() {
   const shell = h("div", { class: "shell" }, [sidebar, main]);
   appRoot.appendChild(shell);
 
-  window.addEventListener("hashchange", () => { updateActiveNav(); refreshSidebarCharacters(); refreshSidebarCampaigns(); });
+  if (!shellListenersBound) {
+    shellListenersBound = true;
+    window.addEventListener("hashchange", () => { updateActiveNav(); refreshSidebarCharacters(); refreshSidebarCampaigns(); });
+    let sidebarTimer = null;
+    window.addEventListener("gt:characters-changed", () => {
+      clearTimeout(sidebarTimer);
+      sidebarTimer = setTimeout(refreshSidebarCharacters, 250);
+    });
+  }
   updateActiveNav();
   refreshSidebarCharacters();
   refreshSidebarCampaigns();
@@ -204,14 +213,21 @@ function registerAllRoutes() {
 }
 
 let routesRegistered = false;
+let shownUid; // undefined = nothing rendered yet; null = login screen
 
+// Auth can report the same user more than once (demo-mode tabs, token refresh);
+// only rebuild the shell when the signed-in account actually changes.
 onAuthChange((user) => {
+  const uidNow = user?.uid || null;
+  if (uidNow === shownUid) return;
+  shownUid = uidNow;
   if (user) {
     const view = buildShell();
     if (!routesRegistered) { registerAllRoutes(); routesRegistered = true; }
     initRouter(view);
   } else {
     charListEl = null;
+    campaignListEl = null;
     appRoot.innerHTML = "";
     renderLogin(appRoot);
   }

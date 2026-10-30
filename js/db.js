@@ -46,28 +46,45 @@ function subscribeTable(name, cb) {
   return () => localListeners.get(name)?.delete(cb);
 }
 
+// One-time migration: demo sessions used to live in localStorage (shared by all
+// tabs). Keep that account (and its characters) under its name.
+try {
+  const legacy = localStorage.getItem(LOCAL_PREFIX + "session");
+  if (legacy) {
+    const u = JSON.parse(legacy);
+    const accounts = JSON.parse(localStorage.getItem(LOCAL_PREFIX + "accounts") || "{}");
+    if (u?.displayName && !accounts[u.displayName.trim().toLowerCase()]) accounts[u.displayName.trim().toLowerCase()] = u;
+    localStorage.setItem(LOCAL_PREFIX + "accounts", JSON.stringify(accounts));
+    if (!sessionStorage.getItem(LOCAL_PREFIX + "session")) sessionStorage.setItem(LOCAL_PREFIX + "session", legacy);
+    localStorage.removeItem(LOCAL_PREFIX + "session");
+  }
+} catch { /* storage unavailable */ }
+
 const localDb = {
   auth: {
+    // The demo session is per tab (sessionStorage) while game data is shared
+    // (localStorage), so a second tab can sign in as a different player.
     onChange(cb) {
       const read = () => {
-        const raw = localStorage.getItem(LOCAL_PREFIX + "session");
+        let raw = null;
+        try { raw = sessionStorage.getItem(LOCAL_PREFIX + "session"); } catch { /* storage blocked */ }
         cb(raw ? JSON.parse(raw) : null);
       };
-      read();
-      const handler = (e) => { if (e.key === LOCAL_PREFIX + "session") read(); };
-      window.addEventListener("storage", handler);
-      bc?.addEventListener("message", (e) => { if (e.data.table === "session") read(); });
-      return () => window.removeEventListener("storage", handler);
+      return subscribeTable("session", read);
     },
     async signInDemo(displayName) {
-      const user = { uid: uid("demo"), displayName, photoURL: null, isDemo: true };
-      localStorage.setItem(LOCAL_PREFIX + "session", JSON.stringify(user));
-      notifyLocal("session"); bc?.postMessage({ table: "session" });
+      // Same name → same demo account, so reopening a tab keeps your characters
+      const accounts = readTable("accounts");
+      const key = displayName.trim().toLowerCase();
+      const user = accounts[key] || { uid: uid("demo"), displayName: displayName.trim(), photoURL: null, isDemo: true };
+      if (!accounts[key]) { accounts[key] = user; localStorage.setItem(LOCAL_PREFIX + "accounts", JSON.stringify(accounts)); }
+      sessionStorage.setItem(LOCAL_PREFIX + "session", JSON.stringify(user));
+      notifyLocal("session");
       return user;
     },
     async signOut() {
-      localStorage.removeItem(LOCAL_PREFIX + "session");
-      notifyLocal("session"); bc?.postMessage({ table: "session" });
+      sessionStorage.removeItem(LOCAL_PREFIX + "session");
+      notifyLocal("session");
     }
   },
 
@@ -109,7 +126,7 @@ const localDb = {
       delete campaigns[campaignId];
       writeTable("campaigns", campaigns);
 
-      ["logs", "notes", "partyInventory", "relationships", "maps", "componentFolders", "componentLibrary", "combat"].forEach(name => {
+      ["logs", "notes", "partyInventory", "relationships", "maps", "componentFolders", "componentLibrary", "monsterImages", "combat"].forEach(name => {
         const t = readTable(name);
         if (campaignId in t) { delete t[campaignId]; writeTable(name, t); }
       });
@@ -413,6 +430,28 @@ const localDb = {
     }
   },
 
+  // One doc per persistent AoE shape (maps/{mapId}/aoeShapes/{shapeId}) so two
+  // people editing different shapes never overwrite each other's change.
+  shapes: {
+    async set(campaignId, mapId, shape) {
+      const all = readTable("aoeShapes");
+      const key = `${campaignId}:${mapId}`;
+      all[key] = all[key] || {};
+      all[key][shape.id] = { ...shape, updatedAt: Date.now() };
+      writeTable("aoeShapes", all);
+    },
+    async remove(campaignId, mapId, shapeId) {
+      const all = readTable("aoeShapes");
+      const key = `${campaignId}:${mapId}`;
+      if (all[key]) delete all[key][shapeId];
+      writeTable("aoeShapes", all);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("aoeShapes", () => cb(Object.values(readTable("aoeShapes")[key] || {})));
+    }
+  },
+
   tokens: {
     async add(campaignId, mapId, token) {
       const tokens = readTable("tokens");
@@ -488,6 +527,29 @@ const localDb = {
     },
     subscribe(campaignId, cb) {
       return subscribeTable("componentLibrary", () => cb(readTable("componentLibrary")[campaignId] || []));
+    }
+  },
+
+  // Per-campaign artwork for Monster Manual entries, keyed by monster id.
+  // New NPCs/tokens made from that monster use it as their portrait.
+  monsterImages: {
+    async set(campaignId, monsterId, imageBase64) {
+      const t = readTable("monsterImages");
+      t[campaignId] = t[campaignId] || {};
+      t[campaignId][monsterId] = { imageBase64, updatedAt: Date.now() };
+      writeTable("monsterImages", t);
+    },
+    async remove(campaignId, monsterId) {
+      const t = readTable("monsterImages");
+      if (t[campaignId]) delete t[campaignId][monsterId];
+      writeTable("monsterImages", t);
+    },
+    // cb receives { monsterId: imageBase64 }
+    subscribe(campaignId, cb) {
+      return subscribeTable("monsterImages", () => {
+        const entries = readTable("monsterImages")[campaignId] || {};
+        cb(Object.fromEntries(Object.entries(entries).map(([id, v]) => [id, v.imageBase64])));
+      });
     }
   },
 
@@ -630,6 +692,7 @@ const firestoreDb = {
       await deleteAllDocs("campaigns", campaignId, "relationships");
       await deleteAllDocs("campaigns", campaignId, "componentFolders");
       await deleteAllDocs("campaigns", campaignId, "componentLibrary");
+      await deleteAllDocs("campaigns", campaignId, "monsterImages");
       await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "combat", "state")).catch(() => {});
 
       const charsSnap = await fx.getDocs(fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId)));
@@ -827,6 +890,8 @@ const firestoreDb = {
       const tokSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"));
       await Promise.all(tokSnap.docs.map(d => fx.deleteDoc(d.ref)));
       await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask")).catch(() => {});
+      const shapeSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps", mapId, "aoeShapes")).catch(() => null);
+      if (shapeSnap) await Promise.all(shapeSnap.docs.map(d => fx.deleteDoc(d.ref)));
       await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId));
     },
     async get(campaignId, mapId) {
@@ -921,6 +986,27 @@ const firestoreDb = {
     }
   },
 
+  shapes: {
+    async set(campaignId, mapId, shape) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "aoeShapes", shape.id), { ...shape, updatedAt: fx.serverTimestamp() });
+    },
+    async remove(campaignId, mapId, shapeId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "aoeShapes", shapeId));
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "aoeShapes"), (snap) => cb(snap.docs.map(d => {
+          const { updatedAt, ...rest } = d.data();
+          return { id: d.id, ...rest };
+        })), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
   tokens: {
     async add(campaignId, mapId, token) {
       const { db, fx } = await initFirebase();
@@ -994,6 +1080,24 @@ const firestoreDb = {
     }
   },
 
+  monsterImages: {
+    async set(campaignId, monsterId, imageBase64) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "monsterImages", monsterId), { imageBase64, updatedAt: fx.serverTimestamp() });
+    },
+    async remove(campaignId, monsterId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "monsterImages", monsterId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "monsterImages"), (snap) => cb(Object.fromEntries(snap.docs.map(d => [d.id, d.data().imageBase64]))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
   relationships: {
     async add(campaignId, data) {
       const { db, fx } = await initFirebase();
@@ -1038,5 +1142,42 @@ const firestoreDb = {
   }
 };
 
-export const db = USE_FIREBASE ? firestoreDb : localDb;
+// ---------------------------------------------------------------------------
+// Sync tracking: every write is counted until the backend confirms it, so the UI
+// can show "Syncing…" / "Offline — N changes queued" instead of silently drifting.
+// ---------------------------------------------------------------------------
+const syncListeners = new Set();
+const syncState = { online: typeof navigator === "undefined" ? true : navigator.onLine !== false, pending: 0, lastError: null };
+function emitSync() { syncListeners.forEach(cb => { try { cb({ ...syncState }); } catch { /* listener errors stay local */ } }); }
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => { syncState.online = true; emitSync(); });
+  window.addEventListener("offline", () => { syncState.online = false; emitSync(); });
+}
+const WRITE_METHODS = /^(add|update|remove|set|create|join|move|clear|append|toggle)/;
+function trackWrites(backend) {
+  Object.values(backend).forEach(ns => {
+    if (!ns || typeof ns !== "object") return;
+    Object.keys(ns).forEach(name => {
+      const fn = ns[name];
+      if (typeof fn !== "function" || !WRITE_METHODS.test(name)) return;
+      ns[name] = function (...args) {
+        syncState.pending++; emitSync();
+        let result;
+        try { result = fn.apply(this, args); }
+        catch (e) { syncState.pending--; syncState.lastError = e; emitSync(); throw e; }
+        return Promise.resolve(result).then(
+          (v) => { syncState.pending--; syncState.lastError = null; emitSync(); return v; },
+          (e) => { syncState.pending--; syncState.lastError = e; emitSync(); throw e; }
+        );
+      };
+    });
+  });
+  backend.sync = {
+    subscribe(cb) { syncListeners.add(cb); cb({ ...syncState }); return () => syncListeners.delete(cb); },
+    get state() { return { ...syncState }; }
+  };
+  return backend;
+}
+
+export const db = trackWrites(USE_FIREBASE ? firestoreDb : localDb);
 export const backendMode = USE_FIREBASE ? "firebase" : "demo";

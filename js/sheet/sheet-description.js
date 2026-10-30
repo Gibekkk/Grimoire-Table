@@ -34,8 +34,10 @@ export function renderDescriptionTab(ctx) {
   const apCard = h("div", { class: "card" });
   apCard.appendChild(h("h3", {}, "Appearance & Identity"));
   const fields = [
+    ["gender", "Gender", ""], ["age", "Age", "e.g. 27"],
     ["height", "Height", "e.g. 5'8\""], ["weight", "Weight", "e.g. 150 lb."],
     ["eyes", "Eyes", "e.g. Hazel"], ["hair", "Hair", "e.g. Black, braided"],
+    ["skin", "Skin", "e.g. Olive"], ["faith", "Faith", "e.g. Pelor"],
     ["faction", "Faction / Affiliation", "e.g. Harpers"]
   ];
   const grid = h("div", { class: "grid cols-2" });
@@ -68,7 +70,26 @@ export function renderDescriptionTab(ctx) {
   bioArea.addEventListener("change", () => patch({ backstory: bioArea.value }));
   bioCard.appendChild(bioLabel); bioCard.appendChild(bioArea);
 
-  const personalityLabel = h("label", {}, "Personality traits, ideals, bonds, flaws");
+  // D&D Beyond-style characteristics
+  bioCard.appendChild(h("label", {}, "Lifestyle"));
+  const life = h("select", {});
+  ["", "Wretched", "Squalid", "Poor", "Modest", "Comfortable", "Wealthy", "Aristocratic"].forEach(v => life.appendChild(h("option", { value: v, selected: (character.lifestyle || "") === v ? "selected" : null }, v || "\u2014")));
+  life.disabled = !canEditCore;
+  life.addEventListener("change", () => patch({ lifestyle: life.value }));
+  bioCard.appendChild(life);
+  const traitsGrid = h("div", { class: "grid cols-2" });
+  [["personalityTraits", "Personality Traits"], ["ideals", "Ideals"], ["bonds", "Bonds"], ["flaws", "Flaws"]].forEach(([key, label]) => {
+    const f = h("div", {});
+    f.appendChild(h("label", {}, label));
+    const ta = h("textarea", { style: "min-height:64px;" });
+    ta.value = character[key] || "";
+    ta.disabled = !canEditCore;
+    ta.addEventListener("change", () => patch({ [key]: ta.value }));
+    f.appendChild(ta);
+    traitsGrid.appendChild(f);
+  });
+  bioCard.appendChild(traitsGrid);
+  const personalityLabel = h("label", {}, "Other characteristics");
   const personalityArea = h("textarea", {});
   personalityArea.value = character.personality || "";
   personalityArea.disabled = !canEditCore;
@@ -90,10 +111,10 @@ export function renderDescriptionTab(ctx) {
   getClassEntries(character).forEach(entry => {
     const cls = findById(ruleset.classes, entry.classId);
     if (!cls) return;
-    refCard.innerHTML += `<p><strong>${cls.name} (Level ${entry.level})</strong> \u2014 d${cls.hitDie} Hit Die, saves in ${cls.savingThrows.map(s => s.toUpperCase()).join("/")}. ${cls.subclassLabel}: ${entry.subclassId || "not yet chosen"}. Options: ${cls.subclasses.join(", ")}.</p>`;
+    refCard.innerHTML += `<p><strong>${cls.name} (Level ${entry.level})</strong> \u2014 d${cls.hitDie} Hit Die, saves in ${cls.savingThrows.map(s => s.toUpperCase()).join("/")}. ${cls.subclassLabel}: ${(cls.subclasses || []).find(sc => (sc.id || sc) === entry.subclassId || sc.name === entry.subclassId)?.name || entry.subclassId || "not yet chosen"}. Options: ${(cls.subclasses || []).map(sc => sc.name || sc).join(", ")}.</p>`;
   });
   if (sp) refCard.innerHTML += `<p><strong>${sp.name}</strong> \u2014 Size ${sp.size.join("/")}, Speed ${sp.speed} ft.</p>`;
-  if (bg) refCard.innerHTML += `<p><strong>${bg.name} Background</strong> \u2014 Tool: ${bg.tool}. Skills: ${bg.skills.map(s => findById(ruleset.skills, s)?.name).join(", ")}.</p>`;
+  if (bg) refCard.innerHTML += `<p><strong>${bg.name} Background</strong> \u2014 Tool: ${escapeHtml(bg.tool || "")}. Skills: ${bg.skills.map(s => findById(ruleset.skills, s)?.name).join(", ")}. Feat: ${escapeHtml(bg.feat || "")}.</p>`;
   wrap.appendChild(refCard);
 
   return wrap;

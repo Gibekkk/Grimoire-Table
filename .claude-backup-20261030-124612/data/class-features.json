@@ -1,0 +1,45 @@
+[
+  { "id": "barbarian-unarmored-defense", "classId": "barbarian", "name": "Unarmored Defense", "level": 1, "toggleable": false, "resource": null, "description": "While not wearing armor, AC = 10 + Dex modifier + Con modifier. A shield can still be used." },
+  { "id": "barbarian-rage", "classId": "barbarian", "name": "Rage", "level": 1, "toggleable": true, "resource": { "recharge": "longRest", "kind": "rage-uses" }, "description": "Bonus action: resistance to Bludgeoning/Piercing/Slashing damage and extra melee damage for 1 minute. Uses scale with level." },
+  { "id": "barbarian-reckless", "classId": "barbarian", "name": "Reckless Attack", "level": 2, "toggleable": true, "resource": null, "description": "On your turn, gain Advantage on Strength-based attack rolls this turn, but attacks against you have Advantage until your next turn." },
+  { "id": "barbarian-danger-sense", "classId": "barbarian", "name": "Danger Sense", "level": 2, "toggleable": false, "resource": null, "description": "Advantage on Dexterity saving throws against effects you can see, as long as you aren't Blinded, Deafened, or Incapacitated." },
+  { "id": "barbarian-extra-attack", "classId": "barbarian", "name": "Extra Attack", "level": 5, "toggleable": false, "resource": null, "description": "You can attack twice, instead of once, whenever you take the Attack action on your turn." },
+
+  { "id": "bard-inspiration", "classId": "bard", "name": "Bardic Inspiration", "level": 1, "toggleable": true, "resource": { "recharge": "longRest", "kind": "ability-mod-cha" }, "description": "Bonus action: give a creature a Bardic Inspiration die (d6, scaling with level) to add to one ability check, attack roll, or save." },
+  { "id": "bard-jack-of-all-trades", "classId": "bard", "name": "Jack of All Trades", "level": 2, "toggleable": false, "resource": null, "description": "Add half your Proficiency Bonus (round down) to any ability check that doesn't already include your Proficiency Bonus." },
+  { "id": "bard-expertise", "classId": "bard", "name": "Expertise", "level": 3, "toggleable": false, "resource": null, "description": "Choose two skill proficiencies (or one skill and Thieves' Tools) to become an Expertise \u2014 use the skill row's proficiency dot to mark it." },
+
+  { "id": "cleric-divine-order", "classId": "cleric", "name": "Divine Order", "level": 1, "toggleable": false, "resource": null, "description": "Choose Protector (Martial weapon and Heavy armor training) or Thaumaturge (extra cantrip, Wisdom to Arcana/Religion checks)." },
+  { "id": "cleric-channel-divinity", "classId": "cleric", "name": "Channel Divinity", "level": 2, "toggleable": true, "resource": { "recharge": "shortRest", "kind": "channel-divinity" }, "description": "Fuel domain and cleric features that consume a Channel Divinity use; uses scale with level." },
+
+  { "id": "druid-wild-shape", "classId": "druid", "name": "Wild Shape", "level": 2, "toggleable": true, "resource": { "recharge": "shortRest", "kind": "fixed-2" }, "description": "Action: magically transform into a beast form you've learned, for a number of hours based on level." },
+  { "id": "druid-druidic", "classId": "druid", "name": "Druidic", "level": 1, "toggleable": false, "resource": null, "description": "You know Druidic, the secret language of druids, and can leave hidden messages other druids will automatically spot." },
+
+  { "id": "fighter-second-wind", "classId": "fighter", "name": "Second Wind", "level": 1, "toggleable": true, "resource": { "recharge": "shortRest", "kind": "fixed-1" }, "description": "Bonus action: regain 1d10 + Fighter level hit points." },
+  { "id": "fighter-action-surge", "classId": "fighter", "name": "Action Surge", "level": 2, "toggleable": true, "resource": { "recharge": "shortRest", "kind": "fixed-1" }, "description": "Take one additional action on your turn, on top of your regular action and a possible bonus action." },
+  { "id": "fighter-extra-attack", "classId": "fighter", "name": "Extra Attack", "level": 5, "toggleable": false, "resource": null, "description": "You can attack twice, instead of once, whenever you take the Attack action on your turn." },
+
+  { "id": "monk-martial-arts", "classId": "monk", "name": "Martial Arts", "level": 1, "toggleable": false, "resource": null, "description": "Use Dexterity instead of Strength for unarmed strikes and Monk weapons; unarmed strike damage die scales with level." },
+  { "id": "monk-unarmored-defense", "classId": "monk", "name": "Unarmored Defense", "level": 1, "toggleable": false, "resource": null, "description": "While not wearing armor or a shield, AC = 10 + Dex modifier + Wis modifier." },
+  { "id": "monk-focus-points", "classId": "monk", "name": "Focus Points", "level": 2, "toggleable": true, "resource": { "recharge": "shortRest", "kind": "monk-level" }, "description": "Spend points fueling Flurry of Blows, Patient Defense, Step of the Wind, and other Monk features. Pool equals your Monk level." },
+
+  { "id": "paladin-lay-on-hands", "classId": "paladin", "name": "Lay on Hands", "level": 1, "toggleable": true, "resource": { "recharge": "longRest", "kind": "paladin-lay-on-hands-pool" }, "description": "A healing pool (5 \u00d7 Paladin level) you can spend as an action, 1 point restoring 1 HP to a touched creature." },
+  { "id": "paladin-channel-divinity", "classId": "paladin", "name": "Channel Divinity", "level": 3, "toggleable": true, "resource": { "recharge": "shortRest", "kind": "fixed-1" }, "description": "Fuel your Sacred Oath's Channel Divinity options." },
+  { "id": "paladin-extra-attack", "classId": "paladin", "name": "Extra Attack", "level": 5, "toggleable": false, "resource": null, "description": "You can attack twice, instead of once, whenever you take the Attack action on your turn." },
+
+  { "id": "ranger-deft-explorer", "classId": "ranger", "name": "Deft Explorer", "level": 1, "toggleable": false, "resource": null, "description": "Gain an Expertise skill, and a bonus to Initiative and one Origin-related benefit reflecting your travels." },
+  { "id": "ranger-extra-attack", "classId": "ranger", "name": "Extra Attack", "level": 5, "toggleable": false, "resource": null, "description": "You can attack twice, instead of once, whenever you take the Attack action on your turn." },
+
+  { "id": "rogue-expertise", "classId": "rogue", "name": "Expertise", "level": 1, "toggleable": false, "resource": null, "description": "Choose two of your skill proficiencies (or one skill and Thieves' Tools) to become an Expertise." },
+  { "id": "rogue-sneak-attack", "classId": "rogue", "name": "Sneak Attack", "level": 1, "toggleable": false, "resource": null, "description": "Once per turn, deal extra damage (scaling with level) on one attack with a Finesse or ranged weapon if you have Advantage, or an ally is within 5 feet of the target." },
+  { "id": "rogue-cunning-action", "classId": "rogue", "name": "Cunning Action", "level": 2, "toggleable": false, "resource": null, "description": "Bonus action: Dash, Disengage, or Hide." },
+
+  { "id": "sorcerer-sorcery-points", "classId": "sorcerer", "name": "Sorcery Points", "level": 2, "toggleable": true, "resource": { "recharge": "longRest", "kind": "sorcerer-level" }, "description": "A pool (equal to Sorcerer level) you can convert to and from spell slots, and spend on Metamagic options." },
+  { "id": "sorcerer-innate-sorcery", "classId": "sorcerer", "name": "Innate Sorcery", "level": 1, "toggleable": true, "resource": { "recharge": "longRest", "kind": "fixed-2" }, "description": "Bonus action: your spell attacks have Advantage and your spell save DC increases by 1, for 1 minute." },
+
+  { "id": "warlock-pact-magic", "classId": "warlock", "name": "Pact Magic", "level": 1, "toggleable": false, "resource": null, "description": "Your spell slots are few but recharge on a Short or Long Rest, unlike other casters. Tracked in the Spells tab." },
+  { "id": "warlock-eldritch-invocations", "classId": "warlock", "name": "Eldritch Invocations", "level": 2, "toggleable": false, "resource": null, "description": "You learn magical shortcuts called Invocations that customize your warlock powers; track chosen invocations in Notes for now." },
+
+  { "id": "wizard-arcane-recovery", "classId": "wizard", "name": "Arcane Recovery", "level": 1, "toggleable": true, "resource": { "recharge": "longRest", "kind": "fixed-1" }, "description": "Once per day after a Short Rest, recover expended spell slots with a combined level up to half your Wizard level (rounded up)." },
+  { "id": "wizard-ritual-casting", "classId": "wizard", "name": "Ritual Casting", "level": 1, "toggleable": false, "resource": null, "description": "Cast a Wizard spell with the Ritual tag as a ritual, without expending a spell slot, if it's in your spellbook." }
+]

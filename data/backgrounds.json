@@ -1,258 +1,799 @@
 [
-  {
-    "id": "acolyte",
-    "name": "Acolyte",
-    "abilityScores": [
-      "int",
-      "wis",
-      "cha"
-    ],
-    "feat": "Magic Initiate (Cleric)",
-    "skills": [
-      "insight",
-      "religion"
-    ],
-    "tool": "Calligrapher's Supplies",
-    "featId": "magic-initiate-cleric"
+ {
+  "id": "acolyte",
+  "name": "Acolyte",
+  "abilityScores": [
+   "int",
+   "wis",
+   "cha"
+  ],
+  "featId": "magic-initiate",
+  "featList": "cleric",
+  "feat": "Magic Initiate (Cleric)",
+  "skills": [
+   "insight",
+   "religion"
+  ],
+  "tool": "Calligrapher's Supplies",
+  "toolChoice": null,
+  "equipmentText": "Calligrapher's Supplies, Book (prayers), Holy Symbol, Parchment (10 sheets), Robe, 8 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "gear",
+     "catalogId": "calligraphers-supplies",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "book",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "holy-symbol",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "parchment",
+     "quantity": 10
+    },
+    {
+     "category": "gear",
+     "catalogId": "robe",
+     "quantity": 1
+    }
+   ],
+   "gold": 8
   },
-  {
-    "id": "artisan",
-    "name": "Artisan",
-    "abilityScores": [
-      "str",
-      "dex",
-      "int"
-    ],
-    "feat": "Crafter",
-    "skills": [
-      "investigation",
-      "persuasion"
-    ],
-    "tool": "Artisan's Tools (choice)",
-    "featId": "crafter"
+  "goldAlternative": 50
+ },
+ {
+  "id": "artisan",
+  "name": "Artisan",
+  "abilityScores": [
+   "str",
+   "dex",
+   "int"
+  ],
+  "featId": "crafter",
+  "feat": "Crafter",
+  "skills": [
+   "investigation",
+   "persuasion"
+  ],
+  "tool": "Artisan's Tools (one kind)",
+  "toolChoice": "artisan",
+  "equipmentText": "Artisan's Tools (same as above), 2 Pouches, Traveler's Clothes, 32 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "gear",
+     "catalogId": "tool-choice",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "pouch",
+     "quantity": 2
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 32
   },
-  {
-    "id": "charlatan",
-    "name": "Charlatan",
-    "abilityScores": [
-      "dex",
-      "con",
-      "cha"
-    ],
-    "feat": "Skilled",
-    "skills": [
-      "deception",
-      "sleightOfHand"
-    ],
-    "tool": "Forgery Kit",
-    "featId": "skilled"
+  "goldAlternative": 50
+ },
+ {
+  "id": "charlatan",
+  "name": "Charlatan",
+  "abilityScores": [
+   "dex",
+   "con",
+   "cha"
+  ],
+  "featId": "skilled",
+  "feat": "Skilled",
+  "skills": [
+   "deception",
+   "sleightOfHand"
+  ],
+  "tool": "Forgery Kit",
+  "toolChoice": null,
+  "equipmentText": "Forgery Kit, Costume, Fine Clothes, 15 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "gear",
+     "catalogId": "forgery-kit",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "costume",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "fine-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 15
   },
-  {
-    "id": "criminal",
-    "name": "Criminal",
-    "abilityScores": [
-      "dex",
-      "con",
-      "int"
-    ],
-    "feat": "Alert",
-    "skills": [
-      "sleightOfHand",
-      "stealth"
-    ],
-    "tool": "Thieves' Tools",
-    "featId": "alert"
+  "goldAlternative": 50
+ },
+ {
+  "id": "criminal",
+  "name": "Criminal",
+  "abilityScores": [
+   "dex",
+   "con",
+   "int"
+  ],
+  "featId": "alert",
+  "feat": "Alert",
+  "skills": [
+   "sleightOfHand",
+   "stealth"
+  ],
+  "tool": "Thieves' Tools",
+  "toolChoice": null,
+  "equipmentText": "2 Daggers, Thieves' Tools, Crowbar, 2 Pouches, Traveler's Clothes, 16 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "dagger",
+     "quantity": 2
+    },
+    {
+     "category": "gear",
+     "catalogId": "thieves-tools",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "crowbar",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "pouch",
+     "quantity": 2
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 16
   },
-  {
-    "id": "entertainer",
-    "name": "Entertainer",
-    "abilityScores": [
-      "str",
-      "dex",
-      "cha"
-    ],
-    "feat": "Musician",
-    "skills": [
-      "acrobatics",
-      "performance"
-    ],
-    "tool": "Musical Instrument (choice)",
-    "featId": "musician"
+  "goldAlternative": 50
+ },
+ {
+  "id": "entertainer",
+  "name": "Entertainer",
+  "abilityScores": [
+   "str",
+   "dex",
+   "cha"
+  ],
+  "featId": "musician",
+  "feat": "Musician",
+  "skills": [
+   "acrobatics",
+   "performance"
+  ],
+  "tool": "Musical Instrument (one kind)",
+  "toolChoice": "instrument",
+  "equipmentText": "Musical Instrument (same as above), 2 Costumes, Mirror, Perfume, Traveler's Clothes, 11 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "gear",
+     "catalogId": "tool-choice",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "costume",
+     "quantity": 2
+    },
+    {
+     "category": "gear",
+     "catalogId": "mirror",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "perfume",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 11
   },
-  {
-    "id": "farmer",
-    "name": "Farmer",
-    "abilityScores": [
-      "str",
-      "con",
-      "wis"
-    ],
-    "feat": "Tough",
-    "skills": [
-      "animalHandling",
-      "nature"
-    ],
-    "tool": "Carpenter's Tools",
-    "featId": "tough"
+  "goldAlternative": 50
+ },
+ {
+  "id": "farmer",
+  "name": "Farmer",
+  "abilityScores": [
+   "str",
+   "con",
+   "wis"
+  ],
+  "featId": "tough",
+  "feat": "Tough",
+  "skills": [
+   "animalHandling",
+   "nature"
+  ],
+  "tool": "Carpenter's Tools",
+  "toolChoice": null,
+  "equipmentText": "Sickle, Carpenter's Tools, Healer's Kit, Iron Pot, Shovel, Traveler's Clothes, 30 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "sickle",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "carpenters-tools",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "healers-kit",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "iron-pot",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "shovel",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 30
   },
-  {
-    "id": "guard",
-    "name": "Guard",
-    "abilityScores": [
-      "str",
-      "int",
-      "wis"
-    ],
-    "feat": "Alert",
-    "skills": [
-      "athletics",
-      "perception"
-    ],
-    "tool": "Gaming Set (choice)",
-    "featId": "alert"
+  "goldAlternative": 50
+ },
+ {
+  "id": "guard",
+  "name": "Guard",
+  "abilityScores": [
+   "str",
+   "int",
+   "wis"
+  ],
+  "featId": "alert",
+  "feat": "Alert",
+  "skills": [
+   "athletics",
+   "perception"
+  ],
+  "tool": "Gaming Set (one kind)",
+  "toolChoice": "gaming",
+  "equipmentText": "Spear, Light Crossbow, 20 Bolts, Gaming Set (same as above), Hooded Lantern, Manacles, Quiver, Traveler's Clothes, 12 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "spear",
+     "quantity": 1
+    },
+    {
+     "category": "weapon",
+     "catalogId": "light-crossbow",
+     "quantity": 1
+    },
+    {
+     "category": "ammo",
+     "catalogId": "bolts",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "tool-choice",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "hooded-lantern",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "manacles",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "quiver",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 12
   },
-  {
-    "id": "guide",
-    "name": "Guide",
-    "abilityScores": [
-      "dex",
-      "con",
-      "wis"
-    ],
-    "feat": "Magic Initiate (Druid)",
-    "skills": [
-      "stealth",
-      "survival"
-    ],
-    "tool": "Cartographer's Tools",
-    "featId": "magic-initiate-druid"
+  "goldAlternative": 50
+ },
+ {
+  "id": "guide",
+  "name": "Guide",
+  "abilityScores": [
+   "dex",
+   "con",
+   "wis"
+  ],
+  "featId": "magic-initiate",
+  "featList": "druid",
+  "feat": "Magic Initiate (Druid)",
+  "skills": [
+   "stealth",
+   "survival"
+  ],
+  "tool": "Cartographer's Tools",
+  "toolChoice": null,
+  "equipmentText": "Shortbow, 20 Arrows, Cartographer's Tools, Bedroll, Quiver, Tent, Traveler's Clothes, 3 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "shortbow",
+     "quantity": 1
+    },
+    {
+     "category": "ammo",
+     "catalogId": "arrows",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "cartographers-tools",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "bedroll",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "quiver",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "tent",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 3
   },
-  {
-    "id": "hermit",
-    "name": "Hermit",
-    "abilityScores": [
-      "con",
-      "wis",
-      "cha"
-    ],
-    "feat": "Healer",
-    "skills": [
-      "medicine",
-      "religion"
-    ],
-    "tool": "Herbalism Kit",
-    "featId": "healer"
+  "goldAlternative": 50
+ },
+ {
+  "id": "hermit",
+  "name": "Hermit",
+  "abilityScores": [
+   "con",
+   "wis",
+   "cha"
+  ],
+  "featId": "healer",
+  "feat": "Healer",
+  "skills": [
+   "medicine",
+   "religion"
+  ],
+  "tool": "Herbalism Kit",
+  "toolChoice": null,
+  "equipmentText": "Quarterstaff, Herbalism Kit, Bedroll, Book (philosophy), Lamp, Oil (3 flasks), Traveler's Clothes, 16 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "quarterstaff",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "herbalism-kit",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "bedroll",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "book",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "lamp",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "oil",
+     "quantity": 3
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 16
   },
-  {
-    "id": "merchant",
-    "name": "Merchant",
-    "abilityScores": [
-      "con",
-      "int",
-      "cha"
-    ],
-    "feat": "Lucky",
-    "skills": [
-      "animalHandling",
-      "persuasion"
-    ],
-    "tool": "Navigator's Tools",
-    "featId": "lucky"
+  "goldAlternative": 50
+ },
+ {
+  "id": "merchant",
+  "name": "Merchant",
+  "abilityScores": [
+   "con",
+   "int",
+   "cha"
+  ],
+  "featId": "lucky",
+  "feat": "Lucky",
+  "skills": [
+   "animalHandling",
+   "persuasion"
+  ],
+  "tool": "Navigator's Tools",
+  "toolChoice": null,
+  "equipmentText": "Navigator's Tools, 2 Pouches, Traveler's Clothes, 22 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "gear",
+     "catalogId": "navigators-tools",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "pouch",
+     "quantity": 2
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 22
   },
-  {
-    "id": "noble",
-    "name": "Noble",
-    "abilityScores": [
-      "str",
-      "int",
-      "cha"
-    ],
-    "feat": "Skilled",
-    "skills": [
-      "history",
-      "persuasion"
-    ],
-    "tool": "Gaming Set (choice)",
-    "featId": "skilled"
+  "goldAlternative": 50
+ },
+ {
+  "id": "noble",
+  "name": "Noble",
+  "abilityScores": [
+   "str",
+   "int",
+   "cha"
+  ],
+  "featId": "skilled",
+  "feat": "Skilled",
+  "skills": [
+   "history",
+   "persuasion"
+  ],
+  "tool": "Gaming Set (one kind)",
+  "toolChoice": "gaming",
+  "equipmentText": "Gaming Set (same as above), Fine Clothes, Perfume, 29 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "gear",
+     "catalogId": "tool-choice",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "fine-clothes",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "perfume",
+     "quantity": 1
+    }
+   ],
+   "gold": 29
   },
-  {
-    "id": "sage",
-    "name": "Sage",
-    "abilityScores": [
-      "con",
-      "int",
-      "wis"
-    ],
-    "feat": "Magic Initiate (Wizard)",
-    "skills": [
-      "arcana",
-      "history"
-    ],
-    "tool": "Calligrapher's Supplies",
-    "featId": "magic-initiate-wizard"
+  "goldAlternative": 50
+ },
+ {
+  "id": "sage",
+  "name": "Sage",
+  "abilityScores": [
+   "con",
+   "int",
+   "wis"
+  ],
+  "featId": "magic-initiate",
+  "featList": "wizard",
+  "feat": "Magic Initiate (Wizard)",
+  "skills": [
+   "arcana",
+   "history"
+  ],
+  "tool": "Calligrapher's Supplies",
+  "toolChoice": null,
+  "equipmentText": "Quarterstaff, Calligrapher's Supplies, Book (history), Parchment (8 sheets), Robe, 8 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "quarterstaff",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "calligraphers-supplies",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "book",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "parchment",
+     "quantity": 8
+    },
+    {
+     "category": "gear",
+     "catalogId": "robe",
+     "quantity": 1
+    }
+   ],
+   "gold": 8
   },
-  {
-    "id": "sailor",
-    "name": "Sailor",
-    "abilityScores": [
-      "str",
-      "dex",
-      "wis"
-    ],
-    "feat": "Tavern Brawler",
-    "skills": [
-      "acrobatics",
-      "perception"
-    ],
-    "tool": "Navigator's Tools",
-    "featId": "tavern-brawler"
+  "goldAlternative": 50
+ },
+ {
+  "id": "sailor",
+  "name": "Sailor",
+  "abilityScores": [
+   "str",
+   "dex",
+   "wis"
+  ],
+  "featId": "tavern-brawler",
+  "feat": "Tavern Brawler",
+  "skills": [
+   "acrobatics",
+   "perception"
+  ],
+  "tool": "Navigator's Tools",
+  "toolChoice": null,
+  "equipmentText": "Dagger, Navigator's Tools, Rope, Traveler's Clothes, 20 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "dagger",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "navigators-tools",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "rope",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 20
   },
-  {
-    "id": "scribe",
-    "name": "Scribe",
-    "abilityScores": [
-      "dex",
-      "int",
-      "wis"
-    ],
-    "feat": "Skilled",
-    "skills": [
-      "investigation",
-      "perception"
-    ],
-    "tool": "Calligrapher's Supplies",
-    "featId": "skilled"
+  "goldAlternative": 50
+ },
+ {
+  "id": "scribe",
+  "name": "Scribe",
+  "abilityScores": [
+   "dex",
+   "int",
+   "wis"
+  ],
+  "featId": "skilled",
+  "feat": "Skilled",
+  "skills": [
+   "investigation",
+   "perception"
+  ],
+  "tool": "Calligrapher's Supplies",
+  "toolChoice": null,
+  "equipmentText": "Calligrapher's Supplies, Fine Clothes, Lamp, Oil (3 flasks), Parchment (12 sheets), 23 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "gear",
+     "catalogId": "calligraphers-supplies",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "fine-clothes",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "lamp",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "oil",
+     "quantity": 3
+    },
+    {
+     "category": "gear",
+     "catalogId": "parchment",
+     "quantity": 12
+    }
+   ],
+   "gold": 23
   },
-  {
-    "id": "soldier",
-    "name": "Soldier",
-    "abilityScores": [
-      "str",
-      "dex",
-      "con"
-    ],
-    "feat": "Savage Attacker",
-    "skills": [
-      "athletics",
-      "intimidation"
-    ],
-    "tool": "Gaming Set (choice)",
-    "featId": "savage-attacker"
+  "goldAlternative": 50
+ },
+ {
+  "id": "soldier",
+  "name": "Soldier",
+  "abilityScores": [
+   "str",
+   "dex",
+   "con"
+  ],
+  "featId": "savage-attacker",
+  "feat": "Savage Attacker",
+  "skills": [
+   "athletics",
+   "intimidation"
+  ],
+  "tool": "Gaming Set (one kind)",
+  "toolChoice": "gaming",
+  "equipmentText": "Spear, Shortbow, 20 Arrows, Gaming Set (same as above), Healer's Kit, Quiver, Traveler's Clothes, 14 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "spear",
+     "quantity": 1
+    },
+    {
+     "category": "weapon",
+     "catalogId": "shortbow",
+     "quantity": 1
+    },
+    {
+     "category": "ammo",
+     "catalogId": "arrows",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "tool-choice",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "healers-kit",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "quiver",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 14
   },
-  {
-    "id": "wayfarer",
-    "name": "Wayfarer",
-    "abilityScores": [
-      "dex",
-      "wis",
-      "cha"
-    ],
-    "feat": "Lucky",
-    "skills": [
-      "insight",
-      "stealth"
-    ],
-    "tool": "Thieves' Tools",
-    "featId": "lucky"
-  }
+  "goldAlternative": 50
+ },
+ {
+  "id": "wayfarer",
+  "name": "Wayfarer",
+  "abilityScores": [
+   "dex",
+   "wis",
+   "cha"
+  ],
+  "featId": "lucky",
+  "feat": "Lucky",
+  "skills": [
+   "insight",
+   "stealth"
+  ],
+  "tool": "Thieves' Tools",
+  "toolChoice": null,
+  "equipmentText": "2 Daggers, Thieves' Tools, Gaming Set (any), Bedroll, 2 Pouches, Traveler's Clothes, 16 GP",
+  "equipment": {
+   "items": [
+    {
+     "category": "weapon",
+     "catalogId": "dagger",
+     "quantity": 2
+    },
+    {
+     "category": "gear",
+     "catalogId": "thieves-tools",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "gaming-set",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "bedroll",
+     "quantity": 1
+    },
+    {
+     "category": "gear",
+     "catalogId": "pouch",
+     "quantity": 2
+    },
+    {
+     "category": "gear",
+     "catalogId": "travelers-clothes",
+     "quantity": 1
+    }
+   ],
+   "gold": 16
+  },
+  "goldAlternative": 50
+ }
 ]

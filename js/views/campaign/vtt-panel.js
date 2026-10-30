@@ -1,17 +1,14 @@
 import { db } from "../../db.js";
 import { h, toast, escapeHtml, showContextMenu } from "../../util.js";
-import { VttCanvas } from "../../vtt/vtt-canvas.js";
+import { VttCanvas, loadImageCached } from "../../vtt/vtt-canvas.js";
 import { mountCharacterSheet } from "../../character-sheet.js";
 import { COVER_AC_BONUS, COVER_LABELS, estimateArmorClass } from "../../rules-engine.js";
 import { navigate } from "../../router.js";
 import { loadRuleset } from "../../data-loader.js";
-import { createNpcFromMonster, pickMonster, tokenSquaresForSize } from "../../monsters.js";
+import { createNpcFromMonster, pickMonster, tokenSquaresForSize, nextMonsterName, monsterImageFor, once } from "../../monsters.js";
 
-// Module-level (not per-mount) so a background image, once decoded, stays
-// cached for the rest of the browser session — switching maps back and forth
-// no longer re-decodes/reloads it. Keyed by the base64 string itself, so a
-// re-uploaded background for the same map naturally invalidates the old entry.
-const bgImageCache = new Map();
+// Decoded map backgrounds and token images live in vtt-canvas.js's shared
+// session cache (loadImageCached), so switching maps never re-decodes them.
 
 export async function mountVttPanel(container, { campaignId, user, isDm, getAdvMode, onRoll }) {
   const shell = h("div", { class: "vtt-shell" });
@@ -24,9 +21,22 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   const toolbar = h("div", { class: "vtt-toolbar" });
   const canvasHost = h("div", { class: "vtt-canvas-host" });
   const popup = h("div", { class: "vtt-token-popup", style: "display:none;" });
+  // Empty/loading states are an overlay — never wipe canvasHost, it owns the <canvas>
+  const stageMessage = h("div", { class: "vtt-stage-message", style: "display:none;" });
+  const syncBadge = h("span", { class: "vtt-sync-badge", title: "Sync status" });
   stage.appendChild(toolbar);
   stage.appendChild(canvasHost);
+  stage.appendChild(stageMessage);
   stage.appendChild(popup);
+  function showStageMessage(html) {
+    stageMessage.innerHTML = html ? `<div class="empty-state">${html}</div>` : "";
+    stageMessage.style.display = html ? "flex" : "none";
+  }
+  const unsubSync = db.sync.subscribe(({ online, pending, lastError }) => {
+    syncBadge.className = `vtt-sync-badge ${!online ? "offline" : pending ? "pending" : lastError ? "error" : "ok"}`;
+    syncBadge.textContent = !online ? (pending ? `Offline \u2022 ${pending} queued` : "Offline") : pending ? `Syncing ${pending}\u2026` : lastError ? "Sync error" : "Synced";
+    syncBadge.title = !online ? "You're offline. Changes are saved locally and will sync when you reconnect." : lastError ? String(lastError.message || lastError) : "All changes saved";
+  });
 
   let myCharacter = null;
   let allMaps = [];
@@ -99,7 +109,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     const zoomIn = h("button", { class: "icon-btn" }, "+");
     zoomIn.addEventListener("click", () => canvas.zoomBy(1.15));
     const fitBtn = h("button", { class: "btn sm" }, "Fit");
-    fitBtn.addEventListener("click", () => canvas._fitToView());
+    fitBtn.addEventListener("click", () => { canvas._fitToView(); canvas._hasSavedView = true; });
     toolbar.appendChild(zoomOut); toolbar.appendChild(zoomIn); toolbar.appendChild(fitBtn);
 
     if (isDm) {
@@ -132,7 +142,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       // Non-DM: never show fog controls
       fogSliderWrap.style.display = "none";
     }
-    // Cone angle slider is removed — cones are now equilateral triangles with fixed geometry
+    toolbar.appendChild(h("span", { style: "flex:1;" }));
+    toolbar.appendChild(syncBadge);
   }
 
   // ---------------- FAB (DM adds tokens) ----------------
@@ -164,20 +175,19 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   fabMonsters.addEventListener("click", async () => {
     if (!currentMap) { toast("Create a map first", "error"); return; }
     const ruleset = await loadRuleset();
-    const monster = await pickMonster(ruleset.monsters || []);
+    const monster = await pickMonster(ruleset.monsters || [], { campaignId });
     if (!monster) return;
-    const name = prompt("Name this monster:", monster.name);
-    if (!name) return;
-    const npcId = await createNpcFromMonster(monster, { name, user, campaignId });
+    const [name, portraitBase64] = await Promise.all([nextMonsterName(campaignId, monster.name), monsterImageFor(campaignId, monster.id)]);
+    const npcId = await createNpcFromMonster(monster, { name, user, campaignId, portraitBase64 });
     const sq = tokenSquaresForSize(monster.size);
-    await addToken({ kind: "npc", refId: npcId, name, imageBase64: null, ...viewCenterSpot(sq, sq), w: sq, h: sq });
+    await addToken({ kind: "npc", refId: npcId, name, imageBase64: portraitBase64, ...viewCenterSpot(sq, sq), w: sq, h: sq });
     toast(`${name} added to the map (also listed under NPCs)`);
   });
 
   fabCharacters.addEventListener("click", async () => {
     const [party, npcs] = await Promise.all([
-      new Promise(res => { const u = db.characters.subscribeCampaignParty(campaignId, (p) => { res(p); u(); }); }),
-      new Promise(res => { const u = db.characters.subscribeCampaignNpcs(campaignId, (n) => { res(n); u(); }); })
+      once(cb => db.characters.subscribeCampaignParty(campaignId, cb)),
+      once(cb => db.characters.subscribeCampaignNpcs(campaignId, cb))
     ]);
     const items = [];
     items.push({ header: "Player Characters" });
@@ -196,8 +206,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   fabComponents.addEventListener("click", async () => {
     const [library, folders] = await Promise.all([
-      new Promise(res => { const u = db.componentLibrary.subscribe(campaignId, (l) => { res(l); u(); }); }),
-      new Promise(res => { const u = db.componentFolders.subscribe(campaignId, (f) => { res(f); u(); }); })
+      once(cb => db.componentLibrary.subscribe(campaignId, cb)),
+      once(cb => db.componentFolders.subscribe(campaignId, cb))
     ]);
     const items = [];
     if (library.length === 0) {
@@ -217,7 +227,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   async function addToken(token) {
     if (!currentMap) { toast("Create a map first", "error"); return; }
-    await db.tokens.add(campaignId, currentMap.id, token);
+    const mapId = currentMap.id;
+    await db.tokens.add(campaignId, mapId, token);
+    // A player's VTT follows their character's currentMapId
+    if (token.kind === "pc" && token.refId) await db.characters.update(token.refId, { currentMapId: mapId });
   }
 
   // ---------------- Cover auto-apply ----------------
@@ -324,32 +337,48 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   }
 
   // ---------------- Persistent AoE shapes handlers ----------------
+  // One doc per shape (db.shapes). Older maps kept every shape in one array on the
+  // map doc — whole-array writes from two people at once lost one of the edits.
+  // Those legacy shapes are shown merged and moved into docs on first touch.
   let currentShapes = [];
+  let docShapes = [];
+  let legacyShapes = [];
+  function refreshShapes() {
+    const ids = new Set(docShapes.map(sh => sh.id));
+    currentShapes = [...docShapes, ...legacyShapes.filter(sh => !ids.has(sh.id))];
+    canvas.setPersistentShapes(currentShapes);
+  }
+  async function migrateLegacyShapes(mapId) {
+    if (!isDm || !legacyShapes.length) return;
+    const toMove = legacyShapes;
+    legacyShapes = [];
+    await Promise.all(toMove.map(sh => db.shapes.set(campaignId, mapId, sh)));
+    await db.maps.updatePersistentShapes(campaignId, mapId, []);
+  }
 
   async function handleShapeAdded(shape) {
     if (!currentMap) return;
-    const newShapes = [...currentShapes, shape];
-    await db.maps.updatePersistentShapes(campaignId, currentMap.id, newShapes);
-    currentShapes = newShapes;
+    await db.shapes.set(campaignId, currentMap.id, shape);
   }
 
   async function handleShapeRemoved(shape) {
     if (!currentMap) return;
-    const newShapes = currentShapes.filter(s => s.id !== shape.id);
-    await db.maps.updatePersistentShapes(campaignId, currentMap.id, newShapes);
-    currentShapes = newShapes;
+    const mapId = currentMap.id;
+    if (legacyShapes.some(sh => sh.id === shape.id)) {
+      legacyShapes = legacyShapes.filter(sh => sh.id !== shape.id);
+      await db.maps.updatePersistentShapes(campaignId, mapId, legacyShapes);
+    }
+    await db.shapes.remove(campaignId, mapId, shape.id);
   }
 
   async function handleShapeMoved(shape) {
     if (!currentMap) return;
-    // Sync the moved shape position into currentShapes first, then save
-    const idx = currentShapes.findIndex(s => s.id === shape.id);
-    if (idx !== -1) {
-      Object.assign(currentShapes[idx], shape);
-    } else {
-      currentShapes.push({ ...shape });
+    const { _previewX, _previewY, ...clean } = shape;
+    await db.shapes.set(campaignId, currentMap.id, clean);
+    if (legacyShapes.some(sh => sh.id === shape.id)) {
+      legacyShapes = legacyShapes.filter(sh => sh.id !== shape.id);
+      await db.maps.updatePersistentShapes(campaignId, currentMap.id, legacyShapes);
     }
-    await db.maps.updatePersistentShapes(campaignId, currentMap.id, currentShapes);
   }
 
   // ---------------- VTT Fullscreen ----------------
@@ -387,7 +416,12 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   // ---------------- Sidebar content ----------------
   let sheetUnsub = null;
+  let sheetCharId = null;
   function buildSidebar() {
+    // The player's docked sheet stays mounted (it live-updates itself); only
+    // remount when the character itself changes.
+    if (!isDm && myCharacter && sheetCharId === myCharacter.id && sidebar.childElementCount) return;
+    sheetUnsub?.(); sheetUnsub = null; sheetCharId = null;
     sidebar.innerHTML = "";
     if (isDm) {
       sidebar.appendChild(h("h3", {}, "Maps"));
@@ -401,44 +435,66 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       if (!myCharacter) { sidebar.appendChild(h("p", {}, "You don't have a character in this campaign yet.")); return; }
       const host = h("div", {});
       sidebar.appendChild(host);
-      mountCharacterSheet(host, myCharacter.id, { viewerUid: user.uid, isDm: false, getAdvMode, onRoll }).then(u => { sheetUnsub = u; });
+      sheetCharId = myCharacter.id;
+      const mountedFor = myCharacter.id;
+      mountCharacterSheet(host, myCharacter.id, { viewerUid: user.uid, isDm: false, getAdvMode, onRoll }).then(u => {
+        if (sheetCharId === mountedFor) sheetUnsub = u; else u?.();
+      });
     }
   }
 
   // ---------------- Map loading ----------------
-  async function loadMap(mapId) {
-    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.();
-    currentMap = allMaps.find(m => m.id === mapId) || null;
-    if (!currentMap) return;
-    legacyFogs = []; fogMaskDoc = undefined; lastFogKey = null;
-    canvas.clearFog();
-    canvas.setMapSize(currentMap.widthPx, currentMap.heightPx);
-    const bg = currentMap.backgroundBase64;
-    if (!bg) {
-      canvas.setBackgroundImage(null);
-    } else if (bgImageCache.has(bg)) {
-      canvas.setBackgroundImage(bgImageCache.get(bg));
-    } else {
-      const img = new Image();
-      img.onload = () => { bgImageCache.set(bg, img); canvas.setBackgroundImage(img); };
-      img.onerror = () => {
-        console.error("[VTT] Failed to load background image for map:", mapId, "bg length:", bg?.length);
-        toast("Failed to load map background", "error");
-      };
-      img.src = bg;
-    }
-    canvas.setGridPx(currentMap.gridPx);
-    unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; canvas.setTokens(tokens); });
-    unsubFogs = db.maps.subscribe(campaignId, mapId, (map) => {
-      currentMap = map || currentMap;
-      legacyFogs = map?.fogs || [];
-      currentShapes = map?.persistentShapes || [];
-      canvas.setPersistentShapes(currentShapes);
-      applyFog();
+  // Fog first: the canvas covers the map for players until this map's fog mask has
+  // been decoded (instant when it was seen before this session), then the
+  // background, tokens and shapes stream in underneath it.
+  let unsubShapes = null;
+  let loadedMapId = null;
+  let shownBg = null;
+  function applyMapDoc(map) {
+    if (!map) return;
+    currentMap = map;
+    canvas.setMapSize(map.widthPx, map.heightPx);
+    canvas.setGridPx(map.gridPx);
+    const bg = map.backgroundBase64 || null;
+    if (bg === shownBg) return;
+    shownBg = bg;
+    if (!bg) { canvas.setBackgroundImage(null); return; }
+    loadImageCached(bg).then(img => {
+      if (shownBg !== bg || loadedMapId !== map.id) return; // superseded
+      if (img) canvas.setBackgroundImage(img);
+      else toast("Failed to load map background", "error");
     });
+  }
+
+  function loadMap(mapId) {
+    if (!mapId) return;
+    if (mapId === loadedMapId && currentMap) return; // already showing it
+    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.();
+    const map = allMaps.find(m => m.id === mapId) || (currentMap?.id === mapId ? currentMap : null);
+    loadedMapId = mapId;
+    showStageMessage(null);
+    legacyFogs = []; fogMaskDoc = undefined; lastFogKey = null;
+    docShapes = []; legacyShapes = []; currentShapes = [];
+    tokens = [];
+    canvas.setTokens([]);
+    canvas.setPersistentShapes([]);
+    canvas.setViewKey(`${campaignId}:${mapId}`);
+    shownBg = undefined;
+    if (map) applyMapDoc(map);
     unsubFogMask = db.fogMask.subscribe(campaignId, mapId, (doc) => {
       fogMaskDoc = doc;
       applyFog();
+    });
+    unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; canvas.setTokens(tokens); });
+    unsubShapes = db.shapes.subscribe(campaignId, mapId, (list) => { docShapes = list; refreshShapes(); });
+    unsubFogs = db.maps.subscribe(campaignId, mapId, (m) => {
+      if (!m) return;
+      applyMapDoc(m);
+      legacyFogs = m.fogs || [];
+      legacyShapes = m.persistentShapes || [];
+      refreshShapes();
+      applyFog();
+      migrateLegacyShapes(mapId);
     });
     buildToolbar();
     buildSidebar();
@@ -448,30 +504,38 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   const unsubMaps = db.maps.subscribeList(campaignId, async (list) => {
     allMaps = list;
     if (isDm) {
-      if (!currentMap && list.length) loadMap(list[0].id);
+      if (!loadedMapId && list.length) loadMap(list[0].id);
+      else if (loadedMapId && !list.some(m => m.id === loadedMapId)) { loadedMapId = null; currentMap = null; if (list.length) loadMap(list[0].id); }
       else buildToolbar();
-    }
-    if (list.length === 0) {
-      canvasHost.innerHTML = "";
-      canvasHost.appendChild(h("div", { class: "empty-state" }, isDm ? "<h3>No maps yet</h3><p>Create one in Map Workshop.</p>" : "<h3>No maps yet</h3><p>Your DM hasn't built one yet.</p>"));
+      if (!list.length) showStageMessage("<h3>No maps yet</h3><p>Create one in Map Workshop.</p>");
+    } else if (!list.length) {
+      showStageMessage("<h3>No maps yet</h3><p>Your DM hasn't built one yet.</p>");
     }
   });
 
   if (!isDm) {
+    // Party snapshots fire on any party member's change (HP, inventory, notes...).
+    // Only a change of *this player's* map should reload the VTT.
+    let lastCharId = null;
     const unsubParty = db.characters.subscribeCampaignParty(campaignId, (party) => {
       myCharacter = party.find(c => c.ownerUid === user.uid) || null;
-      buildSidebar();
-      if (myCharacter?.currentMapId) loadMap(myCharacter.currentMapId);
-      else if (myCharacter) {
-        canvasHost.innerHTML = "";
-        canvasHost.appendChild(h("div", { class: "empty-state" }, "<h3>Not on a map yet</h3><p>Ask your DM to place you.</p>"));
+      if (myCharacter?.id !== lastCharId) { lastCharId = myCharacter?.id || null; buildSidebar(); }
+      if (myCharacter?.currentMapId) {
+        if (myCharacter.currentMapId !== loadedMapId) loadMap(myCharacter.currentMapId);
+      } else {
+        if (loadedMapId) {
+          unsubTokens?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.();
+          loadedMapId = null; currentMap = null;
+          canvas.setTokens([]); canvas.setPersistentShapes([]);
+        }
+        showStageMessage(myCharacter ? "<h3>Not on a map yet</h3><p>Ask your DM to place you.</p>" : "<h3>No character here yet</h3><p>Join this campaign with a character first.</p>");
       }
     });
     buildToolbar();
-    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); sheetUnsub?.(); canvas.dispose(); };
+    return () => { unsubMaps(); unsubParty(); unsubCombat(); unsubSync(); unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); sheetUnsub?.(); canvas.dispose(); };
   }
 
   buildToolbar();
   buildSidebar();
-  return () => { unsubMaps(); unsubCombat(); unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); canvas.dispose(); };
+  return () => { unsubMaps(); unsubCombat(); unsubSync(); unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); canvas.dispose(); };
 }

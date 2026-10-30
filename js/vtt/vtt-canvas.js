@@ -21,13 +21,68 @@
 // The mask is exported as a PNG data URL for persistence.
 //
 // Performance: rendering is event-driven via a dirty flag rather than a
-// continuous rAF loop. The canvas only redraws when something changes.
+// continuous rAF loop. The canvas only redraws when something changes. Decoded
+// images, round token sprites, the fog mask of each visited map and each map's
+// pan/zoom are cached in memory (module level, so they survive panel remounts and
+// map switches) — a re-render never re-decodes a base64 image.
+//
+// Fog first: when a map loads, players see the whole map covered by fog until its
+// saved mask has been decoded and applied, so a reload / map switch / snapshot
+// never flashes what's underneath. A new mask replaces the old one only once it's
+// fully decoded.
 
 const FEET_PER_GRID = 5;
 const FOG_MASK_PX_PER_GRID = 16; // mask resolution — fog edges are smoothed when scaled up
 const FOG_MASK_MAX_DIM = 2048;
 const DRAG_THRESHOLD_PX = 4;     // pointer travel below this counts as a click, not a drag
 const DEFAULT_MAP_SIZE = { w: 1200, h: 800 };
+const PENDING_MOVE_TTL_MS = 8000;  // keep showing a local move this long while the server catches up
+
+// ---- Shared caches ----
+// Base64 data URLs can be hundreds of KB; hashing the whole string on every Map
+// lookup (per token, per frame) is itself a cost, so key by length + head + tail.
+export function imageKey(src) {
+  if (!src) return null;
+  return src.length < 256 ? src : `${src.length}:${src.slice(0, 48)}:${src.slice(-96)}`;
+}
+const IMAGE_CACHE_MAX = 300;
+const imageCache = new Map(); // key -> { img, ready, waiters: Set<fn> }
+function cachedImage(src, onReady) {
+  const key = imageKey(src);
+  if (!key) return null;
+  let entry = imageCache.get(key);
+  if (entry) {
+    imageCache.delete(key); imageCache.set(key, entry); // LRU bump
+    if (!entry.ready && onReady) entry.waiters.add(onReady);
+    return entry;
+  }
+  const img = new Image();
+  entry = { img, ready: false, waiters: new Set(onReady ? [onReady] : []) };
+  img.decoding = "async";
+  img.onload = () => {
+    entry.ready = true;
+    entry.waiters.forEach(fn => fn(img)); entry.waiters.clear();
+  };
+  img.onerror = () => { entry.failed = true; entry.waiters.clear(); };
+  img.src = src;
+  imageCache.set(key, entry);
+  if (imageCache.size > IMAGE_CACHE_MAX) imageCache.delete(imageCache.keys().next().value);
+  return entry;
+}
+// Resolves with a decoded <img> (shared with the token cache), or null on failure.
+export function loadImageCached(src) {
+  return new Promise((resolve) => {
+    if (!src) { resolve(null); return; }
+    const entry = cachedImage(src, (img) => resolve(img));
+    if (entry.ready) resolve(entry.img);
+    else if (entry.failed) resolve(null);
+    else entry.img.addEventListener("error", () => resolve(null), { once: true });
+  });
+}
+const spriteCache = new Map();     // round token sprites, keyed by image + kind + pixel size
+const SPRITE_CACHE_MAX = 400;
+const fogCache = new Map();        // viewKey -> { dataUrl, canvas } last mask seen per map
+const viewCache = new Map();       // viewKey -> { pan, zoom } so returning to a map keeps your view
 
 export class VttCanvas {
   constructor(container, opts) {
@@ -64,6 +119,12 @@ export class VttCanvas {
 
     // --- Persistent AoE shapes (like tokens, stay until removed) ---
     this.persistentShapes = [];
+
+    // --- Sync / cache state ---
+    this._viewKey = null;          // usually the map id; scopes the fog + view caches
+    this._fogReady = true;         // false while a map's fog is loading (players see full fog)
+    this._pendingMoves = new Map(); // tokenId -> { x, y, until } optimistic local moves
+    this._hasSavedView = false;
 
     // --- Performance: dirty flag (event-driven rendering) ---
     this._dirty = true;
@@ -122,20 +183,65 @@ export class VttCanvas {
   }
 
   setBackground(base64) {
-    if (!base64) { this.bgImage = null; this._markDirty(); return; }
-    const img = new Image();
-    img.onload = () => { this.bgImage = img; this._ensureFogMask(); this._fitToView(); };
-    img.src = base64;
+    if (!base64) { this.setBackgroundImage(null); return; }
+    loadImageCached(base64).then(img => { if (img) this.setBackgroundImage(img); });
   }
 
   setBackgroundImage(img) {
+    const changed = this.bgImage !== (img || null);
     this.bgImage = img || null;
     this._ensureFogMask();
-    if (img) this._fitToView();
+    if (img && changed && !this._hasSavedView) { this._fitToView(); this._hasSavedView = true; }
     this._markDirty();
   }
 
-  setTokens(tokens) { this.tokens = tokens; this._markDirty(); }
+  // Scope fog/view caches to a map. Restores that map's last pan/zoom and shows its
+  // last known fog instantly; players get full fog until the live mask is applied.
+  setViewKey(key) {
+    if (this._viewKey) viewCache.set(this._viewKey, { pan: { ...this.pan }, zoom: this.zoom });
+    this._viewKey = key || null;
+    const saved = key ? viewCache.get(key) : null;
+    this._hasSavedView = !!saved;
+    if (saved) { this.pan = { ...saved.pan }; this.zoom = saved.zoom; }
+    this._pendingMoves.clear();
+    this.selectedShape = null;
+    const cachedFog = key ? fogCache.get(key) : null;
+    this._ensureFogMask();
+    this.fogMaskCtx.clearRect(0, 0, this.fogMask.width, this.fogMask.height);
+    this._fogLoadToken++;
+    if (cachedFog) {
+      this.fogMaskCtx.drawImage(cachedFog.canvas, 0, 0, this.fogMask.width, this.fogMask.height);
+      this._fogMaskSrc = cachedFog.dataUrl;
+      this._fogReady = true;
+    } else {
+      this._fogMaskSrc = undefined;
+      this._fogReady = false;
+    }
+    this._markDirty();
+  }
+
+  // Incoming token list from the server. Local drag previews and recent moves that
+  // the server hasn't confirmed yet are kept, so a slow round trip (or a snapshot
+  // for a different token) never snaps a token back to its old square.
+  setTokens(tokens) {
+    const dragging = this.drag?.type === "token" ? this.drag.token : null;
+    const now = Date.now();
+    const next = (tokens || []).map(t => {
+      const p = this._pendingMoves.get(t.id);
+      let out = t;
+      if (p) {
+        if ((t.x === p.x && t.y === p.y) || now > p.until) this._pendingMoves.delete(t.id);
+        else out = { ...t, x: p.x, y: p.y };
+      }
+      if (dragging && dragging.id === t.id) {
+        out = { ...out, _previewX: dragging._previewX, _previewY: dragging._previewY };
+        this.drag.token = out;
+      }
+      return out;
+    });
+    this.tokens = next;
+    this._markDirty();
+  }
   setGridPx(px) { this.gridPx = px || 70; this._ensureFogMask(); this._markDirty(); }
   setMapSize(w, h) {
     this.mapSize = w && h ? { w, h } : null;
@@ -196,26 +302,47 @@ export class VttCanvas {
       this._pendingFog = { dataUrl, legacyFogs };
       return;
     }
-    if (dataUrl && dataUrl === this._fogMaskSrc) return;
+    if (dataUrl && dataUrl === this._fogMaskSrc) { this._fogReady = true; this._markDirty(); return; }
     this._ensureFogMask();
     const ctx = this.fogMaskCtx;
     const loadToken = ++this._fogLoadToken;
-    this._fogMaskSrc = dataUrl || null;
     if (!dataUrl) {
+      this._fogMaskSrc = null;
       ctx.clearRect(0, 0, this.fogMask.width, this.fogMask.height);
       this._rasterizeLegacyFogs(legacyFogs);
+      this._fogReady = true;
+      this._rememberFog(null);
       this._markDirty();
       return;
     }
+    // Decode off-screen first; the old mask stays visible until the new one is ready.
     const img = new Image();
+    img.decoding = "async";
     img.onload = () => {
       if (loadToken !== this._fogLoadToken) return; // a newer update superseded this one
-      ctx.clearRect(0, 0, this.fogMask.width, this.fogMask.height);
-      ctx.drawImage(img, 0, 0, this.fogMask.width, this.fogMask.height);
+      this._ensureFogMask();
+      this.fogMaskCtx.clearRect(0, 0, this.fogMask.width, this.fogMask.height);
+      this.fogMaskCtx.drawImage(img, 0, 0, this.fogMask.width, this.fogMask.height);
+      this._fogMaskSrc = dataUrl;
+      this._fogReady = true;
+      this._rememberFog(dataUrl);
       this._markDirty();
     };
+    img.onerror = () => { if (loadToken === this._fogLoadToken) { this._fogReady = true; this._markDirty(); } };
     img.src = dataUrl;
   }
+
+  // Keep a copy of the current mask for this map so switching back is instant.
+  _rememberFog(dataUrl) {
+    if (!this._viewKey || !this.fogMask) return;
+    const copy = document.createElement("canvas");
+    copy.width = this.fogMask.width; copy.height = this.fogMask.height;
+    copy.getContext("2d").drawImage(this.fogMask, 0, 0);
+    fogCache.set(this._viewKey, { dataUrl, canvas: copy });
+    if (fogCache.size > 30) fogCache.delete(fogCache.keys().next().value);
+  }
+
+  isFogReady() { return this._fogReady; }
 
   _rasterizeLegacyFogs(fogs) {
     if (!fogs?.length) return;
@@ -243,6 +370,8 @@ export class VttCanvas {
     this._fogLoadToken++;
     this._fogMaskSrc = null;
     this.fogMaskCtx?.clearRect(0, 0, this.fogMask.width, this.fogMask.height);
+    this._fogReady = true;
+    this._rememberFog(null);
     this._markDirty();
   }
 
@@ -250,6 +379,7 @@ export class VttCanvas {
     if (!this.fogMask) return null;
     const dataUrl = this.fogMask.toDataURL("image/png");
     this._fogMaskSrc = dataUrl;
+    this._rememberFog(dataUrl);
     return dataUrl;
   }
 
@@ -416,6 +546,7 @@ export class VttCanvas {
     }
 
     if (this._isFogTool() && this._isDm) {
+      if (!this._fogReady) return; // the saved mask is still loading; don't paint over it
       this.drag = { type: this.tool, last: world };
       this._paintFog(world, world, this.tool === "erase-fog");
       return;
@@ -514,6 +645,7 @@ export class VttCanvas {
         const finalY = Math.round((t._previewY ?? t.y) * 4) / 4;
         delete t._previewX; delete t._previewY;
         t.x = finalX; t.y = finalY;
+        this._pendingMoves.set(t.id, { x: finalX, y: finalY, until: Date.now() + PENDING_MOVE_TTL_MS });
         this.opts.onTokenMoved?.(t, finalX, finalY);
       }
     } else if (drag.type === "click") {
@@ -591,6 +723,7 @@ export class VttCanvas {
 
   _onWheel(e) {
     e.preventDefault();
+    this._hasSavedView = true;
     const { x: sx, y: sy } = this._eventPos(e);
     const worldBefore = this.screenToWorld(sx, sy);
     const factor = e.deltaY < 0 ? 1.1 : 0.9;
@@ -688,13 +821,44 @@ export class VttCanvas {
   }
 
   _getImage(src) {
-    if (!src) return null;
-    if (this._images.has(src)) return this._images.get(src);
-    const img = new Image();
-    img.onload = () => this._markDirty();
-    img.src = src;
-    this._images.set(src, img);
-    return img;
+    const entry = cachedImage(src, () => this._markDirty());
+    return entry?.ready ? entry.img : null;
+  }
+
+  // Pre-rendered round token (clipped portrait or initial + ring) at a device-pixel
+  // size bucket, so a frame is one drawImage per token instead of clip/arc/stroke.
+  _tokenSprite(t, diameterPx) {
+    const bucket = Math.max(16, Math.min(1024, Math.pow(2, Math.ceil(Math.log2(diameterPx)))));
+    const img = this._getImage(t.imageBase64);
+    const key = `${t.kind}|${img ? imageKey(t.imageBase64) : "letter:" + (t.name || "?")[0]}|${bucket}`;
+    let sprite = spriteCache.get(key);
+    if (sprite) return sprite;
+    const c = document.createElement("canvas");
+    c.width = c.height = bucket;
+    const g = c.getContext("2d");
+    const r = bucket / 2, ring = Math.max(2, bucket / 28);
+    g.save();
+    g.beginPath(); g.arc(r, r, r - ring / 2, 0, Math.PI * 2); g.closePath(); g.clip();
+    if (img) {
+      // cover-fit the portrait into the circle
+      const s = Math.max(bucket / img.naturalWidth, bucket / img.naturalHeight);
+      const w = img.naturalWidth * s, h = img.naturalHeight * s;
+      g.drawImage(img, (bucket - w) / 2, (bucket - h) / 2, w, h);
+    } else {
+      g.fillStyle = t.kind === "npc" ? "#9a3838" : "#3f8f80";
+      g.fillRect(0, 0, bucket, bucket);
+      g.fillStyle = "#fff"; g.font = `${Math.round(r)}px sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText((t.name || "?")[0].toUpperCase(), r, r + bucket * 0.03);
+    }
+    g.restore();
+    g.strokeStyle = t.kind === "npc" ? "#c24b4b" : "#c69a3e";
+    g.lineWidth = ring;
+    g.beginPath(); g.arc(r, r, r - ring / 2, 0, Math.PI * 2); g.stroke();
+    if (img || !t.imageBase64) {   // don't cache the placeholder while a portrait is still decoding
+      spriteCache.set(key, c);
+      if (spriteCache.size > SPRITE_CACHE_MAX) spriteCache.delete(spriteCache.keys().next().value);
+    }
+    return c;
   }
 
   // --- Rendering ---
@@ -711,68 +875,69 @@ export class VttCanvas {
     ctx.translate(this.pan.x, this.pan.y);
     ctx.scale(this.zoom, this.zoom);
 
+    // Visible world rectangle (for culling grid lines and tokens)
+    const view = { x0: -this.pan.x / this.zoom, y0: -this.pan.y / this.zoom, x1: (w - this.pan.x) / this.zoom, y1: (h - this.pan.y) / this.zoom };
+    const world = this._worldSize();
+    // Players see nothing but fog until this map's fog has loaded
+    const fogPending = !this._isDm && !this._fogReady;
+
     // Background
     if (this.bgImage) {
       ctx.drawImage(this.bgImage, 0, 0);
     }
 
-    // Grid — improved contrast (always draw if we have a grid size)
-    if (this.gridPx) {
+    // Grid — one batched path, only the visible lines
+    if (this.gridPx && !fogPending) {
+      const gp = this.gridPx;
+      const gw = this.bgImage?.width ?? Math.max(world.w, view.x1);
+      const gh = this.bgImage?.height ?? Math.max(world.h, view.y1);
+      const xs = Math.max(0, Math.floor(view.x0 / gp) * gp), xe = Math.min(gw, view.x1);
+      const ys = Math.max(0, Math.floor(view.y0 / gp) * gp), ye = Math.min(gh, view.y1);
+      const y0 = Math.max(0, view.y0), y1 = Math.min(gh, view.y1);
+      const x0 = Math.max(0, view.x0), x1 = Math.min(gw, view.x1);
+      ctx.beginPath();
+      for (let x = xs; x <= xe; x += gp) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
+      for (let y = ys; y <= ye; y += gp) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
       ctx.strokeStyle = "rgba(198,154,62,0.4)";
       ctx.lineWidth = 1 / this.zoom;
-      // Determine grid bounds: use bg image dimensions if available, else the visible area
-      const bgW = this.bgImage?.width ?? (w / this.zoom) * 3;
-      const bgH = this.bgImage?.height ?? (h / this.zoom) * 3;
-      for (let x = 0; x <= bgW; x += this.gridPx) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, bgH); ctx.stroke();
-      }
-      for (let y = 0; y <= bgH; y += this.gridPx) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(bgW, y); ctx.stroke();
-      }
+      ctx.stroke();
     }
 
     // Tokens
-    this.tokens.forEach(t => {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    if (!fogPending) this.tokens.forEach(t => {
       const gx = t._previewX ?? t.x, gy = t._previewY ?? t.y;
       const pos = this.gridToWorld(gx, gy);
       const size = this.gridToWorld(t.w || 1, t.h || 1);
+      if (pos.x > view.x1 || pos.y > view.y1 || pos.x + size.x < view.x0 || pos.y + size.y + this.gridPx < view.y0) return;
       if (t.kind === "component") {
         const img = this._getImage(t.imageBase64);
-        if (img?.complete && img.naturalWidth) ctx.drawImage(img, pos.x, pos.y, size.x, size.y);
+        if (img) ctx.drawImage(img, pos.x, pos.y, size.x, size.y);
         else { ctx.fillStyle = "rgba(198,154,62,0.35)"; ctx.fillRect(pos.x, pos.y, size.x, size.y); }
         if (t.isCover) {
           ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
           ctx.strokeRect(pos.x, pos.y, size.x, size.y);
         }
       } else {
-        const cx = pos.x + size.x / 2, cy = pos.y + size.y / 2, r = Math.min(size.x, size.y) / 2;
-        const img = this._getImage(t.imageBase64);
-        ctx.save();
-        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
-        if (img?.complete && img.naturalWidth) ctx.drawImage(img, pos.x, pos.y, size.x, size.y);
-        else { ctx.fillStyle = t.kind === "npc" ? "#9a3838" : "#3f8f80"; ctx.fillRect(pos.x, pos.y, size.x, size.y); }
-        ctx.restore();
-        ctx.strokeStyle = t.kind === "npc" ? "#c24b4b" : "#c69a3e";
-        ctx.lineWidth = 2 / this.zoom;
-        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-        if (!img || !img.naturalWidth) {
-          ctx.fillStyle = "#fff"; ctx.font = `${r}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-          ctx.fillText((t.name || "?")[0].toUpperCase(), cx, cy);
-          ctx.textBaseline = "alphabetic";
-        }
-        // Token name — improved contrast with text shadow
+        const d = Math.min(size.x, size.y);
+        const cx = pos.x + size.x / 2, cy = pos.y + size.y / 2, r = d / 2;
+        const sprite = this._tokenSprite(t, d * this.zoom * dpr);
+        ctx.drawImage(sprite, cx - r, cy - r, d, d);
         // Label size is capped so Huge/Gargantuan tokens don't get giant names
         const labelPx = Math.max(10, Math.min(r * 0.4, this.gridPx * 0.3));
-        ctx.fillStyle = "#fff"; ctx.font = `bold ${labelPx}px sans-serif`; ctx.textAlign = "center";
-        ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 4;
+        ctx.font = `bold ${labelPx}px sans-serif`; ctx.textAlign = "center";
+        ctx.lineWidth = Math.max(2, labelPx / 4); ctx.strokeStyle = "rgba(0,0,0,0.75)"; ctx.lineJoin = "round";
+        ctx.strokeText(t.name || "", cx, pos.y + size.y + labelPx);
+        ctx.fillStyle = "#fff";
         ctx.fillText(t.name || "", cx, pos.y + size.y + labelPx);
-        ctx.shadowBlur = 0;
       }
     });
 
     // Fog of war — one merged layer above tokens. Opaque for players, see-through for the DM.
-    if (this.fogMask) {
-      const world = this._worldSize();
+    if (fogPending) {
+      ctx.fillStyle = "#000";
+      ctx.fillRect(Math.min(0, view.x0), Math.min(0, view.y0), Math.max(world.w, view.x1) - Math.min(0, view.x0), Math.max(world.h, view.y1) - Math.min(0, view.y0));
+    } else if (this.fogMask) {
       ctx.save();
       ctx.globalAlpha = this._isDm ? 0.5 : 1;
       ctx.imageSmoothingEnabled = true;
@@ -794,7 +959,7 @@ export class VttCanvas {
     }
 
     // Persistent shapes
-    this._drawPersistentShapes();
+    if (!fogPending) this._drawPersistentShapes();
 
     // Temporary shape preview (being drawn right now)
     if (this.shape) {
@@ -947,6 +1112,7 @@ export class VttCanvas {
   }
 
   dispose() {
+    if (this._viewKey) viewCache.set(this._viewKey, { pan: { ...this.pan }, zoom: this.zoom });
     cancelAnimationFrame(this._raf);
     this._resizeObserver.disconnect();
     window.removeEventListener("pointermove", this._onPointerMove);

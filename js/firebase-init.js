@@ -21,7 +21,17 @@ export function initFirebase() {
     _app = initializeApp(firebaseConfig);
     _auth = authMod.getAuth(_app);
     _googleProvider = new authMod.GoogleAuthProvider();
-    _db = fsMod.getFirestore(_app);
+    // Persistent local cache (IndexedDB, shared across tabs): snapshots render
+    // instantly from cache on reload, reads keep working through network drops,
+    // and writes made offline are queued and replayed in order on reconnect.
+    try {
+      _db = fsMod.initializeFirestore(_app, {
+        localCache: fsMod.persistentLocalCache({ tabManager: fsMod.persistentMultipleTabManager() })
+      });
+    } catch (e) {
+      console.warn("[grimoire] Offline cache unavailable, using memory cache:", e?.message || e);
+      _db = fsMod.getFirestore(_app);
+    }
     _fx = { ...authMod, ...fsMod };
     return { app: _app, auth: _auth, db: _db, googleProvider: _googleProvider, fx: _fx };
   })();

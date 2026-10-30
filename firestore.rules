@@ -75,6 +75,7 @@ service cloud.firestore {
       match /campaignItems/{itemId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /componentFolders/{folderId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /componentLibrary/{componentId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
+      match /monsterImages/{monsterId} { allow read: if isMember(campaignId); allow write: if isDm(campaignId); }
       match /relationships/{relId} { allow read, write: if isDm(campaignId); }
 
       match /combat/{docId} {

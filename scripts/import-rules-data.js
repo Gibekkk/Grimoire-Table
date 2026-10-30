@@ -97,7 +97,7 @@ async function main() {
 
   console.log(`Seeding Firestore project "${serviceAccount.project_id}"...\n`);
 
-  const [species, classes, backgrounds, skills, feats, spells, classFeatures, monsters, alignments, equipment] = await Promise.all([
+  const [species, classes, backgrounds, skills, feats, spells, classFeatures, monsters, alignments, equipment, classOptions, languages] = await Promise.all([
     loadJson("species.json"),
     loadJson("classes.json"),
     loadJson("backgrounds.json"),
@@ -107,7 +107,9 @@ async function main() {
     loadJson("class-features.json"),
     loadJson("monsters.json"),
     loadJson("alignments.json"),
-    loadJson("equipment.json")
+    loadJson("equipment.json"),
+    loadJson("class-options.json"),
+    loadJson("languages.json")
   ]);
 
   const want = (name) => !ONLY || ONLY.includes(name);
@@ -121,6 +123,8 @@ async function main() {
   if (want("monsters")) await seedCollection(db, "rules_monsters", monsters);
   if (want("meta")) await seedSingleDoc(db, "rules_meta", "alignments", { list: alignments });
   if (want("meta")) await seedSingleDoc(db, "rules_meta", "equipment", equipment);
+  if (want("meta")) await seedSingleDoc(db, "rules_meta", "class_options", classOptions);
+  if (want("meta")) await seedSingleDoc(db, "rules_meta", "languages", languages);
 
   console.log("\nDone. The live app will now read rules data from Firestore automatically.");
   process.exit(0);
