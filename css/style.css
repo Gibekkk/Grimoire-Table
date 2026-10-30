@@ -688,4 +688,97 @@ details.upcoming > summary { cursor: pointer; font-family: var(--font-display); 
 .badge.rarity-common { color: #d6d6d6; }
 .badge.rarity-uncommon { color: #5fcf6b; border-color: #3c8f45; }
 .badge.rarity-rare { color: #6aa8ff; border-color: #3f6fb8; }
-.badge.rarity-very-rare { color: #c58bff; border-co
+.badge.rarity-very-rare { color: #c58bff; border-color: #7f4fb8; }
+.badge.rarity-legendary { color: #ffb347; border-color: #b8742a; }
+.badge.rarity-artifact { color: #ff7a6b; border-color: #b8463c; }
+.hp-manager-actions { flex-wrap: wrap; }
+.hp-manager-actions .hp-amount { flex: 1 1 100%; }
+.hp-manager-actions .btn { flex: 1; }
+/* ---------------- VTT toolbar ---------------- */
+.vtt-tool-group { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--ink); }
+.vtt-tool { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); font-family: var(--font-body); font-size: 0.78rem; cursor: pointer; white-space: nowrap; }
+.vtt-tool .ico { font-size: 0.95rem; line-height: 1; width: 1.1em; text-align: center; }
+.vtt-tool:hover { background: var(--ink-soft); color: var(--gold-bright); }
+.vtt-tool.active { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); color: #201404; border-color: var(--gold); }
+.vtt-tool.icon-only { padding: 0 8px; }
+.vtt-tool.icon-only .lbl:empty { display: none; }
+.vtt-tool.danger:hover { color: var(--blood-bright); }
+.vtt-toolbar > .vtt-tool { border: 1px solid var(--line); background: var(--ink); }
+.vtt-map-select { max-width: 190px; margin: 0; height: 32px; padding: 0 8px; }
+.vtt-tool-group .fog-slider-wrap { border: none; background: none; }
+@media (max-width: 900px) { .vtt-tool .lbl { display: none; } .vtt-tool { padding: 0 8px; } }
+.vtt-help { margin-top: 16px; font-size: 0.78rem; color: var(--text-dim); border-top: 1px solid var(--line); padding-top: 10px; }
+.vtt-help h4 { margin: 0 0 6px; font-size: 0.8rem; color: var(--gold); }
+.vtt-help p { margin: 4px 0; }
+
+/* ---------------- VTT creature panel ---------------- */
+.cp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cp-title { flex: 1; min-width: 0; }
+.cp-title h4 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.cp-close { flex-shrink: 0; }
+.badge.dead { color: #fff; background: var(--blood); border-color: var(--blood-bright); }
+.cp-sub { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 6px; }
+.cp-look { font-family: var(--font-display); color: var(--gold-bright); margin: 6px 0; }
+.cp-stats { display: flex; gap: 12px; margin: 6px 0; flex-wrap: wrap; }
+.cp-stats > div { display: flex; flex-direction: column; }
+.cp-stats b { font-family: var(--font-mono); font-size: 1rem; color: var(--text); }
+.cp-stats b.bad, .cp-note.bad { color: var(--blood-bright); }
+.vtt-token-popup .lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); font-family: var(--font-display); }
+.cp-hp { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--ink); margin: 6px 0; }
+.cp-hp-nums { display: flex; align-items: baseline; gap: 4px; font-family: var(--font-mono); }
+.cp-hp-nums .val { font-size: 1.4rem; color: var(--blood-bright); }
+.cp-hp-nums .slash, .cp-hp-nums .max { color: var(--text-dim); font-size: 1rem; }
+.cp-hp-nums .temp { margin-left: auto; color: var(--rune-bright); font-size: 0.8rem; }
+.cp-hp .hp-bar { margin: 6px 0; }
+.cp-hp-row { display: flex; gap: 4px; margin-top: 4px; }
+.cp-hp-row input, .cp-hp-row select { margin: 0; padding: 5px 6px; min-width: 0; flex: 1; font-size: 0.8rem; }
+.cp-hp-row .btn { flex: 1; }
+.cp-note { font-size: 0.76rem; border-left: 3px solid var(--gold); padding: 4px 8px; margin: 6px 0; background: rgba(198,154,62,0.08); border-radius: 0 6px 6px 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cp-section { margin-top: 8px; }
+.cp-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.condition-chip.implied { opacity: 0.6; border-style: dashed; cursor: default; }
+.cp-effects { margin: 6px 0 0; padding-left: 16px; font-size: 0.74rem; color: var(--text-dim); }
+.cp-edit { margin-top: 4px; }
+.cp-edit > summary { cursor: pointer; font-size: 0.72rem; color: var(--text-dim); padding: 2px 0; }
+.cp-toggle-grid { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.cp-toggle-grid .btn { padding: 3px 7px; font-size: 0.68rem; }
+.cp-toggle-grid .btn.immune { opacity: 0.45; text-decoration: line-through; }
+.cp-exh { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; margin-top: 6px; }
+.cp-exh .btn { padding: 3px 8px; font-size: 0.7rem; }
+.cp-def > div { margin: 2px 0; display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.def-chip { font-size: 0.66rem; padding: 1px 7px; border-radius: 20px; border: 1px solid var(--line); text-transform: capitalize; }
+.def-chip.res { border-color: var(--rune); color: var(--rune-bright); }
+.def-chip.imm { border-color: var(--gold); color: var(--gold-bright); }
+.def-chip.vul { border-color: var(--blood-bright); color: var(--blood-bright); }
+.def-chip.cimm { border-color: #5a5f80; color: #b8bde0; }
+.cp-saves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin-bottom: 6px; }
+.cp-saves .btn { padding: 4px; font-size: 0.7rem; font-family: var(--font-mono); }
+.cp-attack { display: flex; align-items: center; gap: 4px; padding: 4px 0; border-top: 1px solid var(--line); }
+.cp-attack-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cp-attack-name b { font-size: 0.8rem; }
+.cp-attack-name small { font-size: 0.66rem; color: var(--text-dim); }
+.cp-attack .btn { padding: 4px 7px; font-size: 0.7rem; font-family: var(--font-mono); }
+.btn.adv { border-color: var(--rune-bright); color: var(--rune-bright); }
+.btn.dis { border-color: var(--blood-bright); color: var(--blood-bright); }
+.cp-statblock { font-size: 0.74rem; color: var(--text-dim); max-height: 260px; overflow-y: auto; }
+.cp-statblock h5 { margin: 8px 0 2px; color: var(--gold); font-family: var(--font-display); font-size: 0.72rem; text-transform: uppercase; }
+.cp-statblock p { margin: 3px 0; }
+.cp-statblock b { color: var(--text); }
+.cp-abil { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; font-family: var(--font-mono); font-size: 0.68rem; }
+.cp-private { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; color: var(--text-dim); margin-top: 8px; }
+.cp-private input { width: auto; margin: 0; }
+.cp-footer { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.cp-footer .btn { padding: 4px 8px; font-size: 0.72rem; }
+.cp-loot { margin: 8px 0; padding: 8px; border: 1px solid var(--gold); border-radius: 8px; background: rgba(198,154,62,0.08); }
+.cp-loot-list { margin: 4px 0; padding-left: 16px; font-size: 0.78rem; }
+.cp-loot-list li { margin: 2px 0; }
+.cp-btn-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.cp-btn-row .btn { padding: 4px 8px; font-size: 0.7rem; }
+.monster-place-opts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; font-size: 0.82rem; }
+.monster-place-opts label { display: flex; align-items: center; gap: 6px; margin: 0; }
+.monster-place-opts input[type=number] { width: 64px; margin: 0; }
+.monster-place-opts input[type=checkbox] { width: auto; margin: 0; }
+.npc-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.tab-btn.is-hidden { opacity: 0.6; font-style: italic; }
+@media (max-width: 700px) { .vtt-token-popup { width: auto; left: 8px; right: 8px; top: 8px; max-height: 60%; } }

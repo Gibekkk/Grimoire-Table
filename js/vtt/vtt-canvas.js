@@ -1080,4 +1080,139 @@ export class VttCanvas {
     for (const shape of this.persistentShapes) {
       // Draw highlight for selected shape
       if (this.selectedShape && this.selectedShape.id === shape.id) {
-        this._drawShapeHighligh
+        this._drawShapeHighlight(shape);
+      }
+      if (shape.kind === "rect") {
+        const pos = this.gridToWorld(shape.x, shape.y);
+        const size = this.gridToWorld(shape.w, shape.h);
+        ctx.fillStyle = "rgba(63,143,128,0.25)";
+        ctx.strokeStyle = "#56b8a5";
+        ctx.lineWidth = 2 / this.zoom;
+        ctx.fillRect(pos.x, pos.y, size.x, size.y);
+        ctx.strokeRect(pos.x, pos.y, size.x, size.y);
+        // Size label
+        const feetW = Math.round(shape.w * FEET_PER_GRID);
+        const feetH = Math.round(shape.h * FEET_PER_GRID);
+        this._shapeLabel(`${feetW}×${feetH} ft`, pos.x + size.x / 2, pos.y + size.y + 16 / this.zoom);
+      } else if (shape.kind === "circle") {
+        const pos = this.gridToWorld(shape.x, shape.y);
+        const r = shape.radius * this.gridPx;
+        ctx.fillStyle = "rgba(63,143,128,0.25)";
+        ctx.strokeStyle = "#56b8a5";
+        ctx.lineWidth = 2 / this.zoom;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        // Size label
+        const feet = Math.round(shape.radius * FEET_PER_GRID);
+        this._shapeLabel(`${feet} ft radius`, pos.x, pos.y + r + 16 / this.zoom);
+      } else if (shape.kind === "cone") {
+        this._drawConeTriangle(this._shapeCone(shape), `${Math.round(shape.distance * FEET_PER_GRID)} ft`);
+      }
+    }
+  }
+
+  _shapeLabel(text, x, y) {
+    const ctx = this.ctx;
+    ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
+    ctx.fillText(text, x, y);
+    ctx.shadowBlur = 0;
+  }
+
+  _drawConeTriangle([a, b, c], label) {
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(63,143,128,0.25)";
+    ctx.strokeStyle = "#56b8a5";
+    ctx.lineWidth = 2 / this.zoom;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(c.x, c.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Label at the centroid
+    this._shapeLabel(label, (a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3);
+  }
+
+  _drawShapeHighlight(shape) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setLineDash([4 / this.zoom, 4 / this.zoom]);
+    ctx.strokeStyle = "#e0b95c";
+    ctx.lineWidth = 2 / this.zoom;
+    const pad = 3 / this.zoom;
+    if (shape.kind === "rect") {
+      const pos = this.gridToWorld(shape.x, shape.y);
+      const size = this.gridToWorld(shape.w, shape.h);
+      ctx.strokeRect(pos.x - pad, pos.y - pad, size.x + pad * 2, size.y + pad * 2);
+    } else if (shape.kind === "circle") {
+      const pos = this.gridToWorld(shape.x, shape.y);
+      const r = shape.radius * this.gridPx;
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, r + pad, 0, Math.PI * 2); ctx.stroke();
+    } else if (shape.kind === "cone") {
+      const [a, b, c] = this._shapeCone(shape);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.closePath();
+      ctx.lineWidth = 4 / this.zoom;
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  _drawShapePreview() {
+    const ctx = this.ctx;
+    const { kind, startWorld, endWorld } = this.shape;
+
+    if (kind === "rect") {
+      const x = Math.min(startWorld.x, endWorld.x), y = Math.min(startWorld.y, endWorld.y);
+      const w2 = Math.abs(endWorld.x - startWorld.x), h2 = Math.abs(endWorld.y - startWorld.y);
+      ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
+      ctx.fillRect(x, y, w2, h2); ctx.strokeRect(x, y, w2, h2);
+      const feetW = Math.round((w2 / this.gridPx) * FEET_PER_GRID);
+      const feetH = Math.round((h2 / this.gridPx) * FEET_PER_GRID);
+      this._shapeLabel(`${feetW}×${feetH} ft`, x + w2 / 2, y + h2 + 16 / this.zoom);
+    } else if (kind === "circle") {
+      const diameter = this.shape._diameter || 0;
+      const center = this.shape._centerWorld || startWorld;
+      const r = diameter / 2;
+      ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
+      ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      const feet = Math.round((r / this.gridPx) * FEET_PER_GRID);
+      this._shapeLabel(`${feet} ft radius`, center.x, center.y + r + 16 / this.zoom);
+    } else if (kind === "cone") {
+      const { origin, _dist = 0, _angle = 0 } = this.shape;
+      const feet = Math.round(_dist / this.gridPx * FEET_PER_GRID);
+      this._drawConeTriangle(this._coneVertices(origin.x, origin.y, _angle, _dist), `${feet} ft`);
+    }
+  }
+
+  // Bounding-box overlap check used for auto cover application.
+  tokenOverlapsCover(token) {
+    const p = this._byId?.get(token.id) ? this._posOf(this._byId.get(token.id)) : token;
+    const tw = this.gridToWorld(p.x, p.y);
+    const tsize = this.gridToWorld(token.w || 1, token.h || 1);
+    const cx1 = tw.x, cy1 = tw.y, cx2 = tw.x + tsize.x, cy2 = tw.y + tsize.y;
+    for (const other of this.tokens) {
+      if (other.id === token.id || other.kind !== "component" || !other.isCover) continue;
+      const ow = this.gridToWorld(other.x, other.y);
+      const osize = this.gridToWorld(other.w || 1, other.h || 1);
+      const ox1 = ow.x, oy1 = ow.y, ox2 = ow.x + osize.x, oy2 = ow.y + osize.y;
+      if (cx1 < ox2 && cx2 > ox1 && cy1 < oy2 && cy2 > oy1) return other.coverType || "half";
+    }
+    return null;
+  }
+
+  dispose() {
+    if (this._viewKey) viewCache.set(this._viewKey, { pan: { ...this.pan }, zoom: this.zoom });
+    cancelAnimationFrame(this._raf);
+    this._resizeObserver.disconnect();
+    window.removeEventListener("pointermove", this._onPointerMove);
+    window.removeEventListener("pointerup", this._onPointerUp);
+    this.canvas.remove();
+  }
+}

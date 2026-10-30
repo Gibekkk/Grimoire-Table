@@ -198,4 +198,23 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
     const n = combat.combatants.length;
     let nextIndex = (combat.currentTurnIndex + 1) % n;
     let nextRound = combat.round + (nextIndex === 0 ? 1 : 0);
-    const combatants 
+    const combatants = combat.combatants.map((c, i) => i === nextIndex ? { ...c, actionUsed: false, bonusActionUsed: false, reactionUsed: false, movementUsed: false } : c);
+    db.combat.set(campaignId, { currentTurnIndex: nextIndex, round: nextRound, combatants });
+  }
+
+  async function render() {
+    wrap.innerHTML = "";
+    if (!combat?.active) {
+      if (isDm) wrap.appendChild(await startCombatSetup());
+      else wrap.appendChild(h("div", { class: "empty-state" }, "<h3>No active combat</h3><p>Waiting for the DM to start one.</p>"));
+      return;
+    }
+    wrap.appendChild(renderTurnOrder());
+  }
+
+  const unsubCombat = db.combat.subscribe(campaignId, (c) => { combat = c; render(); });
+  const unsubParty = db.characters.subscribeCampaignParty(campaignId, (p) => { party = p; if (!combat?.active) render(); });
+  const unsubNpcs = db.characters.subscribeCampaignNpcs(campaignId, (n) => { npcs = n; if (!combat?.active) render(); });
+
+  return () => { unsubCombat(); unsubParty(); unsubNpcs(); };
+}

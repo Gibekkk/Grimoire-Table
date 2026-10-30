@@ -135,4 +135,16 @@ export function renderCoreTab(ctx) {
     const editRow = h("div", { class: "field-row wrap" });
     [["languages", "Edit languages"], ["toolProficiencies", "Edit tools"]].forEach(([key, label]) => {
       const b = h("button", { class: "btn sm ghost" }, label);
-      b.addEve
+      b.addEventListener("click", () => {
+        const val = prompt(`${label} (comma separated):`, (character[key] || []).join(", "));
+        if (val === null) return;
+        patch({ [key]: val.split(",").map(x => x.trim()).filter(Boolean) });
+      });
+      editRow.appendChild(b);
+    });
+    profCard.appendChild(editRow);
+  }
+  wrap.appendChild(profCard);
+
+  return wrap;
+}

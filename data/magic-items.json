@@ -7043,4 +7043,306 @@
   "attackBonus": null,
   "variable": false,
   "summary": "‘This wand has 7 charges. While holding it, you can take a Magic action to expend I charge and create a harmless burst of multicolored light at a point you can see up to 120 feet away.",
-  "description": "‘This
+  "description": "‘This wand has 7 charges. While holding it, you can take a Magic action to expend I charge and create a harmless burst of multicolored light at a point you can see up to 120 feet away. The burst of light is accompanied by a crackling noise that can be heard up to 300 feet away. The light is as bright as a torch flame but lasts only a second.\nRegaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If you expend the wand's last charge, roll 1d20. On a 1, the wand erupts in a harmless pyrotechnic display and is, destroyed.",
+  "source": "DMG 2024",
+  "themes": [
+   "Armaments"
+  ]
+ },
+ {
+  "id": "wand-of-secrets",
+  "name": "Wand of Secrets",
+  "type": "Wand",
+  "subtype": null,
+  "rarity": "Uncommon",
+  "attunement": false,
+  "attunementBy": null,
+  "charges": "3",
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "This wand has 3 charges and regains 143 expended charges daily at dawn. While holding it, you can take a Magic action to expend 1 charge, and ifa secret door or trap is within 60 feet of you, the wand pulses and points at the one nearest to you.",
+  "description": "This wand has 3 charges and regains 143 expended charges daily at dawn. While holding it, you can take a Magic action to expend 1 charge, and ifa secret door or trap is within 60 feet of you, the wand pulses and points at the one nearest to you.",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana",
+   "Implements"
+  ]
+ },
+ {
+  "id": "wand-of-web",
+  "name": "Wand of Web",
+  "type": "Wand",
+  "subtype": null,
+  "rarity": "Uncommon",
+  "attunement": true,
+  "attunementBy": "a Spellcaster",
+  "charges": "7",
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "‘This wand has 7 charges. While holding it, you can expend 1 charge to cast Web (save DC 13) from it.",
+  "description": "‘This wand has 7 charges. While holding it, you can expend 1 charge to cast Web (save DC 13) from it.\nRegaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If you expend the wand's last charge, roll 1420. On a 1, the wand crumbles into ashes and is destroyed.",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana"
+  ]
+ },
+ {
+  "id": "wand-of-wonder",
+  "name": "Wand of Wonder",
+  "type": "Wand",
+  "subtype": null,
+  "rarity": "Rare",
+  "attunement": true,
+  "attunementBy": null,
+  "charges": "7",
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "This wand has 7 charges. While holding it, you can take a Magic action to expend 1 charge while choosing a point within 120 feet of yourself.",
+  "description": "This wand has 7 charges. While holding it, you can take a Magic action to expend 1 charge while choosing a point within 120 feet of yourself. That location becomes the point of origin of a spell or other magical effect determined by rolling on the Hiker ce Wano oF Secners ——~_ Finger Wano oF Wes Wano or Wonven Wand of Wonder Effects table. Spells cast from the wand have a save DC of 15. Ifa spell’s maximum range is normally less than 120 feet, it becomes 120 feet when cast from the wand. If an effect has multiple possible subjects, the DM determines randomly which among them are affected.\nRegaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If you expend the wand’s last charge, roll 1420. On a 1, the wand crumbles into dust and is destroyed.\nWanp oF Wonper EFFects 1100 Effect 01-20 You cast a spell originating from the chosen point, Roll 1410 to determine the spell: on 21-2, Darkness; on a 34, Faerie Fire; on 25-6, Fireball; on a 7-8, Slow; on a 9-10, Stinking Cloud.\n21-25. Nothing happens at the chosen point of origin. Instead, you have the Stunned condition until the start of your next turn, believing something awesome just happened.\n26-30 You cast Gust of Wind. The Line created by the spell extends from you to the chosen point of origin.\n31-35. Nothing happens at the chosen point of origin. Instead, you take 146 Psychic damage.\n36-40 Heavy rain falls for 1 high, 60-foot-radius the chosen point of origin. During that time, the area of effect is Lightly Obscured.\n41-45 A cloud of 600 oversized butterflies fills a 60-foot-high, 30-foot-radius Cylinder centered on the chosen point of origin. The butterflies remain for 10 minutes, during which time the area of effect is Heavily Obscured.\n—— meg Wan oF rHe Wan Mace 14100 Effect 46-50 You cast Lightning Bolt. The Line created by the spell extends from you to the chosen point of origin.\n51-55 The creature closest to the chosen point of origin is enlarged as if you had cast Enlarge/ Reduce on it. f the target isn’t you and can’t be affected by that spell, you become the target instead.\n56-60 ‘A magically formed creature appears in an unoccupied space as close to the chosen point of origin as possible. The creature isn’t under your control, acts as it normally would, and disappears after 1 hour or when it drops to 0 Hit Points. Roll 1d4to determine which creature appears. On a 1, 2 Rhinoceros appears; on a 2, an Elephant appears; and on a 3=4, a Rat appears.\n61-64 Grass covers a 60-foot-radius circle of ground, with the center of that circle as close to the chosen point of origin as possible. Grass that's already there grows to ten times its normal size and remains overgrown for 1 minute.\n65-68 ‘An object of the DM's choice disappears into the Ethereal Plane. The object must be neither worn nor carried, within 120 feet of the chosen point of origin, and no larger than 10 feet in any dimension. Ifthere are no such objects in range, nothing happens.\n69-72 Nothing happens at the chosen point of origin. Instead, you shrink as if you had cast Enlarge/Reduce on yourself and remain in that state for 1 minute.\n73-77 Leaves grow from the creature nearest to the chosen point of origin. Unless they are picked off, the leaves turn brown and fall off after 24 hours.\n78-82 Nothing happens at the chosen point of origin. Instead, a burst of colorful, shimmering light extends from you in a 30-foot Emanation, Each creature in the area must succeed ona DC 15 Constitution saving throw or have the Blinded condition for 1 minute. A creature repeats the save at the end of each of its turns, ending the effect on itself on a success.\n1d100 Effect 83-87 Nothing happens at the chosen point of origin, Instead, you cast Invisibility on yourself.\n88-92 Nothing happens at the chosen point of origin. Instead, a stream of 1d4x 10 gems, each worth 1 GP, shoots from the wand's tip ina Line 30 feet long and 5 feet wide toward the chosen point of origin. Each gem deals 1 Bludgeoning damage, and the total damage of the gems is divided equally among all creatures in the Line.\n93-97 You cast Polymorph, targeting the creature closest to the chosen point of origin. Roll 1d4to determine the target's new form. On a1, the new form is a Black Bear; on a 2, the new form is a Giant Wasp; on a 3-4, the new form is a Frog.\n98-00 The creature closest to the chosen point of origin makes a DC 15 Constitution saving throw. On a failed save, the creature has the Restrained condition and begins to turn to stone. While Restrained in this way, the creature repeats the save at the end of its next turn. On a successful save, the effect ends. On a failed save, the creature has the Petrified condition instead of the Restrained condition. The petrification lasts until the creature is freed by the Greater Restoration spell or similar magic.",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana"
+  ]
+ },
+ {
+  "id": "wand-of-the-war-mage-1-2-or-3",
+  "name": "Wand of the War Mage, +1, +2, or +3",
+  "type": "Wand",
+  "subtype": null,
+  "rarity": "Varies",
+  "attunement": false,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": true,
+  "summary": "(Requires Attunement by a Spelicaster) While holding this wand, you gain a bonus to spell attack rolls determined by the wand'’s rarity. In addition, you ignore Half Cover when making a spell attack roll.",
+  "description": "(Requires Attunement by a Spelicaster)\nWhile holding this wand, you gain a bonus to spell attack rolls determined by the wand'’s rarity. In addition, you ignore Half Cover when making a spell attack roll.",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana",
+   "Relics"
+  ]
+ },
+ {
+  "id": "wave",
+  "name": "Wave",
+  "type": "Weapon",
+  "subtype": "Trident",
+  "rarity": "Artifact",
+  "attunement": true,
+  "attunementBy": null,
+  "charges": "3",
+  "bonus": 3,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": 3,
+  "variable": false,
+  "summary": "Held in the dungeon of White Plume Mountain, Wave is engraved with images of waves, shells, and sea creatures. You gain a +3 bonus to attack rolls and damage rolls made with this magic weapon.",
+  "description": "Held in the dungeon of White Plume Mountain, Wave is engraved with images of waves, shells, and sea creatures.\nYou gain a +3 bonus to attack rolls and damage rolls made with this magic weapon. When you roll 220 on thed20for an attack roll with this weapon, the target takes an extra 21 Necrotic damage.\nWhile holding Wave, you gain the following benefits:\nCombat Ready. You have Advantage on Initiative rolls.\nUnderwater Adaptation. A bubble of air forms around your head while you are underwater, allowing you to breathe normally in that environment.\nAquatic Command. Wave has 3 charges and regains 1d3expended charges daily at dawn, While you carry it, you can expend I charge to cast Dominate Beast (save DC 20) from it on a Beast that has a ‘Swim Speed.\nGlobe of Invulnerability. While holding Wave, you can cast the level 9 version of Globe of Invulnerability from it. Once used, this property can't be used again until the next dawn, Sentience. Wave is a sentient weapon of Neutral alignment, with an Intelligence of 14, a Wisdom of 10, and a Charisma of 18. It has hearing and Darkvision out to 120 feet.\nThe weapon communicates telepathically with its wielder and speaks Aquan, Personality. Wave zealously encourages mortals to worship sea gods and has a habit of humming sea chanteys. Conflict arises if the wielder fails to further the weapon's objectives in the world, Destroying Wave. Wave can be destroyed only on the island of Thunderforge, where it was forged.\n‘The weapon must be melted down by a storm giant ‘or someone imbued with a storm giant's strength.\nDestroying Wave angers a god of the sea, who sends powerful agents to attack the island and punish the destroyers.",
+  "source": "DMG 2024",
+  "themes": [
+   "Armaments"
+  ]
+ },
+ {
+  "id": "weapon-of-warning",
+  "name": "Weapon of Warning",
+  "type": "Weapon",
+  "subtype": "Any Simple or Martial",
+  "rarity": "Uncommon",
+  "attunement": true,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "As long as this weapon is within your reach and you are attuned to it, you and allies within 30 feet of you gain the following benefits, Alarm. The weapon magically awakens each subject who is sleeping naturally when combat begins.",
+  "description": "As long as this weapon is within your reach and you are attuned to it, you and allies within 30 feet of you gain the following benefits, Alarm. The weapon magically awakens each subject who is sleeping naturally when combat begins.\nThis benefit doesn’t wake a subject from magically induced sleep.\n‘Supernatural Readiness. Each subject has Advantage on its Initiative rolls.",
+  "source": "DMG 2024",
+  "themes": [
+   "Armaments"
+  ]
+ },
+ {
+  "id": "weapon-1-2-or-3",
+  "name": "Weapon, +1, +2, or +3",
+  "type": "Weapon",
+  "subtype": "Any Simple or Martial",
+  "rarity": "Varies",
+  "attunement": false,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": true,
+  "summary": "You have a bonus to attack rolls and damage rolls made with this magic weapon. The bonus is determined by the weapon's rarity.",
+  "description": "You have a bonus to attack rolls and damage rolls made with this magic weapon. The bonus is determined by the weapon's rarity.",
+  "source": "DMG 2024",
+  "themes": [
+   "Armaments"
+  ]
+ },
+ {
+  "id": "well-of-many-worlds",
+  "name": "Well of Many Worlds",
+  "type": "Wondrous Item",
+  "subtype": null,
+  "rarity": "Legendary",
+  "attunement": false,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "This fine black cloth, soft as silk, is folded up to the dimensions of a handkerchief. It unfolds into a circular sheet 6 feet in diameter.",
+  "description": "This fine black cloth, soft as silk, is folded up to the dimensions of a handkerchief. It unfolds into a circular sheet 6 feet in diameter.\nYou can take a Magic action to unfold the Well of Many Worlds and place it on a solid surface, whereupon it forms a two-way, 6-foot-diameter, circular portal to another world or plane of existence.\nEach time the item opens a portal, the DM decides where it leads. The portal remains open until a creature within 5 feet of it takes a Magic action to close it by taking hold of the edges of the cloth and folding itup.\nOnce the Well of Many Worlds has opened a portal, it can't do so again for 148 hours.",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana"
+  ]
+ },
+ {
+  "id": "whelm",
+  "name": "Whelm",
+  "type": "Weapon",
+  "subtype": "Warhammer",
+  "rarity": "Artifact",
+  "attunement": true,
+  "attunementBy": "a Dwar or f a Creature Attuned to a Belt of Dwarvenkind",
+  "charges": null,
+  "bonus": 3,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": 3,
+  "variable": false,
+  "summary": "Whelm is a powerful weapon forged by dwarves and lost in the dungeon of White Plume Mountain, You gain a +3 bonus to attack rolls and damage rolls made with this magic weapon, Hurl. Whelm has the Thrown property with a normal range of 60 feet and a long range of 180 feet.",
+  "description": "Whelm is a powerful weapon forged by dwarves and lost in the dungeon of White Plume Mountain, You gain a +3 bonus to attack rolls and damage rolls made with this magic weapon, Hurl. Whelm has the Thrown property with a normal range of 60 feet and a long range of 180 feet. When you hit with a ranged attack roll using Whelm, the target takes an extra 1d8Force damage, or an extra 4d8Force damage if the target is a Construct, an Elemental, or a Giant, Immediately after hitting or missing, the weapon flies back to your hand, Shock Wave. You can take a Magic action to strike the ground with Whelm and send a shock wave out from the point of impact. Each creature of your choice on the ground within 60 feet of that point must succeed on a DC 20 Constitution saving throw or have the Stunned condition for 1 minute.\nA creature repeats the save at the end of each of its turns, ending the effect on itself on a success. Once used, this property can't be used again until the next dawn.\nSupernatural Awareness. While you are holding the weapon, it alerts you to the location of any secret or concealed doors within 30 feet of you.\nIn addition, you can cast Detect Evil and Good or Locate Object from the weapon. Once you cast either spell, you can't cast it from the weapon again until the next dawn, Sentience. Wheim is a sentient, Lawful Neutral ‘weapon with an Intelligence of 15, a Wisdom of 12, and a Charisma of 15. It has hearing and Darkvision out to 120 feet.\nThe weapon communicates telepathically with its wielder and speaks Dwarvish, Giant, and Gobli Personality. Whelm has ties to the dwarf clan that created it, called the Dankil or the Mightyhammer clan, It longs to be returned to that clan.\nWhelm's purpose is to protect dwarves. Conflict arises if the wielder doesn't share this goal.\nWeavon oF Wannine (Tavoenr)\n+1 Weavon (OWaR Piew)\nDestroying Whelm. Whelm can be dissolved in the acidic bile of a recently slain ancient black dragon.\nIt can also be melted down in the forges of the Mightyhammer dwarf clan, but only by the rightful leader of that clan.",
+  "source": "DMG 2024",
+  "themes": [
+   "Armaments"
+  ]
+ },
+ {
+  "id": "wind-fan",
+  "name": "Wind Fan",
+  "type": "Wondrous Item",
+  "subtype": null,
+  "rarity": "Uncommon",
+  "attunement": false,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "While holding this fan, you can cast Gust of Wind (save DC 13) from it. Each subsequent time the fan is used before the next dawn, it has a cumulative 20 percent chance of not working; if the fan fails to work, it tears into useless, nonmagical tatters.",
+  "description": "While holding this fan, you can cast Gust of Wind (save DC 13) from it. Each subsequent time the fan is used before the next dawn, it has a cumulative 20 percent chance of not working; if the fan fails to work, it tears into useless, nonmagical tatters.",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana"
+  ]
+ },
+ {
+  "id": "winged-boots",
+  "name": "Winged Boots",
+  "type": "Wondrous Item",
+  "subtype": null,
+  "rarity": "Uncommon",
+  "attunement": true,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "‘These boots have 4 charges and regain 1d4expended charges daily at dawn. While wearing the boots, you can take a Magic action to expend 1 charge, gaining a Fly Speed of 30 feet for1 hour.",
+  "description": "‘These boots have 4 charges and regain 1d4expended charges daily at dawn. While wearing the boots, you can take a Magic action to expend 1 charge, gaining a Fly Speed of 30 feet for1 hour. If you are flying when the duration expires, you descend at a rate of 30 feet per round until you land.\nWings oF Fuvine Winseo Boors",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana"
+  ]
+ },
+ {
+  "id": "wings-of-flying",
+  "name": "Wings of Flying",
+  "type": "Wondrous Item",
+  "subtype": null,
+  "rarity": "Rare",
+  "attunement": true,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "While wearing this cloak, you can take a Magic action to turn the cloak into a pair of wings on your back. The wings lasts for1 hour or until you end the effect early as a Magic action.",
+  "description": "While wearing this cloak, you can take a Magic action to turn the cloak into a pair of wings on your back. The wings lasts for1 hour or until you end the effect early as a Magic action. The wings give you a Fly Speed of 60 feet. If you are aloft when the wings disappear, you fall. When the wings disappear, you can't use them again for 1d12hours.",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana"
+  ]
+ },
+ {
+  "id": "wraps-of-unarmed-power",
+  "name": "Wraps of Unarmed Power",
+  "type": "Wondrous Item",
+  "subtype": null,
+  "rarity": "Varies",
+  "attunement": false,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "While wearing these wraps, you have a bonus to attack rolls and damage rolls made with your Unarmed Strikes. The bonus is determined by the wraps’ rarity, and those strikes deal your choice of Force damage or their normal damage type.",
+  "description": "While wearing these wraps, you have a bonus to attack rolls and damage rolls made with your Unarmed Strikes. The bonus is determined by the wraps’ rarity, and those strikes deal your choice of Force damage or their normal damage type.\nRANDOM Macic ITems Use the tables in this section to randomly determine magic items the characters find in your adventures. The tables are sorted first by treasure theme (as described in the Monster Manual), and then by item rarity. If an item isn't associated with a theme, roll 1d4to decide which table to roll on next:\nonal, roll on the Arcana tables; ona 2, Armaments; on a 3, Implements; and on a 4, Relics.\nARCANA TABLES ARCANA—COMMON 14100 Item 01-02 Bead of Nourishment 03-04 Bead of Refreshment 05-07 Candle of the Deep 08-10 Cloak of Billowing n-3 Cloak of Many Fashions 14-15 Clothes of Mending 1617 Dark Shard Amulet 18-19 Enduring Spellbook 20-21 Ersatz Eye 22-24 Hat of Vermin 25-27 Hat of Wizardry 28-29 Heward's Handy Spice Pouch 30-31 Horn of Silent Alarm 32-33 Instrument of illusions 34-35 Instrument of Scribing 36-37 Lock of Trickery",
+  "source": "DMG 2024",
+  "themes": [
+   "Armaments"
+  ]
+ },
+ {
+  "id": "things-rod-has-a-range-heward-and-its-education-has-a",
+  "name": "| Things Rod Has a Range Heward and Its Education Has a",
+  "type": "Rod",
+  "subtype": null,
+  "rarity": "Legendary",
+  "attunement": true,
+  "attunementBy": null,
+  "charges": null,
+  "bonus": null,
+  "acBonus": null,
+  "saveBonus": null,
+  "attackBonus": null,
+  "variable": false,
+  "summary": "magic Mace that grants a +3 bonus to attack rolls i and damage rolls made with it. The rod has proper- !",
+  "description": "magic Mace that grants a +3 bonus to attack rolls i and damage rolls made with it. The rod has proper- ! ties associated with six different buttons that are set } in a row along the haft. It has three other properties as well, detailed below.\nButtons. You can press one of the following buttons as a Bonus Action; a button's effect lasts until you push a different button or until you push the same button again, which causes the rod to revert to its normal form:\nRov or | Reverso Roo or Lorouy Miner Rov or y Resuanecrion Rove oF Enrancuenenr Button 1. A fiery blade sprouts from the site the rod’s flanged head. The flames = Light in a 40-foot radius and Dim Liste additional 40 feet, and the blade magic Longsword or Shortsword (yaa = that deals an extra 2d6Fire damaze om = Button 2. The rod’s flanged head folds a= two crescent-shaped blades spring out = ing the rod into a magic Battleaxe that +3 bonus to attack rolls and damaze rails with it, Button 3. The rod's flanged head folds spear point springs from the rod’s tip. amt rod’s handle lengthens into a 6-foot ha forming the rod into a magic Spear that = +3 bonus to attack rolls and damaze rails with it.\nButton 4, The rod transforms into 2 up to 50 feet long (you specify the lene the rod's buttons remain within your surfaces as hard as granite, a spike 2 the tom and three hooks at the top anchor Horizontal bars 3 inches long fold out sides, 1 foot apart, forming a ladder. The bear up to 4,000 pounds. More weiss of solid anchoring causes the rod to normal form.\nButton 5. The rod transforms into 2 bend battering ram and grants its user 2 20)\nto Strength (Athletics) checks mad= ®5 through doors, barricades, and other Button 6. The rod assumes or remains = mal form and indicates magnetic nor happensif this function of the rod location that has no magnetic north.) T gives you knowledge of your appros beneath the ground or your height sbow= Drain Life. When you hit a creature attack using the rod, you can force the make a DC 17 Constitution saving throw save, the target takes an extra 4d6Ns age, and you regain a number of Hit half that Necrotic damage. Once used.\ncan't be used again until the next d=.\nParalyze. When you hit a creature w= tack using the rod, you can force the © a DC 17 Constitution saving throw. O= = the target has the Paralyzed condition Sax = The target repeats the save at the end of turns, ending the effect on a success. One this property can’t be used again until She dawn.\nTerrify. While holding the rod, you cam Magic action to force each creature yom within 30 feet of yourself to make 2 DOS saving throw. On a failed save, 2 tarce® & Frightened condition for 1 minute. A Frightened target repeats the save at the end of each of its turns, ending the effect on itself on a success. Once used, this property can't be used again until the next dawn,",
+  "source": "DMG 2024",
+  "themes": [
+   "Arcana"
+  ]
+ }
+]

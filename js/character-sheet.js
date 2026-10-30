@@ -613,4 +613,9 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
     requestAnimationFrame(() => { renderQueued = false; render(); });
   }
   const unsubChar = db.characters.subscribe(characterId, (updated) => { if (updated) { character = updated; scheduleRender(); } });
-  const unsubInv = db.inventory.subscribe(characterId
+  const unsubInv = db.inventory.subscribe(characterId, (items) => { inventory = items; scheduleRender(); });
+  if (character.campaignId) db.campaigns.get(character.campaignId).then(c => { campaignName = c?.name || null; scheduleRender(); });
+  ready = true;
+  await render();
+  return () => { ready = false; unsubChar(); unsubInv(); };
+}

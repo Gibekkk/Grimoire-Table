@@ -212,4 +212,34 @@ not a full commercial VTT. Deliberately simplified:
   Weapon Mastery properties are shown for reference; their unique mechanical
   effects (Vex, Sap, Graze, etc.) aren't automated — apply them manually.
 - **Multiclass HP**: approximated using your first class's Hit Die scaled by
-  total level, rather tha
+  total level, rather than summing each class's own Hit Die per level (the
+  fully correct multiclass HP rule). Proficiency bonus, spell slots, and
+  ability math are all total-level-correct.
+- **Action economy**: Attacking and moving on the VTT auto-clear Action/Movement
+  for whoever's turn it is; everything else (bonus actions, reactions, using a
+  skill, Dash) is a manual toggle, since whether a given skill check "counts"
+  as your action is genuinely DM/context-dependent, not something to guess at.
+- **Cover** is bounding-box overlap between a token and a cover-flagged
+  component on the same map — a practical approximation, not true line-of-sight
+  raycasting. It reads correctly for "standing behind the crate" and misreads
+  for anything requiring an actual sightline calculation.
+- **Token movement sync** writes on drop, not continuously mid-drag — other
+  viewers see a token jump to its new spot rather than glide, which avoids
+  write-spamming Firestore during a drag.
+- **AoE shapes** (rectangle/circle) on the VTT are a local, temporary visual
+  aid for the person who drew them — not broadcast to other clients, and don't
+  auto-detect which tokens fall inside.
+- **Images live in Firestore, not Storage**: portraits/maps/components are
+  compressed client-side (`js/image-utils.js`) to fit Firestore's per-document
+  size limit. Map backgrounds in particular will look noticeably more
+  compressed than a native VTT product with real object storage — that's the
+  deliberate trade-off for staying on a Storage-free setup.
+- **AC** from armor is formula-driven (base + Dex cap + shield); it doesn't yet
+  read a Strength requirement into a Speed penalty.
+- Feats beyond Skilled's skill choice don't yet have their own configurable
+  sub-options (e.g., Magic Initiate's specific cantrip picks) — track those in
+  Notes for now.
+
+The code is modular by design (`js/rules-engine.js` for math, `data/*.json` for
+content, one file per sheet tab under `js/sheet/`) so all of the above are
+additive, not rewrites.

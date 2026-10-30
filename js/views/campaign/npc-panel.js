@@ -190,4 +190,63 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
       if (!name) { toast("Name the NPC first", "error"); return; }
       const level = Math.max(1, parseInt(levelInput.value, 10) || 1);
       const abilityScores = {};
-      ABILITIES.forEach(a => { abilityScores[a] = parseInt(abilI
+      ABILITIES.forEach(a => { abilityScores[a] = parseInt(abilInputs[a].value, 10) || 10; });
+      const maxHp = parseInt(hpInput.value, 10) || 10;
+      const npc = {
+        ownerUid: user.uid, ownerName: user.displayName, isNpc: true,
+        name, portraitBase64,
+        classId: classSel.value || null,
+        classes: classSel.value ? [{ classId: classSel.value, level, subclassId: null }] : [],
+        speciesId: speciesSel.value || null,
+        backgroundId: null, alignment: "", backstory: "",
+        appearance: {}, level, xp: 0,
+        abilityScores, abilityOverrides: {}, skillOverrides: {}, savingThrowOverrides: {},
+        skillProficiencies: [], skillExpertise: [], savingThrowProficiencies: [],
+        equipmentChoice: "A", weaponMasteries: [], featChoices: {},
+        hp: { current: maxHp, max: maxHp, temp: 0 }, hitDiceUsed: 0,
+        armorClassOverride: parseInt(acInput.value, 10) || null,
+        acAdjustments: [], inspiration: false,
+        currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+        resourcesUsed: {}, spellsPrepared: [], spellSlotsUsed: {}, pactSlotsUsed: 0,
+        campaignId, personality: personalityInput.value.trim(), notes: notesInput.value.trim()
+      };
+      const id = await db.characters.create(npc);
+      toast(`${name} added to the roster`);
+      openNpc(id);
+    });
+    card.appendChild(createBtn);
+    return card;
+  }
+
+  hiddenToggle.addEventListener("click", () => { showHidden = !showHidden; renderRoster(); });
+
+  function renderRoster() {
+    const hiddenCount = allNpcs.filter(n => n.hiddenFromRoster).length;
+    hiddenToggle.style.display = hiddenCount ? "" : "none";
+    hiddenToggle.textContent = showHidden ? `Hide hidden NPCs` : `Show hidden (${hiddenCount})`;
+    const npcs = allNpcs.filter(n => showHidden || !n.hiddenFromRoster || n.id === activeId);
+    rosterTabs.innerHTML = "";
+    npcs.forEach(npc => {
+      const tab = h("button", { class: `tab-btn ${npc.id === activeId ? "active" : ""} ${npc.hiddenFromRoster ? "is-hidden" : ""}` }, `${npc.hiddenFromRoster ? "\u{1F576} " : ""}${npc.name}`);
+      tab.dataset.id = npc.id;
+      tab.addEventListener("click", () => openNpc(npc.id));
+      rosterTabs.appendChild(tab);
+    });
+    if (npcs.length === 0 && !creating) {
+      pickerCleanup?.(); pickerCleanup = null;
+    sheetHost.innerHTML = "";
+      sheetHost.appendChild(h("p", {}, allNpcs.length ? "All NPCs are hidden \u2014 click \u201cShow hidden\u201d to see them." : "No NPCs yet. Click \u201c+ New NPC\u201d to create your first one."));
+    } else if (!activeId && !creating && npcs.length > 0) {
+      openNpc(npcs[0].id);
+    }
+    renderNpcBar();
+  }
+
+  const unsubRoster = db.characters.subscribeCampaignNpcs(campaignId, (list) => {
+    allNpcs = list;
+    if (activeId && !list.some(n => n.id === activeId)) activeId = null;
+    renderRoster();
+  });
+
+  return () => { unsubRoster(); sheetUnsub?.(); };
+}

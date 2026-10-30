@@ -35,4 +35,4 @@ for step in species_bg equipment spells2 spells3 spells_final feats_final option
   echo "== $step"
   python3 "$step.py"
 done
-echo "Done. Bump DATA_VERSION in js/data-loader.js so browser
+echo "Done. Bump DATA_VERSION in js/data-loader.js so browsers fetch the new files."

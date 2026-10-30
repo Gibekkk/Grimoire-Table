@@ -496,4 +496,242 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     lastFogKey = (dataUrl || "") + "|";
     await db.fogMask.set(campaignId, mapId, dataUrl);
     if (legacyFogs.length) {
-      le
+      legacyFogs = [];
+      await db.maps.updateFogs(campaignId, mapId, []);
+    }
+  }
+
+  // ---------------- Persistent AoE shapes handlers ----------------
+  // One doc per shape (db.shapes). Older maps kept every shape in one array on the
+  // map doc — whole-array writes from two people at once lost one of the edits.
+  // Those legacy shapes are shown merged and moved into docs on first touch.
+  let currentShapes = [];
+  let docShapes = [];
+  let legacyShapes = [];
+  function refreshShapes() {
+    const ids = new Set(docShapes.map(sh => sh.id));
+    currentShapes = [...docShapes, ...legacyShapes.filter(sh => !ids.has(sh.id))];
+    canvas.setPersistentShapes(currentShapes);
+  }
+  async function migrateLegacyShapes(mapId) {
+    if (!isDm || !legacyShapes.length) return;
+    const toMove = legacyShapes;
+    legacyShapes = [];
+    await Promise.all(toMove.map(sh => db.shapes.set(campaignId, mapId, sh)));
+    await db.maps.updatePersistentShapes(campaignId, mapId, []);
+  }
+
+  async function handleShapeAdded(shape) {
+    if (!currentMap) return;
+    await db.shapes.set(campaignId, currentMap.id, shape);
+  }
+
+  async function handleShapeRemoved(shape) {
+    if (!currentMap) return;
+    const mapId = currentMap.id;
+    if (legacyShapes.some(sh => sh.id === shape.id)) {
+      legacyShapes = legacyShapes.filter(sh => sh.id !== shape.id);
+      await db.maps.updatePersistentShapes(campaignId, mapId, legacyShapes);
+    }
+    await db.shapes.remove(campaignId, mapId, shape.id);
+  }
+
+  async function handleShapeMoved(shape) {
+    if (!currentMap) return;
+    const { _previewX, _previewY, ...clean } = shape;
+    await db.shapes.set(campaignId, currentMap.id, clean);
+    if (legacyShapes.some(sh => sh.id === shape.id)) {
+      legacyShapes = legacyShapes.filter(sh => sh.id !== shape.id);
+      await db.maps.updatePersistentShapes(campaignId, currentMap.id, legacyShapes);
+    }
+  }
+
+  // ---------------- VTT Fullscreen ----------------
+  // The shell is pinned over the page with CSS (so page-level menus, dialogs,
+  // toasts and dice still stack above it); the browser's own fullscreen is asked
+  // for on the whole document, never on the shell, for the same reason.
+  function toggleVttFullscreen(force) {
+    const next = typeof force === "boolean" ? force : !vttFullscreen;
+    if (next === vttFullscreen) return;
+    vttFullscreen = next;
+    shell.classList.toggle("vtt-shell--fullscreen", vttFullscreen);
+    document.body.classList.toggle("vtt-fullscreen-open", vttFullscreen);
+    try {
+      if (vttFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+      else if (!vttFullscreen && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    } catch { /* not allowed here — the CSS fullscreen still works */ }
+    syncToolbar();
+    requestAnimationFrame(() => { canvas._resize(); });
+  }
+  const onFullscreenChange = () => { if (!document.fullscreenElement && vttFullscreen) toggleVttFullscreen(false); };
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+
+  const onKey = (e) => {
+    if (!shell.isConnected) return;
+    const typing = e.target.closest?.("input, textarea, select, [contenteditable]");
+    const modalOpen = document.querySelector(".modal-overlay, .ctx-menu");
+    if (e.key === "Escape") {
+      if (modalOpen) return; // the dialog/menu closes itself first
+      if (openTokenId) { closePopup(); return; }
+      if (vttFullscreen) toggleVttFullscreen(false);
+      return;
+    }
+    if (typing || modalOpen || e.ctrlKey || e.metaKey || e.altKey) return;
+    // Delete selected shape
+    if ((e.key === "Delete" || e.key === "Backspace") && canvas.selectedShape) {
+      const shape = canvas.selectedShape;
+      if (isDm || shape.ownerUid === user.uid) {
+        canvas.removePersistentShape(shape);
+        canvas.selectedShape = null;
+      }
+      return;
+    }
+    const k = e.key.toLowerCase();
+    const tool = [...TOOLS, ...(isDm ? FOG_TOOLS : [])].find(t => t.key === k);
+    if (tool) { setTool(tool.id); e.preventDefault(); return; }
+    if (k === "f") { toggleVttFullscreen(); e.preventDefault(); }
+    else if (k === "+" || k === "=") canvas.zoomBy(1.15);
+    else if (k === "-") canvas.zoomBy(0.85);
+    else if (k === "0") { canvas._fitToView(); canvas._hasSavedView = true; }
+  };
+  document.addEventListener("keydown", onKey);
+
+  // ---------------- Sidebar content ----------------
+  let sheetUnsub = null;
+  let sheetCharId = null;
+  function buildSidebar() {
+    // The player's docked sheet stays mounted (it live-updates itself); only
+    // remount when the character itself changes.
+    if (!isDm && myCharacter && sheetCharId === myCharacter.id && sidebar.childElementCount) return;
+    sheetUnsub?.(); sheetUnsub = null; sheetCharId = null;
+    sidebar.innerHTML = "";
+    if (isDm) {
+      sidebar.appendChild(h("h3", {}, "Maps"));
+      allMaps.forEach(m => {
+        const btn = h("button", { class: `btn sm block ${currentMap?.id === m.id ? "primary" : ""}`, style: "margin-bottom:6px;" }, m.name);
+        btn.addEventListener("click", () => loadMap(m.id));
+        sidebar.appendChild(btn);
+      });
+      sidebar.appendChild(h("div", { class: "vtt-help" }, `
+        <h4>Quick help</h4>
+        <p><b>Click</b> a creature: HP, conditions, defenses, rolls, loot.</p>
+        <p><b>Right-click</b> a token: hide, size, grapple, initiative.</p>
+        <p><b>Keys</b>: V select, R ruler, S/C/T AoE, G fog, E reveal, F fullscreen, 0 fit.</p>`));
+    } else {
+      sidebar.appendChild(h("h3", {}, "Your Character"));
+      if (!myCharacter) { sidebar.appendChild(h("p", {}, "You don't have a character in this campaign yet.")); return; }
+      const host = h("div", {});
+      sidebar.appendChild(host);
+      sheetCharId = myCharacter.id;
+      const mountedFor = myCharacter.id;
+      mountCharacterSheet(host, myCharacter.id, { viewerUid: user.uid, isDm: false, getAdvMode, onRoll }).then(u => {
+        if (sheetCharId === mountedFor) sheetUnsub = u; else u?.();
+      });
+    }
+  }
+
+  // ---------------- Map loading ----------------
+  // Fog first: the canvas covers the map for players until this map's fog mask has
+  // been decoded (instant when it was seen before this session), then the
+  // background, tokens and shapes stream in underneath it.
+  let unsubShapes = null;
+  let loadedMapId = null;
+  let shownBg = null;
+  function applyMapDoc(map) {
+    if (!map) return;
+    currentMap = map;
+    canvas.setMapSize(map.widthPx, map.heightPx);
+    canvas.setGridPx(map.gridPx);
+    const bg = map.backgroundBase64 || null;
+    if (bg === shownBg) return;
+    shownBg = bg;
+    if (!bg) { canvas.setBackgroundImage(null); return; }
+    loadImageCached(bg).then(img => {
+      if (shownBg !== bg || loadedMapId !== map.id) return; // superseded
+      if (img) canvas.setBackgroundImage(img);
+      else toast("Failed to load map background", "error");
+    });
+  }
+
+  function loadMap(mapId) {
+    if (!mapId) return;
+    if (mapId === loadedMapId && currentMap) return; // already showing it
+    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.();
+    const map = allMaps.find(m => m.id === mapId) || (currentMap?.id === mapId ? currentMap : null);
+    loadedMapId = mapId;
+    closePopup();
+    showStageMessage(null);
+    legacyFogs = []; fogMaskDoc = undefined; lastFogKey = null;
+    docShapes = []; legacyShapes = []; currentShapes = [];
+    tokens = [];
+    canvas.setTokens([]);
+    canvas.setPersistentShapes([]);
+    canvas.setViewKey(`${campaignId}:${mapId}`);
+    shownBg = undefined;
+    if (map) applyMapDoc(map);
+    unsubFogMask = db.fogMask.subscribe(campaignId, mapId, (doc) => {
+      fogMaskDoc = doc;
+      applyFog();
+    });
+    unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; refreshTokens(); });
+    unsubShapes = db.shapes.subscribe(campaignId, mapId, (list) => { docShapes = list; refreshShapes(); });
+    unsubFogs = db.maps.subscribe(campaignId, mapId, (m) => {
+      if (!m) return;
+      applyMapDoc(m);
+      legacyFogs = m.fogs || [];
+      legacyShapes = m.persistentShapes || [];
+      refreshShapes();
+      applyFog();
+      migrateLegacyShapes(mapId);
+    });
+    buildToolbar();
+    buildSidebar();
+  }
+
+  // ---------------- Boot ----------------
+  const unsubMaps = db.maps.subscribeList(campaignId, async (list) => {
+    allMaps = list;
+    if (isDm) {
+      if (!loadedMapId && list.length) loadMap(list[0].id);
+      else if (loadedMapId && !list.some(m => m.id === loadedMapId)) { loadedMapId = null; currentMap = null; if (list.length) loadMap(list[0].id); }
+      else buildToolbar();
+      if (!list.length) showStageMessage("<h3>No maps yet</h3><p>Create one in Map Workshop.</p>");
+    } else if (!list.length) {
+      showStageMessage("<h3>No maps yet</h3><p>Your DM hasn't built one yet.</p>");
+    }
+  });
+
+  // Party snapshots fire on any party member's change (HP, inventory, notes...).
+  // For players, only a change of *their own* map reloads the VTT.
+  let lastCharId = null;
+  const unsubParty = db.characters.subscribeCampaignParty(campaignId, (list) => {
+    party = list;
+    indexCharacters();
+    if (isDm) return;
+    myCharacter = party.find(c => c.ownerUid === user.uid) || null;
+    if (myCharacter?.id !== lastCharId) { lastCharId = myCharacter?.id || null; buildSidebar(); }
+    if (myCharacter?.currentMapId) {
+      if (myCharacter.currentMapId !== loadedMapId) loadMap(myCharacter.currentMapId);
+    } else {
+      if (loadedMapId) {
+        unsubTokens?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.();
+        loadedMapId = null; currentMap = null; tokens = [];
+        canvas.setTokens([]); canvas.setPersistentShapes([]);
+        closePopup();
+      }
+      showStageMessage(myCharacter ? "<h3>Not on a map yet</h3><p>Ask your DM to place you.</p>" : "<h3>No character here yet</h3><p>Join this campaign with a character first.</p>");
+    }
+  });
+
+  buildToolbar();
+  buildSidebar();
+  return () => {
+    unsubMaps(); unsubParty(); unsubNpcs(); unsubCombat(); unsubSync();
+    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); sheetUnsub?.();
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("fullscreenchange", onFullscreenChange);
+    document.body.classList.remove("vtt-fullscreen-open");
+    if (vttFullscreen && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    canvas.dispose();
+  };
+}

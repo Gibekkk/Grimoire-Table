@@ -224,4 +224,23 @@ export function pickMonster(monsters, { title = "Add a Monster", campaignId = nu
       countInput = h("input", { type: "number", min: "1", max: "20", value: "1", title: "How many copies to place" });
       hiddenInput = h("input", { type: "checkbox", title: "Players won't see them until you show them" });
       const c = h("label", {}, "Place "); c.appendChild(countInput);
-      const hd = h("label", {}); hd.appendChild(hiddenInput); hd.appendChild(document.create
+      const hd = h("label", {}); hd.appendChild(hiddenInput); hd.appendChild(document.createTextNode(" Hidden from players (ambush)"));
+      opts.appendChild(c); opts.appendChild(hd);
+      body.appendChild(opts);
+    }
+    let cleanup = null;
+    const finish = (m) => {
+      cleanup?.(); overlay.remove(); document.removeEventListener("keydown", onKey);
+      if (!placement || !m) { resolve(m); return; }
+      resolve({ monster: m, count: Math.max(1, Math.min(20, parseInt(countInput.value, 10) || 1)), hidden: hiddenInput.checked });
+    };
+    const onKey = (e) => { if (e.key === "Escape") finish(null); };
+    document.addEventListener("keydown", onKey);
+    closeBtn.addEventListener("click", () => finish(null));
+    overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) finish(null); });
+    if (campaignId) body.appendChild(h("p", { class: "meta", style: "margin-top:0;" }, placement
+      ? "Click a monster to place it on the map. Monsters live on the map only (not in the NPC roster) \u2014 removing the token removes it. Use \u{1F5BC} to give a monster an image for every copy in this campaign."
+      : "Click a monster to place it. Use \u{1F5BC} to give a monster an image \u2014 every copy of it in this campaign uses it."));
+    cleanup = renderMonsterList(body, monsters, finish, { maxShown: 40, campaignId });
+  });
+}
