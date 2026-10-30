@@ -40,7 +40,13 @@ No build step. No framework. Plain HTML/CSS/JS modules + Firebase.
 - **Social** — a relationship web between NPCs and/or player characters, with a \u201312 to +12 affinity score and freeform notes per relationship.
 - **Combat tracker** — start combat with any mix of party + NPCs, roll initiative for NPCs directly, or send a roll request that pops up a modal on the right player's screen (wherever they are in the app) showing their bonus. Turn order shows portraits; Action/Bonus Action/Reaction/Movement toggle per turn and auto-clear on End Turn. Attacking and moving on the VTT auto-mark Action/Movement used.
 - **Map Workshop** — upload map backgrounds and build a folder-organized library of reusable furniture/props, each optionally flagged as Half/Three-Quarters/Total Cover.
-- **VTT** — a grid-based 2D tabletop per map: left-click to select/drag your own token (players) or any token/object (DM), right-drag to pan, a ruler in feet, rectangle/circle/cone (equilateral) AoE markers, a fog-of-war brush and eraser for the DM (one merged layer, stored at `maps/{mapId}/fogs/mask`), click a token for an HP/AC popup, right-click (DM) to open a sheet, resize, or move a token to a different map in real time. Cover AC bonuses apply and clear automatically as tokens cross a cover object's footprint. Players toggle their docked mini-sheet from the toolbar; the DM's toggle shows a map switcher instead.
+- **VTT** — a grid-based 2D tabletop per map: left-click to select/drag your own token (players) or any token/object (DM), right-drag to pan, a ruler in feet, square/circle/cone (equilateral) AoE markers, a fog-of-war brush and eraser for the DM (one merged layer, stored at `maps/{mapId}/fogs/mask`). Grouped toolbar with keyboard shortcuts (V select, R ruler, S/C/T AoE, G fog, E reveal, F fullscreen, 0 fit); fullscreen keeps menus, pickers, toasts and dice on top. Cover AC bonuses apply and clear automatically as tokens cross a cover object's footprint.
+  - **Monsters** (🐉 button) are placed straight from the Monster Manual — pick a count and optionally place them hidden. They live on the map only (`kind: "monster"` tokens carry their own `stats`), so removing the token removes the monster; use NPCs → "From Monster Catalog" for named recurring foes.
+  - **Creature panel** (click any creature): HP with Damage/Heal/Temp where the damage type applies resistance, immunity and vulnerability (species resistances included for PCs); massive damage, death saves and Concentration DCs; the 14 conditions + Exhaustion with their effects spelled out (Unconscious adds Prone, Incapacitated ends Concentration and grapples, condition immunities block); editable resistances/immunities/vulnerabilities/condition immunities; monster saving throws (auto-fail Str/Dex when Paralyzed/Stunned/…, Disadvantage on Dex when Restrained) and attacks that pick Advantage/Disadvantage from conditions and apply the Exhaustion penalty; private rolls for the DM.
+  - **Automation**: Speed-0 conditions (Grappled, Paralyzed, Petrified, Restrained, Unconscious) lock a token and say why. Grappling asks who the grappler is, pulls the target within 5 ft, and the target then follows the grappler (dashed tether); it ends when the grappler is incapacitated, drops, or leaves the map.
+  - **Loot**: when a monster drops to 0 HP the DM sees its loot — its Gear plus DMG Individual Treasure coins by CR, with a "Roll hoard" for monsters whose Monster Manual Treasure tag is Arcana/Armaments/Implements/Relics/Any (magic items rolled by CR rarity and theme) — and can send it all to Party Loot.
+  - Tokens show condition badges, HP bars (DM; PCs for everyone), a dead marker and the current turn. Right-click (DM): hide/show for players, the six creature sizes (Tiny → Gargantuan), grapple, initiative, move to another map. ⚔ Encounter puts every visible creature on the map into initiative (monsters roll automatically).
+  - NPCs can be hidden from the roster (and the VTT's add-token list) or deleted.
   - *Fog first:* players see the map fully fogged until that map's saved fog has loaded, so reloading, switching maps or a sync update never reveals what's underneath.
   - *Caching:* decoded map backgrounds and token portraits, round token sprites, each map's last fog and each map's pan/zoom are cached in memory for the session. With Firebase, Firestore's offline cache (IndexedDB) makes reloads instant and queues changes made while offline.
   - *Sync:* the toolbar badge shows Synced / Syncing / Offline (with the number of queued changes). A token you just moved keeps its new spot while the server catches up, and each AoE shape is its own document (`maps/{mapId}/aoeShapes/{shapeId}`), so two people editing at once no longer overwrite each other.
@@ -83,7 +89,7 @@ party; DM Notes are DM-only; `rules_*` collections are public read-only.
 The app reads the rules from the bundled `data/*.json` files (cached by the browser, no
 Firestore reads). Seeding Firestore is only needed if you switch `RULES_SOURCE` in
 `js/data-loader.js` to `"firestore"`. To rebuild the JSON from your own copy of the 2024
-Player's Handbook and Dungeon Master's Guide, put the PDFs in `docs/` and run `scripts/rules-build/build.sh`.
+Player's Handbook, Dungeon Master's Guide and Monster Manual (monster treasure tags), put the PDFs in `docs/` and run `scripts/rules-build/build.sh`.
 
 #### Seed the rulebook data into Firestore
 
@@ -206,34 +212,4 @@ not a full commercial VTT. Deliberately simplified:
   Weapon Mastery properties are shown for reference; their unique mechanical
   effects (Vex, Sap, Graze, etc.) aren't automated — apply them manually.
 - **Multiclass HP**: approximated using your first class's Hit Die scaled by
-  total level, rather than summing each class's own Hit Die per level (the
-  fully correct multiclass HP rule). Proficiency bonus, spell slots, and
-  ability math are all total-level-correct.
-- **Action economy**: Attacking and moving on the VTT auto-clear Action/Movement
-  for whoever's turn it is; everything else (bonus actions, reactions, using a
-  skill, Dash) is a manual toggle, since whether a given skill check "counts"
-  as your action is genuinely DM/context-dependent, not something to guess at.
-- **Cover** is bounding-box overlap between a token and a cover-flagged
-  component on the same map — a practical approximation, not true line-of-sight
-  raycasting. It reads correctly for "standing behind the crate" and misreads
-  for anything requiring an actual sightline calculation.
-- **Token movement sync** writes on drop, not continuously mid-drag — other
-  viewers see a token jump to its new spot rather than glide, which avoids
-  write-spamming Firestore during a drag.
-- **AoE shapes** (rectangle/circle) on the VTT are a local, temporary visual
-  aid for the person who drew them — not broadcast to other clients, and don't
-  auto-detect which tokens fall inside.
-- **Images live in Firestore, not Storage**: portraits/maps/components are
-  compressed client-side (`js/image-utils.js`) to fit Firestore's per-document
-  size limit. Map backgrounds in particular will look noticeably more
-  compressed than a native VTT product with real object storage — that's the
-  deliberate trade-off for staying on a Storage-free setup.
-- **AC** from armor is formula-driven (base + Dex cap + shield); it doesn't yet
-  read a Strength requirement into a Speed penalty.
-- Feats beyond Skilled's skill choice don't yet have their own configurable
-  sub-options (e.g., Magic Initiate's specific cantrip picks) — track those in
-  Notes for now.
-
-The code is modular by design (`js/rules-engine.js` for math, `data/*.json` for
-content, one file per sheet tab under `js/sheet/`) so all of the above are
-additive, not rewrites.
+  total level, rather tha

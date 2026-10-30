@@ -189,7 +189,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
 .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--gold); animation: spin 0.8s linear infinite; margin: 40px auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 999; }
+.toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 999; max-width: min(420px, calc(100vw - 40px)); }
 .toast { background: var(--ink-raised); border: 1px solid var(--gold); border-radius: 8px; padding: 10px 16px; font-size: 0.88rem; box-shadow: var(--shadow); animation: toastIn .2s ease; }
 .toast.error { border-color: var(--blood-bright); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -459,10 +459,11 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
 .monster-img-btn { position: absolute; top: 8px; right: 8px; }
 .vtt-fab-secondary { bottom: 84px; background: linear-gradient(180deg, var(--rune-bright), var(--rune)); color: #06231d; font-size: 1.2rem; }
 .vtt-token-popup {
-  position: absolute; top: 16px; right: 16px; background: var(--ink-raised); border: 1px solid var(--gold);
-  border-radius: 10px; padding: 14px; width: 220px; box-shadow: var(--shadow); z-index: 20;
+  position: absolute; top: 12px; right: 12px; background: var(--ink-raised); border: 1px solid var(--gold);
+  border-radius: 10px; padding: 12px; width: 330px; max-width: calc(100% - 24px); max-height: calc(100% - 24px);
+  overflow-y: auto; box-shadow: var(--shadow); z-index: 20; font-size: 0.85rem;
 }
-.vtt-token-popup h4 { margin: 0 0 6px; color: var(--gold-bright); }
+.vtt-token-popup h4 { margin: 0; color: var(--gold-bright); }
 
 /* ---------- Fog of war slider ---------- */
 .fog-slider-wrap {
@@ -489,19 +490,19 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
   height: 4px; background: var(--line); border-radius: 2px;
 }
 
-/* ---------- VTT Fullscreen ---------- */
+/* ---------- VTT Fullscreen ----------
+   Kept below page-level layers (dialogs 500, dice 400, menus/toasts 999) so
+   pickers, menus, toasts and rolls still show while the VTT fills the screen. */
 .vtt-shell--fullscreen {
-  position: fixed; inset: 0; z-index: 1000;
-  border-radius: 0; margin: 0; height: 100vh;
+  position: fixed; inset: 0; z-index: 300;
+  border-radius: 0; margin: 0; height: 100vh; height: 100dvh; min-height: 0; border: none;
 }
+body.vtt-fullscreen-open { overflow: hidden; }
 .vtt-shell--fullscreen .vtt-sidebar {
   display: none !important;
 }
 .vtt-shell--fullscreen .vtt-toolbar {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
-  background: rgba(16,16,24,0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line);
+  background: rgba(16,16,24,0.96);
   border-radius: 0;
   padding-top: 4px;
   padding-bottom: 4px;
@@ -626,7 +627,7 @@ details.upcoming > summary { cursor: pointer; font-family: var(--font-display); 
 .spell-card .lore-tags { margin: 6px 0; }
 .qty-val { min-width: 28px; text-align: center; }
 .combat-stat .sub { font-size: 0.62rem; color: var(--text-dim); margin-top: 2px; }
-.vtt-stage-message { position: absolute; inset: 44px 0 0 0; display: flex; align-items: center; justify-content: center; background: rgba(12,13,20,0.92); z-index: 8; pointer-events: none; }
+.vtt-stage-message { position: absolute; inset: 50px 0 0 0; display: flex; align-items: center; justify-content: center; background: rgba(12,13,20,0.92); z-index: 8; pointer-events: none; }
 .vtt-sync-badge { font-size: 0.68rem; font-family: var(--font-mono); padding: 3px 9px; border-radius: 20px; border: 1px solid var(--line); color: var(--text-dim); white-space: nowrap; }
 .vtt-sync-badge.ok { color: var(--rune-bright); border-color: var(--rune); }
 .vtt-sync-badge.pending { color: var(--gold-bright); border-color: var(--gold); }
@@ -687,9 +688,4 @@ details.upcoming > summary { cursor: pointer; font-family: var(--font-display); 
 .badge.rarity-common { color: #d6d6d6; }
 .badge.rarity-uncommon { color: #5fcf6b; border-color: #3c8f45; }
 .badge.rarity-rare { color: #6aa8ff; border-color: #3f6fb8; }
-.badge.rarity-very-rare { color: #c58bff; border-color: #7f4fb8; }
-.badge.rarity-legendary { color: #ffb347; border-color: #b8742a; }
-.badge.rarity-artifact { color: #ff7a6b; border-color: #b8463c; }
-.hp-manager-actions { flex-wrap: wrap; }
-.hp-manager-actions .hp-amount { flex: 1 1 100%; }
-.hp-manager-actions .btn { flex: 1; }
+.badge.rarity-very-rare { color: #c58bff; border-co

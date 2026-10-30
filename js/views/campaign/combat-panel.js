@@ -20,10 +20,10 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
   async function startCombatSetup() {
     const setupCard = h("div", { class: "card" });
     setupCard.appendChild(h("h3", {}, "Start Combat"));
-    setupCard.appendChild(h("p", {}, "Choose who's rolling into this fight."));
+    setupCard.appendChild(h("p", {}, "Choose who's rolling into this fight. To add monsters, place them on the VTT and use \u2694 Encounter (or Initiative in a creature's panel)."));
     const grid = h("div", { class: "grid cols-3" });
     const checks = [];
-    [...party, ...npcs].forEach(entity => {
+    [...party, ...npcs.filter(n => !n.hiddenFromRoster)].forEach(entity => {
       const id = `combatant-${entity.id}`;
       const card = h("label", { class: "choice-card", style: "display:flex; align-items:center; gap:8px; cursor:pointer;" });
       const check = h("input", { type: "checkbox", id, style: "width:auto; margin:0;", checked: "checked" });
@@ -48,11 +48,12 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
     return setupCard;
   }
 
+  // NPCs roll from their sheet; VTT monsters carry their stat block's Initiative bonus
   function rollForNpc(index) {
     const c = combat.combatants[index];
     const npc = npcs.find(n => n.id === c.id);
-    if (!npc) return;
-    const mod = initiativeModifier(npc);
+    if (!npc && c.type !== "monster") return;
+    const mod = npc ? initiativeModifier(npc) : (c.initMod || 0);
     const result = computeRoll({ sides: 20, count: 1, modifier: mod, mode: "normal", label: `${c.name} Initiative` });
     const combatants = [...combat.combatants];
     combatants[index] = { ...c, initiative: result.total };
@@ -119,13 +120,16 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
           <div style="display:flex; align-items:center; gap:10px;">
             <div class="portrait-preview sm">${portraitOrInitial(c)}</div>
             <div>
-              <div class="item-name">${isCurrent ? "\u25b6 " : ""}${escapeHtml(c.name)} ${c.type === "npc" ? '<span class="badge rune">NPC</span>' : ""}</div>
+              <div class="item-name">${isCurrent ? "\u25b6 " : ""}${escapeHtml(c.name)} ${c.type === "npc" ? '<span class="badge rune">NPC</span>' : c.type === "monster" ? '<span class="badge rune">Monster</span>' : ""}</div>
             </div>
           </div>
         </div>
       `;
       const initRow = h("div", { class: "row-actions", style: "align-items:center;" });
       if (isDm) {
+        const rm = h("button", { class: "icon-btn", title: "Remove from the initiative order" }, "\u2715");
+        rm.addEventListener("click", () => removeCombatant(idx));
+        initRow.appendChild(rm);
         const upBtn = h("button", { class: "icon-btn" }, "\u25b2");
         upBtn.title = "Move earlier in turn order";
         upBtn.disabled = idx === 0;
@@ -145,10 +149,10 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
         initRow.appendChild(h("span", { class: "badge" }, `Init: ${c.initiative != null ? c.initiative : "pending"}`));
       }
       if (isDm && c.initiative == null) {
-        const btn = h("button", { class: "btn sm" }, c.type === "npc" ? "Roll for NPC" : "Request Player Roll");
-        btn.addEventListener("click", () => c.type === "npc" ? rollForNpc(idx) : requestPcRoll(idx));
+        const btn = h("button", { class: "btn sm" }, c.type !== "pc" ? "Roll" : "Request Player Roll");
+        btn.addEventListener("click", () => c.type !== "pc" ? rollForNpc(idx) : requestPcRoll(idx));
         initRow.appendChild(btn);
-      } else if (isDm && c.type === "npc") {
+      } else if (isDm && c.type !== "pc") {
         const btn = h("button", { class: "btn sm ghost" }, "Reroll");
         btn.addEventListener("click", () => rollForNpc(idx));
         initRow.appendChild(btn);
@@ -176,6 +180,14 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
     return card;
   }
 
+  function removeCombatant(idx) {
+    const cur = combat.combatants[combat.currentTurnIndex]?.id;
+    const combatants = combat.combatants.filter((_, i) => i !== idx);
+    if (!combatants.length) { db.combat.set(campaignId, { active: false, combatants: [] }); return; }
+    const keep = combatants.findIndex(c => c.id === cur);
+    db.combat.set(campaignId, { combatants, currentTurnIndex: keep >= 0 ? keep : Math.min(idx, combatants.length - 1) });
+  }
+
   function toggleAction(idx, type) {
     const combatants = [...combat.combatants];
     combatants[idx] = { ...combatants[idx], [`${type}Used`]: !combatants[idx][`${type}Used`] };
@@ -186,23 +198,4 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
     const n = combat.combatants.length;
     let nextIndex = (combat.currentTurnIndex + 1) % n;
     let nextRound = combat.round + (nextIndex === 0 ? 1 : 0);
-    const combatants = combat.combatants.map((c, i) => i === nextIndex ? { ...c, actionUsed: false, bonusActionUsed: false, reactionUsed: false, movementUsed: false } : c);
-    db.combat.set(campaignId, { currentTurnIndex: nextIndex, round: nextRound, combatants });
-  }
-
-  async function render() {
-    wrap.innerHTML = "";
-    if (!combat?.active) {
-      if (isDm) wrap.appendChild(await startCombatSetup());
-      else wrap.appendChild(h("div", { class: "empty-state" }, "<h3>No active combat</h3><p>Waiting for the DM to start one.</p>"));
-      return;
-    }
-    wrap.appendChild(renderTurnOrder());
-  }
-
-  const unsubCombat = db.combat.subscribe(campaignId, (c) => { combat = c; render(); });
-  const unsubParty = db.characters.subscribeCampaignParty(campaignId, (p) => { party = p; if (!combat?.active) render(); });
-  const unsubNpcs = db.characters.subscribeCampaignNpcs(campaignId, (n) => { npcs = n; if (!combat?.active) render(); });
-
-  return () => { unsubCombat(); unsubParty(); unsubNpcs(); };
-}
+    const combatants 

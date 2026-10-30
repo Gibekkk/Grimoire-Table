@@ -1,0 +1,1183 @@
+import { isFirebaseConfigured } from "./firebase-config.js";
+import { initFirebase, getFirebase } from "./firebase-init.js";
+
+const USE_FIREBASE = isFirebaseConfigured();
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+function uid(prefix = "id") {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function inviteCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I ambiguity
+  let out = "";
+  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+// ===========================================================================
+// LOCAL DEMO BACKEND — localStorage for persistence, BroadcastChannel so
+// multiple open tabs (e.g. "DM" and "Player") see the same data update live.
+// ===========================================================================
+const LOCAL_PREFIX = "dnd_demo_v1_";
+const bc = ("BroadcastChannel" in window) ? new BroadcastChannel("dnd-demo-sync") : null;
+const localListeners = new Map(); // key -> Set(callback)
+
+function readTable(name) {
+  try { return JSON.parse(localStorage.getItem(LOCAL_PREFIX + name) || "{}"); }
+  catch { return {}; }
+}
+function writeTable(name, obj) {
+  localStorage.setItem(LOCAL_PREFIX + name, JSON.stringify(obj));
+  notifyLocal(name);
+  bc?.postMessage({ table: name });
+}
+function notifyLocal(name) {
+  (localListeners.get(name) || []).forEach(cb => cb());
+}
+bc?.addEventListener("message", (e) => notifyLocal(e.data.table));
+
+function subscribeTable(name, cb) {
+  if (!localListeners.has(name)) localListeners.set(name, new Set());
+  localListeners.get(name).add(cb);
+  cb(); // fire immediately with current state
+  return () => localListeners.get(name)?.delete(cb);
+}
+
+// One-time migration: demo sessions used to live in localStorage (shared by all
+// tabs). Keep that account (and its characters) under its name.
+try {
+  const legacy = localStorage.getItem(LOCAL_PREFIX + "session");
+  if (legacy) {
+    const u = JSON.parse(legacy);
+    const accounts = JSON.parse(localStorage.getItem(LOCAL_PREFIX + "accounts") || "{}");
+    if (u?.displayName && !accounts[u.displayName.trim().toLowerCase()]) accounts[u.displayName.trim().toLowerCase()] = u;
+    localStorage.setItem(LOCAL_PREFIX + "accounts", JSON.stringify(accounts));
+    if (!sessionStorage.getItem(LOCAL_PREFIX + "session")) sessionStorage.setItem(LOCAL_PREFIX + "session", legacy);
+    localStorage.removeItem(LOCAL_PREFIX + "session");
+  }
+} catch { /* storage unavailable */ }
+
+const localDb = {
+  auth: {
+    // The demo session is per tab (sessionStorage) while game data is shared
+    // (localStorage), so a second tab can sign in as a different player.
+    onChange(cb) {
+      const read = () => {
+        let raw = null;
+        try { raw = sessionStorage.getItem(LOCAL_PREFIX + "session"); } catch { /* storage blocked */ }
+        cb(raw ? JSON.parse(raw) : null);
+      };
+      return subscribeTable("session", read);
+    },
+    async signInDemo(displayName) {
+      // Same name → same demo account, so reopening a tab keeps your characters
+      const accounts = readTable("accounts");
+      const key = displayName.trim().toLowerCase();
+      const user = accounts[key] || { uid: uid("demo"), displayName: displayName.trim(), photoURL: null, isDemo: true };
+      if (!accounts[key]) { accounts[key] = user; localStorage.setItem(LOCAL_PREFIX + "accounts", JSON.stringify(accounts)); }
+      sessionStorage.setItem(LOCAL_PREFIX + "session", JSON.stringify(user));
+      notifyLocal("session");
+      return user;
+    },
+    async signOut() {
+      sessionStorage.removeItem(LOCAL_PREFIX + "session");
+      notifyLocal("session");
+    }
+  },
+
+  campaigns: {
+    async create({ name, dmUid, dmName }) {
+      const campaigns = readTable("campaigns");
+      const id = uid("camp");
+      campaigns[id] = {
+        id, name, dmUid, dmName, inviteCode: inviteCode(),
+        memberUids: [dmUid], memberNames: { [dmUid]: dmName },
+        createdAt: Date.now()
+      };
+      writeTable("campaigns", campaigns);
+      return id;
+    },
+    async get(id) { return readTable("campaigns")[id] || null; },
+    async join(code, uidVal, displayName) {
+      const campaigns = readTable("campaigns");
+      const found = Object.values(campaigns).find(c => c.inviteCode === code.toUpperCase());
+      if (!found) throw new Error("No campaign found with that invite code.");
+      if (!found.memberUids.includes(uidVal)) found.memberUids.push(uidVal);
+      found.memberNames[uidVal] = displayName;
+      writeTable("campaigns", campaigns);
+      return found.id;
+    },
+    async listMine(uidVal) {
+      const campaigns = readTable("campaigns");
+      return Object.values(campaigns).filter(c => c.memberUids.includes(uidVal))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    },
+    async update(id, patch) {
+      const campaigns = readTable("campaigns");
+      if (!campaigns[id]) return;
+      Object.assign(campaigns[id], patch);
+      writeTable("campaigns", campaigns);
+    },
+    async remove(campaignId) {
+      const campaigns = readTable("campaigns");
+      delete campaigns[campaignId];
+      writeTable("campaigns", campaigns);
+
+      ["logs", "notes", "partyInventory", "relationships", "maps", "componentFolders", "componentLibrary", "monsterImages", "combat"].forEach(name => {
+        const t = readTable(name);
+        if (campaignId in t) { delete t[campaignId]; writeTable(name, t); }
+      });
+
+      const tokens = readTable("tokens");
+      let tokensChanged = false;
+      Object.keys(tokens).forEach(key => { if (key.startsWith(`${campaignId}:`)) { delete tokens[key]; tokensChanged = true; } });
+      if (tokensChanged) writeTable("tokens", tokens);
+
+      const masks = readTable("fogMasks");
+      let masksChanged = false;
+      Object.keys(masks).forEach(key => { if (key.startsWith(`${campaignId}:`)) { delete masks[key]; masksChanged = true; } });
+      if (masksChanged) writeTable("fogMasks", masks);
+
+      const chars = readTable("characters");
+      let charsChanged = false;
+      Object.values(chars).forEach(c => {
+        if (c.campaignId === campaignId) {
+          charsChanged = true;
+          if (c.isNpc) delete chars[c.id];
+          else { c.campaignId = null; c.currentMapId = null; }
+        }
+      });
+      if (charsChanged) writeTable("characters", chars);
+    },
+    subscribe(id, cb) {
+      return subscribeTable("campaigns", () => cb(readTable("campaigns")[id] || null));
+    }
+  },
+
+  characters: {
+    async create(data) {
+      const chars = readTable("characters");
+      const id = uid("char");
+      chars[id] = { id, createdAt: Date.now(), ...data };
+      writeTable("characters", chars);
+      return id;
+    },
+    async update(id, patch) {
+      const chars = readTable("characters");
+      if (!chars[id]) return;
+      Object.assign(chars[id], patch);
+      writeTable("characters", chars);
+    },
+    async get(id) { return readTable("characters")[id] || null; },
+    async remove(id) {
+      const chars = readTable("characters");
+      delete chars[id];
+      writeTable("characters", chars);
+    },
+    async listMine(uidVal) {
+      const chars = readTable("characters");
+      return Object.values(chars).filter(c => c.ownerUid === uidVal && !c.isNpc)
+        .sort((a, b) => b.createdAt - a.createdAt);
+    },
+    subscribe(id, cb) {
+      return subscribeTable("characters", () => cb(readTable("characters")[id] || null));
+    },
+    subscribeCampaignParty(campaignId, cb) {
+      return subscribeTable("characters", () => {
+        const chars = Object.values(readTable("characters")).filter(c => c.campaignId === campaignId && !c.isNpc);
+        cb(chars);
+      });
+    },
+    subscribeCampaignNpcs(campaignId, cb) {
+      return subscribeTable("characters", () => {
+        const chars = Object.values(readTable("characters")).filter(c => c.campaignId === campaignId && c.isNpc);
+        cb(chars);
+      });
+    }
+  },
+
+  log: {
+    async add(campaignId, entry) {
+      const logs = readTable("logs");
+      logs[campaignId] = logs[campaignId] || [];
+      logs[campaignId].push({ id: uid("log"), createdAt: Date.now(), ...entry });
+      // keep last 300 entries per campaign
+      if (logs[campaignId].length > 300) logs[campaignId] = logs[campaignId].slice(-300);
+      writeTable("logs", logs);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("logs", () => cb(readTable("logs")[campaignId] || []));
+    }
+  },
+
+  inventory: {
+    async add(characterId, item) {
+      const inv = readTable("inventory");
+      inv[characterId] = inv[characterId] || [];
+      const id = uid("item");
+      inv[characterId].push({ id, createdAt: Date.now(), ...item });
+      writeTable("inventory", inv);
+      return id;
+    },
+    async update(characterId, itemId, patch) {
+      const inv = readTable("inventory");
+      const list = inv[characterId] || [];
+      const found = list.find(i => i.id === itemId);
+      if (found) Object.assign(found, patch);
+      writeTable("inventory", inv);
+    },
+    async remove(characterId, itemId) {
+      const inv = readTable("inventory");
+      inv[characterId] = (inv[characterId] || []).filter(i => i.id !== itemId);
+      writeTable("inventory", inv);
+    },
+    subscribe(characterId, cb) {
+      return subscribeTable("inventory", () => cb(readTable("inventory")[characterId] || []));
+    }
+  },
+
+  partyInventory: {
+    async add(campaignId, item) {
+      const inv = readTable("partyInventory");
+      inv[campaignId] = inv[campaignId] || [];
+      const id = uid("pitem");
+      inv[campaignId].push({ id, createdAt: Date.now(), ...item });
+      writeTable("partyInventory", inv);
+      return id;
+    },
+    async update(campaignId, itemId, patch) {
+      const inv = readTable("partyInventory");
+      const found = (inv[campaignId] || []).find(i => i.id === itemId);
+      if (found) Object.assign(found, patch);
+      writeTable("partyInventory", inv);
+    },
+    async remove(campaignId, itemId) {
+      const inv = readTable("partyInventory");
+      inv[campaignId] = (inv[campaignId] || []).filter(i => i.id !== itemId);
+      writeTable("partyInventory", inv);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("partyInventory", () => cb(readTable("partyInventory")[campaignId] || []));
+    }
+  },
+
+  notes: {
+    async add(campaignId, note) {
+      const notes = readTable("notes");
+      notes[campaignId] = notes[campaignId] || [];
+      notes[campaignId].push({ id: uid("note"), createdAt: Date.now(), ...note });
+      writeTable("notes", notes);
+    },
+    async update(campaignId, noteId, patch) {
+      const notes = readTable("notes");
+      const list = notes[campaignId] || [];
+      const found = list.find(n => n.id === noteId);
+      if (found) Object.assign(found, patch);
+      writeTable("notes", notes);
+    },
+    async remove(campaignId, noteId) {
+      const notes = readTable("notes");
+      notes[campaignId] = (notes[campaignId] || []).filter(n => n.id !== noteId);
+      writeTable("notes", notes);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("notes", () => cb(readTable("notes")[campaignId] || []));
+    }
+  },
+
+  maps: {
+    async create(campaignId, data) {
+      const maps = readTable("maps");
+      maps[campaignId] = maps[campaignId] || {};
+      const id = uid("map");
+      maps[campaignId][id] = { id, createdAt: Date.now(), ...data };
+      writeTable("maps", maps);
+      return id;
+    },
+    async update(campaignId, mapId, patch) {
+      const maps = readTable("maps");
+      if (!maps[campaignId]?.[mapId]) return;
+      Object.assign(maps[campaignId][mapId], patch);
+      writeTable("maps", maps);
+    },
+    async addShape(campaignId, mapId, shape) {
+      const maps = readTable("maps");
+      const map = maps[campaignId]?.[mapId];
+      if (!map) return;
+      map.aoeShapes = [...(map.aoeShapes || []), shape];
+      writeTable("maps", maps);
+    },
+    async clearShapes(campaignId, mapId) {
+      const maps = readTable("maps");
+      const map = maps[campaignId]?.[mapId];
+      if (!map) return;
+      map.aoeShapes = [];
+      writeTable("maps", maps);
+    },
+    async updateFogs(campaignId, mapId, fogs) {
+      const maps = readTable("maps");
+      const map = maps[campaignId]?.[mapId];
+      if (!map) return;
+      map.fogs = fogs;
+      writeTable("maps", maps);
+    },
+    async updatePersistentShapes(campaignId, mapId, shapes) {
+      const maps = readTable("maps");
+      const map = maps[campaignId]?.[mapId];
+      if (!map) return;
+      map.persistentShapes = shapes;
+      writeTable("maps", maps);
+    },
+    async remove(campaignId, mapId) {
+      const maps = readTable("maps");
+      if (maps[campaignId]) delete maps[campaignId][mapId];
+      writeTable("maps", maps);
+      const tokens = readTable("tokens");
+      delete tokens[`${campaignId}:${mapId}`];
+      writeTable("tokens", tokens);
+      const masks = readTable("fogMasks");
+      if (masks[`${campaignId}:${mapId}`]) { delete masks[`${campaignId}:${mapId}`]; writeTable("fogMasks", masks); }
+    },
+    async get(campaignId, mapId) {
+      const maps = readTable("maps");
+      return maps[campaignId]?.[mapId] || null;
+    },
+    async listAll(campaignId) {
+      const maps = readTable("maps");
+      return Object.values(maps[campaignId] || {}).sort((a, b) => a.createdAt - b.createdAt);
+    },
+    subscribeList(campaignId, cb) {
+      return subscribeTable("maps", () => cb(Object.values(readTable("maps")[campaignId] || {}).sort((a, b) => a.createdAt - b.createdAt)));
+    },
+    subscribe(campaignId, mapId, cb) {
+      return subscribeTable("maps", () => cb(readTable("maps")[campaignId]?.[mapId] || null));
+    }
+  },
+
+  // Item Workshop: campaign-scoped custom item definitions the DM authors once
+  // and can then stock in shops, drop as loot, or push into a character's bag.
+  campaignItems: {
+    async add(campaignId, item) {
+      const items = readTable("campaignItems");
+      items[campaignId] = items[campaignId] || [];
+      const id = uid("citem");
+      items[campaignId].push({ id, createdAt: Date.now(), ...item });
+      writeTable("campaignItems", items);
+      return id;
+    },
+    async update(campaignId, itemId, patch) {
+      const items = readTable("campaignItems");
+      const found = (items[campaignId] || []).find(i => i.id === itemId);
+      if (found) Object.assign(found, patch);
+      writeTable("campaignItems", items);
+    },
+    async remove(campaignId, itemId) {
+      const items = readTable("campaignItems");
+      items[campaignId] = (items[campaignId] || []).filter(i => i.id !== itemId);
+      writeTable("campaignItems", items);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("campaignItems", () => cb(readTable("campaignItems")[campaignId] || []));
+    }
+  },
+
+  // Loot physically "in the room" (per-map) — distinct from partyInventory
+  // (campaign-wide trading pool): dropped items and leftover loot tied to a
+  // specific map, which the DM can fully override the contents of.
+  roomInventory: {
+    async add(campaignId, mapId, item) {
+      const inv = readTable("roomInventory");
+      const key = `${campaignId}:${mapId}`;
+      inv[key] = inv[key] || [];
+      const id = uid("ritem");
+      inv[key].push({ id, createdAt: Date.now(), ...item });
+      writeTable("roomInventory", inv);
+      return id;
+    },
+    async update(campaignId, mapId, itemId, patch) {
+      const inv = readTable("roomInventory");
+      const key = `${campaignId}:${mapId}`;
+      const found = (inv[key] || []).find(i => i.id === itemId);
+      if (found) Object.assign(found, patch);
+      writeTable("roomInventory", inv);
+    },
+    async remove(campaignId, mapId, itemId) {
+      const inv = readTable("roomInventory");
+      const key = `${campaignId}:${mapId}`;
+      inv[key] = (inv[key] || []).filter(i => i.id !== itemId);
+      writeTable("roomInventory", inv);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("roomInventory", () => cb(readTable("roomInventory")[key] || []));
+    }
+  },
+
+  // Fog of war: one bitmap mask per map (PNG data URL), kept out of the map doc
+  // so a brush stroke doesn't re-send the map background to every client.
+  fogMask: {
+    async set(campaignId, mapId, dataUrl) {
+      const masks = readTable("fogMasks");
+      masks[`${campaignId}:${mapId}`] = { dataUrl: dataUrl || null, updatedAt: Date.now() };
+      writeTable("fogMasks", masks);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("fogMasks", () => cb(readTable("fogMasks")[key] || null));
+    }
+  },
+
+  // One doc per persistent AoE shape (maps/{mapId}/aoeShapes/{shapeId}) so two
+  // people editing different shapes never overwrite each other's change.
+  shapes: {
+    async set(campaignId, mapId, shape) {
+      const all = readTable("aoeShapes");
+      const key = `${campaignId}:${mapId}`;
+      all[key] = all[key] || {};
+      all[key][shape.id] = { ...shape, updatedAt: Date.now() };
+      writeTable("aoeShapes", all);
+    },
+    async remove(campaignId, mapId, shapeId) {
+      const all = readTable("aoeShapes");
+      const key = `${campaignId}:${mapId}`;
+      if (all[key]) delete all[key][shapeId];
+      writeTable("aoeShapes", all);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("aoeShapes", () => cb(Object.values(readTable("aoeShapes")[key] || {})));
+    }
+  },
+
+  tokens: {
+    async add(campaignId, mapId, token) {
+      const tokens = readTable("tokens");
+      const key = `${campaignId}:${mapId}`;
+      tokens[key] = tokens[key] || [];
+      const id = uid("tok");
+      tokens[key].push({ id, createdAt: Date.now(), ...token });
+      writeTable("tokens", tokens);
+      return id;
+    },
+    async update(campaignId, mapId, tokenId, patch) {
+      const tokens = readTable("tokens");
+      const key = `${campaignId}:${mapId}`;
+      const found = (tokens[key] || []).find(t => t.id === tokenId);
+      if (found) Object.assign(found, patch);
+      writeTable("tokens", tokens);
+    },
+    async remove(campaignId, mapId, tokenId) {
+      const tokens = readTable("tokens");
+      const key = `${campaignId}:${mapId}`;
+      tokens[key] = (tokens[key] || []).filter(t => t.id !== tokenId);
+      writeTable("tokens", tokens);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("tokens", () => cb(readTable("tokens")[key] || []));
+    },
+    async moveToMap(campaignId, fromMapId, toMapId, token, spawn) {
+      await this.remove(campaignId, fromMapId, token.id);
+      const { id, createdAt, ...rest } = token;
+      return this.add(campaignId, toMapId, { ...rest, x: spawn?.x ?? 2, y: spawn?.y ?? 2 });
+    }
+  },
+
+  componentFolders: {
+    async add(campaignId, data) {
+      const folders = readTable("componentFolders");
+      folders[campaignId] = folders[campaignId] || [];
+      const id = uid("folder");
+      folders[campaignId].push({ id, createdAt: Date.now(), ...data });
+      writeTable("componentFolders", folders);
+      return id;
+    },
+    async remove(campaignId, folderId) {
+      const folders = readTable("componentFolders");
+      folders[campaignId] = (folders[campaignId] || []).filter(f => f.id !== folderId);
+      writeTable("componentFolders", folders);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("componentFolders", () => cb(readTable("componentFolders")[campaignId] || []));
+    }
+  },
+
+  componentLibrary: {
+    async add(campaignId, data) {
+      const lib = readTable("componentLibrary");
+      lib[campaignId] = lib[campaignId] || [];
+      const id = uid("comp");
+      lib[campaignId].push({ id, createdAt: Date.now(), ...data });
+      writeTable("componentLibrary", lib);
+      return id;
+    },
+    async update(campaignId, componentId, patch) {
+      const lib = readTable("componentLibrary");
+      const found = (lib[campaignId] || []).find(c => c.id === componentId);
+      if (found) Object.assign(found, patch);
+      writeTable("componentLibrary", lib);
+    },
+    async remove(campaignId, componentId) {
+      const lib = readTable("componentLibrary");
+      lib[campaignId] = (lib[campaignId] || []).filter(c => c.id !== componentId);
+      writeTable("componentLibrary", lib);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("componentLibrary", () => cb(readTable("componentLibrary")[campaignId] || []));
+    }
+  },
+
+  // Per-campaign artwork for Monster Manual entries, keyed by monster id.
+  // New NPCs/tokens made from that monster use it as their portrait.
+  monsterImages: {
+    async set(campaignId, monsterId, imageBase64) {
+      const t = readTable("monsterImages");
+      t[campaignId] = t[campaignId] || {};
+      t[campaignId][monsterId] = { imageBase64, updatedAt: Date.now() };
+      writeTable("monsterImages", t);
+    },
+    async remove(campaignId, monsterId) {
+      const t = readTable("monsterImages");
+      if (t[campaignId]) delete t[campaignId][monsterId];
+      writeTable("monsterImages", t);
+    },
+    // cb receives { monsterId: imageBase64 }
+    subscribe(campaignId, cb) {
+      return subscribeTable("monsterImages", () => {
+        const entries = readTable("monsterImages")[campaignId] || {};
+        cb(Object.fromEntries(Object.entries(entries).map(([id, v]) => [id, v.imageBase64])));
+      });
+    }
+  },
+
+  relationships: {
+    async add(campaignId, data) {
+      const rel = readTable("relationships");
+      rel[campaignId] = rel[campaignId] || [];
+      const id = uid("rel");
+      rel[campaignId].push({ id, createdAt: Date.now(), ...data });
+      writeTable("relationships", rel);
+      return id;
+    },
+    async update(campaignId, relId, patch) {
+      const rel = readTable("relationships");
+      const found = (rel[campaignId] || []).find(r => r.id === relId);
+      if (found) Object.assign(found, patch);
+      writeTable("relationships", rel);
+    },
+    async remove(campaignId, relId) {
+      const rel = readTable("relationships");
+      rel[campaignId] = (rel[campaignId] || []).filter(r => r.id !== relId);
+      writeTable("relationships", rel);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("relationships", () => cb(readTable("relationships")[campaignId] || []));
+    }
+  },
+
+  combat: {
+    async get(campaignId) {
+      const combat = readTable("combat");
+      return combat[campaignId] || null;
+    },
+    async set(campaignId, data) {
+      const combat = readTable("combat");
+      combat[campaignId] = { ...combat[campaignId], ...data };
+      writeTable("combat", combat);
+    },
+    subscribe(campaignId, cb) {
+      return subscribeTable("combat", () => cb(readTable("combat")[campaignId] || null));
+    }
+  }
+};
+
+// ===========================================================================
+// FIRESTORE BACKEND — mirrors the exact same shape as localDb above.
+// ===========================================================================
+
+// Every onSnapshot() in this file is routed through here. Without an error
+// Every onSnapshot() below is routed through here. Without an error callback,
+// a permission-denied (e.g. a listener outliving a campaign you just left, or
+// a doc deleted mid-session) kills the listener silently and the SDK logs
+// "Uncaught Error in snapshot listener" with no indication of why.
+function onSnapshotError(err) {
+  if (err?.code === "permission-denied") {
+    console.warn("[grimoire] A live update stopped because access was denied (left the campaign? item deleted?):", err.message);
+  } else {
+    console.error("[grimoire] Firestore listener error:", err);
+  }
+}
+
+const firestoreDb = {
+  auth: {
+    onChange(cb) {
+      let unsub = () => {};
+      initFirebase().then(({ auth, fx }) => {
+        unsub = fx.onAuthStateChanged(auth, (fbUser) => {
+          cb(fbUser ? { uid: fbUser.uid, displayName: fbUser.displayName, photoURL: fbUser.photoURL } : null);
+        });
+      });
+      return () => unsub();
+    },
+    async signInWithGoogle() {
+      const { auth, googleProvider, fx } = await initFirebase();
+      const result = await fx.signInWithPopup(auth, googleProvider);
+      const u = result.user;
+      return { uid: u.uid, displayName: u.displayName, photoURL: u.photoURL };
+    },
+    async signOut() {
+      const { auth, fx } = await initFirebase();
+      await fx.signOut(auth);
+    }
+  },
+
+  campaigns: {
+    async create({ name, dmUid, dmName }) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns"));
+      await fx.setDoc(ref, {
+        name, dmUid, dmName, inviteCode: inviteCode(),
+        memberUids: [dmUid], memberNames: { [dmUid]: dmName },
+        createdAt: fx.serverTimestamp()
+      });
+      return ref.id;
+    },
+    async get(id) {
+      const { db, fx } = await initFirebase();
+      const snap = await fx.getDoc(fx.doc(db, "campaigns", id));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    },
+    async join(code, uidVal, displayName) {
+      const { db, fx } = await initFirebase();
+      const q = fx.query(fx.collection(db, "campaigns"), fx.where("inviteCode", "==", code.toUpperCase()));
+      const snap = await fx.getDocs(q);
+      if (snap.empty) throw new Error("No campaign found with that invite code.");
+      const docSnap = snap.docs[0];
+      await fx.updateDoc(docSnap.ref, {
+        memberUids: fx.arrayUnion(uidVal),
+        [`memberNames.${uidVal}`]: displayName
+      });
+      return docSnap.id;
+    },
+    async listMine(uidVal) {
+      const { db, fx } = await initFirebase();
+      const q = fx.query(fx.collection(db, "campaigns"), fx.where("memberUids", "array-contains", uidVal));
+      const snap = await fx.getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    },
+    async update(id, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", id), patch);
+    },
+    async remove(campaignId) {
+      const { db, fx } = await initFirebase();
+
+      async function deleteAllDocs(...pathSegments) {
+        const snap = await fx.getDocs(fx.collection(db, ...pathSegments));
+        await Promise.all(snap.docs.map(d => fx.deleteDoc(d.ref)));
+      }
+
+      const mapsSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps"));
+      for (const mapDoc of mapsSnap.docs) {
+        await deleteAllDocs("campaigns", campaignId, "maps", mapDoc.id, "tokens");
+        await deleteAllDocs("campaigns", campaignId, "maps", mapDoc.id, "fogs");
+        await fx.deleteDoc(mapDoc.ref);
+      }
+      await deleteAllDocs("campaigns", campaignId, "log");
+      await deleteAllDocs("campaigns", campaignId, "notes");
+      await deleteAllDocs("campaigns", campaignId, "partyInventory");
+      await deleteAllDocs("campaigns", campaignId, "relationships");
+      await deleteAllDocs("campaigns", campaignId, "componentFolders");
+      await deleteAllDocs("campaigns", campaignId, "componentLibrary");
+      await deleteAllDocs("campaigns", campaignId, "monsterImages");
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "combat", "state")).catch(() => {});
+
+      const charsSnap = await fx.getDocs(fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId)));
+      await Promise.all(charsSnap.docs.map(d => {
+        const data = d.data();
+        return data.isNpc ? fx.deleteDoc(d.ref) : fx.updateDoc(d.ref, { campaignId: null, currentMapId: null });
+      }));
+
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId));
+    },
+    subscribe(id, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", id), (snap) => {
+          cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+        }, onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  characters: {
+    async create(data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "characters"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(id, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "characters", id), patch);
+    },
+    async get(id) {
+      const { db, fx } = await initFirebase();
+      const snap = await fx.getDoc(fx.doc(db, "characters", id));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    },
+    async remove(id) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "characters", id));
+    },
+    async listMine(uidVal) {
+      const { db, fx } = await initFirebase();
+      const q = fx.query(fx.collection(db, "characters"), fx.where("ownerUid", "==", uidVal));
+      const snap = await fx.getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isNpc)
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    },
+    subscribe(id, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "characters", id), (snap) => {
+          cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+        }, onSnapshotError);
+      });
+      return () => unsub();
+    },
+    subscribeCampaignParty(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isNpc)), onSnapshotError);
+      });
+      return () => unsub();
+    },
+    subscribeCampaignNpcs(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.isNpc)), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  log: {
+    async add(campaignId, entry) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.collection(db, "campaigns", campaignId, "log");
+      await fx.addDoc(ref, { ...entry, createdAt: fx.serverTimestamp() });
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "log"), fx.orderBy("createdAt", "asc"), fx.limitToLast(300));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  inventory: {
+    async add(characterId, item) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.collection(db, "characters", characterId, "inventory");
+      const docRef = await fx.addDoc(ref, { ...item, createdAt: fx.serverTimestamp() });
+      return docRef.id;
+    },
+    async update(characterId, itemId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "characters", characterId, "inventory", itemId), patch);
+    },
+    async remove(characterId, itemId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "characters", characterId, "inventory", itemId));
+    },
+    subscribe(characterId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "characters", characterId, "inventory"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  partyInventory: {
+    async add(campaignId, item) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.collection(db, "campaigns", campaignId, "partyInventory");
+      const docRef = await fx.addDoc(ref, { ...item, createdAt: fx.serverTimestamp() });
+      return docRef.id;
+    },
+    async update(campaignId, itemId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "partyInventory", itemId), patch);
+    },
+    async remove(campaignId, itemId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "partyInventory", itemId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "partyInventory"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  notes: {
+    async add(campaignId, note) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.collection(db, "campaigns", campaignId, "notes");
+      await fx.addDoc(ref, { ...note, createdAt: fx.serverTimestamp() });
+    },
+    async update(campaignId, noteId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "notes", noteId), patch);
+    },
+    async remove(campaignId, noteId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "notes", noteId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "notes"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  maps: {
+    async create(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "maps"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(campaignId, mapId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), patch);
+    },
+    async addShape(campaignId, mapId, shape) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { aoeShapes: fx.arrayUnion(shape) });
+    },
+    async clearShapes(campaignId, mapId) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { aoeShapes: [] });
+    },
+    async updateFogs(campaignId, mapId, fogs) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { fogs });
+    },
+    async updatePersistentShapes(campaignId, mapId, shapes) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), { persistentShapes: shapes });
+    },
+    async remove(campaignId, mapId) {
+      const { db, fx } = await initFirebase();
+      const tokSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"));
+      await Promise.all(tokSnap.docs.map(d => fx.deleteDoc(d.ref)));
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask")).catch(() => {});
+      const shapeSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps", mapId, "aoeShapes")).catch(() => null);
+      if (shapeSnap) await Promise.all(shapeSnap.docs.map(d => fx.deleteDoc(d.ref)));
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId));
+    },
+    async get(campaignId, mapId) {
+      const { db, fx } = await initFirebase();
+      const snap = await fx.getDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    },
+    async listAll(campaignId) {
+      const { db, fx } = await initFirebase();
+      const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps"), fx.orderBy("createdAt", "asc"));
+      const snap = await fx.getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+    subscribeList(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId), (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  campaignItems: {
+    async add(campaignId, item) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.collection(db, "campaigns", campaignId, "campaignItems");
+      const docRef = await fx.addDoc(ref, { ...item, createdAt: fx.serverTimestamp() });
+      return docRef.id;
+    },
+    async update(campaignId, itemId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "campaignItems", itemId), patch);
+    },
+    async remove(campaignId, itemId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "campaignItems", itemId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "campaignItems"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  roomInventory: {
+    async add(campaignId, mapId, item) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.collection(db, "campaigns", campaignId, "maps", mapId, "roomInventory");
+      const docRef = await fx.addDoc(ref, { ...item, createdAt: fx.serverTimestamp() });
+      return docRef.id;
+    },
+    async update(campaignId, mapId, itemId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "roomInventory", itemId), patch);
+    },
+    async remove(campaignId, mapId, itemId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "roomInventory", itemId));
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps", mapId, "roomInventory"), fx.orderBy("createdAt", "asc"));
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  fogMask: {
+    async set(campaignId, mapId, dataUrl) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask"), { dataUrl: dataUrl || null, updatedAt: fx.serverTimestamp() });
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask"), (snap) => cb(snap.exists() ? snap.data() : null), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  shapes: {
+    async set(campaignId, mapId, shape) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "aoeShapes", shape.id), { ...shape, updatedAt: fx.serverTimestamp() });
+    },
+    async remove(campaignId, mapId, shapeId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "aoeShapes", shapeId));
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "aoeShapes"), (snap) => cb(snap.docs.map(d => {
+          const { updatedAt, ...rest } = d.data();
+          return { id: d.id, ...rest };
+        })), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  tokens: {
+    async add(campaignId, mapId, token) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"));
+      await fx.setDoc(ref, { ...token, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(campaignId, mapId, tokenId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "tokens", tokenId), patch);
+    },
+    async remove(campaignId, mapId, tokenId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "tokens", tokenId));
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    },
+    async moveToMap(campaignId, fromMapId, toMapId, token, spawn) {
+      await this.remove(campaignId, fromMapId, token.id);
+      const { id, createdAt, ...rest } = token;
+      return this.add(campaignId, toMapId, { ...rest, x: spawn?.x ?? 2, y: spawn?.y ?? 2 });
+    }
+  },
+
+  componentFolders: {
+    async add(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "componentFolders"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async remove(campaignId, folderId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "componentFolders", folderId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentFolders"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  componentLibrary: {
+    async add(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "componentLibrary"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(campaignId, componentId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "componentLibrary", componentId), patch);
+    },
+    async remove(campaignId, componentId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "componentLibrary", componentId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentLibrary"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  monsterImages: {
+    async set(campaignId, monsterId, imageBase64) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "monsterImages", monsterId), { imageBase64, updatedAt: fx.serverTimestamp() });
+    },
+    async remove(campaignId, monsterId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "monsterImages", monsterId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "monsterImages"), (snap) => cb(Object.fromEntries(snap.docs.map(d => [d.id, d.data().imageBase64]))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  relationships: {
+    async add(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      const ref = fx.doc(fx.collection(db, "campaigns", campaignId, "relationships"));
+      await fx.setDoc(ref, { ...data, createdAt: fx.serverTimestamp() });
+      return ref.id;
+    },
+    async update(campaignId, relId, patch) {
+      const { db, fx } = await initFirebase();
+      await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "relationships", relId), patch);
+    },
+    async remove(campaignId, relId) {
+      const { db, fx } = await initFirebase();
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "relationships", relId));
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "relationships"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  },
+
+  combat: {
+    async get(campaignId) {
+      const { db, fx } = await initFirebase();
+      const snap = await fx.getDoc(fx.doc(db, "campaigns", campaignId, "combat", "state"));
+      return snap.exists() ? snap.data() : null;
+    },
+    async set(campaignId, data) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "combat", "state"), data, { merge: true });
+    },
+    subscribe(campaignId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "combat", "state"), (snap) => cb(snap.exists() ? snap.data() : null), onSnapshotError);
+      });
+      return () => unsub();
+    }
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Sync tracking: every write is counted until the backend confirms it, so the UI
+// can show "Syncing…" / "Offline — N changes queued" instead of silently drifting.
+// ---------------------------------------------------------------------------
+const syncListeners = new Set();
+const syncState = { online: typeof navigator === "undefined" ? true : navigator.onLine !== false, pending: 0, lastError: null };
+function emitSync() { syncListeners.forEach(cb => { try { cb({ ...syncState }); } catch { /* listener errors stay local */ } }); }
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => { syncState.online = true; emitSync(); });
+  window.addEventListener("offline", () => { syncState.online = false; emitSync(); });
+}
+const WRITE_METHODS = /^(add|update|remove|set|create|join|move|clear|append|toggle)/;
+function trackWrites(backend) {
+  Object.values(backend).forEach(ns => {
+    if (!ns || typeof ns !== "object") return;
+    Object.keys(ns).forEach(name => {
+      const fn = ns[name];
+      if (typeof fn !== "function" || !WRITE_METHODS.test(name)) return;
+      ns[name] = function (...args) {
+        syncState.pending++; emitSync();
+        let result;
+        try { result = fn.apply(this, args); }
+        catch (e) { syncState.pending--; syncState.lastError = e; emitSync(); throw e; }
+        return Promise.resolve(result).then(
+          (v) => { syncState.pending--; syncState.lastError = null; emitSync(); return v; },
+          (e) => { syncState.pending--; syncState.lastError = e; emitSync(); throw e; }
+        );
+      };
+    });
+  });
+  backend.sync = {
+    subscribe(cb) { syncListeners.add(cb); cb({ ...syncState }); return () => syncListeners.delete(cb); },
+    get state() { return { ...syncState }; }
+  };
+  return backend;
+}
+
+export const db = trackWrites(USE_FIREBASE ? firestoreDb : localDb);
+export const backendMode = USE_FIREBASE ? "firebase" : "demo";

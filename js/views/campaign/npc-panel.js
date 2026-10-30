@@ -18,21 +18,55 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
   listCard.appendChild(rosterTabs);
   const newBtn = h("button", { class: "btn primary sm", style: "margin-top:10px;" }, "+ New NPC");
   const newMonsterBtn = h("button", { class: "btn sm", style: "margin-top:10px; margin-left:8px;" }, "+ From Monster Catalog");
+  const hiddenToggle = h("button", { class: "btn sm ghost", style: "margin-top:10px; margin-left:8px; display:none;" });
   listCard.appendChild(newBtn);
   listCard.appendChild(newMonsterBtn);
+  listCard.appendChild(hiddenToggle);
   container.appendChild(listCard);
+
+  // Bar above the open NPC's sheet: hide from the roster (and the VTT's token list) or delete
+  const npcBar = h("div", { class: "npc-bar", style: "display:none;" });
+  container.appendChild(npcBar);
 
   const sheetHost = h("div", {});
   container.appendChild(sheetHost);
 
   let activeId = null;
+  let showHidden = false;
+  let allNpcs = [];
   let sheetUnsub = null;
   let creating = false;
   let pickerCleanup = null; // stops the monster catalog's live image subscription
 
+  function renderNpcBar() {
+    const npc = allNpcs.find(n => n.id === activeId);
+    npcBar.innerHTML = "";
+    npcBar.style.display = npc && !creating ? "flex" : "none";
+    if (!npc || creating) return;
+    npcBar.appendChild(h("span", { class: "meta", style: "flex:1;" }, npc.hiddenFromRoster ? "Hidden: not listed in the roster, the VTT's add-token menu or combat setup." : ""));
+    const hide = h("button", { class: "btn sm" }, npc.hiddenFromRoster ? "\u{1F441} Unhide NPC" : "\u{1F576} Hide NPC");
+    hide.title = "Hidden NPCs keep their sheet but drop out of the roster and the VTT's add-token list";
+    hide.addEventListener("click", async () => {
+      await db.characters.update(npc.id, { hiddenFromRoster: !npc.hiddenFromRoster });
+      toast(npc.hiddenFromRoster ? `${npc.name} is back in the roster` : `${npc.name} hidden \u2014 use \u201cShow hidden\u201d to find it again`);
+    });
+    const del = h("button", { class: "btn sm danger" }, "Delete NPC");
+    del.addEventListener("click", async () => {
+      if (!confirm(`Delete ${npc.name} permanently? Its tokens stay on maps until you remove them.`)) return;
+      await db.characters.remove(npc.id);
+      activeId = null;
+      sheetUnsub?.(); sheetUnsub = null;
+      sheetHost.innerHTML = "";
+      toast(`${npc.name} deleted`);
+    });
+    npcBar.appendChild(hide);
+    npcBar.appendChild(del);
+  }
+
   function openNpc(id) {
     creating = false;
     activeId = id;
+    renderNpcBar();
     [...rosterTabs.children].forEach(t => t.classList.toggle("active", t.dataset.id === id));
     sheetUnsub?.();
     pickerCleanup?.(); pickerCleanup = null;
@@ -52,6 +86,7 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
   function openCreateForm() {
     creating = true;
     activeId = null;
+    renderNpcBar();
     [...rosterTabs.children].forEach(t => t.classList.remove("active"));
     sheetUnsub?.();
     pickerCleanup?.(); pickerCleanup = null;
@@ -63,6 +98,7 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
   function openMonsterPicker() {
     creating = true;
     activeId = null;
+    renderNpcBar();
     [...rosterTabs.children].forEach(t => t.classList.remove("active"));
     sheetUnsub?.();
     pickerCleanup?.(); pickerCleanup = null;
@@ -74,6 +110,7 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
   function buildMonsterPicker() {
     const card = h("div", { class: "card" });
     card.appendChild(h("h3", {}, "Monster Catalog"));
+    card.appendChild(h("p", { class: "hint" }, "For ordinary encounters, place monsters straight onto the VTT with the \u{1F409} button \u2014 they live on the map only. Use this for named, recurring monsters you want a full sheet for."));
     card.appendChild(h("p", {}, "Pick a stat block to instantly create an enemy NPC \u2014 ability scores, AC, HP, and attacks (as ready-to-roll weapons) are filled in for you. Traits and reactions land in Notes for quick reference. Use \u{1F5BC} on a monster to give it an image; every copy of it in this campaign uses that image."));
     pickerCleanup = renderMonsterList(card, ruleset.monsters || [], createFromMonster, { campaignId });
     return card;
@@ -153,50 +190,4 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
       if (!name) { toast("Name the NPC first", "error"); return; }
       const level = Math.max(1, parseInt(levelInput.value, 10) || 1);
       const abilityScores = {};
-      ABILITIES.forEach(a => { abilityScores[a] = parseInt(abilInputs[a].value, 10) || 10; });
-      const maxHp = parseInt(hpInput.value, 10) || 10;
-      const npc = {
-        ownerUid: user.uid, ownerName: user.displayName, isNpc: true,
-        name, portraitBase64,
-        classId: classSel.value || null,
-        classes: classSel.value ? [{ classId: classSel.value, level, subclassId: null }] : [],
-        speciesId: speciesSel.value || null,
-        backgroundId: null, alignment: "", backstory: "",
-        appearance: {}, level, xp: 0,
-        abilityScores, abilityOverrides: {}, skillOverrides: {}, savingThrowOverrides: {},
-        skillProficiencies: [], skillExpertise: [], savingThrowProficiencies: [],
-        equipmentChoice: "A", weaponMasteries: [], featChoices: {},
-        hp: { current: maxHp, max: maxHp, temp: 0 }, hitDiceUsed: 0,
-        armorClassOverride: parseInt(acInput.value, 10) || null,
-        acAdjustments: [], inspiration: false,
-        currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
-        resourcesUsed: {}, spellsPrepared: [], spellSlotsUsed: {}, pactSlotsUsed: 0,
-        campaignId, personality: personalityInput.value.trim(), notes: notesInput.value.trim()
-      };
-      const id = await db.characters.create(npc);
-      toast(`${name} added to the roster`);
-      openNpc(id);
-    });
-    card.appendChild(createBtn);
-    return card;
-  }
-
-  const unsubRoster = db.characters.subscribeCampaignNpcs(campaignId, (npcs) => {
-    rosterTabs.innerHTML = "";
-    npcs.forEach(npc => {
-      const tab = h("button", { class: `tab-btn ${npc.id === activeId ? "active" : ""}` }, npc.name);
-      tab.dataset.id = npc.id;
-      tab.addEventListener("click", () => openNpc(npc.id));
-      rosterTabs.appendChild(tab);
-    });
-    if (npcs.length === 0 && !creating) {
-      pickerCleanup?.(); pickerCleanup = null;
-    sheetHost.innerHTML = "";
-      sheetHost.appendChild(h("p", {}, "No NPCs yet. Click \u201c+ New NPC\u201d to create your first one."));
-    } else if (!activeId && !creating && npcs.length > 0) {
-      openNpc(npcs[0].id);
-    }
-  });
-
-  return () => { unsubRoster(); sheetUnsub?.(); };
-}
+      ABILITIES.forEach(a => { abilityScores[a] = parseInt(abilI

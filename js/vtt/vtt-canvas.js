@@ -30,6 +30,11 @@
 // saved mask has been decoded and applied, so a reload / map switch / snapshot
 // never flashes what's underneath. A new mask replaces the old one only once it's
 // fully decoded.
+//
+// Creature tokens may carry a `_st` decoration from the VTT panel (conditions,
+// HP fraction, hidden/invisible/dead, current turn, and `follow` for a grappled
+// creature). A follower is drawn at its grappler's position plus an offset, so
+// it moves with the grappler on every client before any write lands.
 
 const FEET_PER_GRID = 5;
 const FOG_MASK_PX_PER_GRID = 16; // mask resolution — fog edges are smoothed when scaled up
@@ -240,7 +245,18 @@ export class VttCanvas {
       return out;
     });
     this.tokens = next;
+    this._byId = new Map(next.map(t => [t.id, t]));
     this._markDirty();
+  }
+
+  // Grid position a token is drawn at: drag preview, else its grappler's spot + offset, else x/y
+  _posOf(t, depth = 0) {
+    const f = t._st?.follow;
+    if (f && depth < 4) {
+      const leader = this._byId?.get(f.id);
+      if (leader) { const p = this._posOf(leader, depth + 1); return { x: p.x + f.dx, y: p.y + f.dy }; }
+    }
+    return { x: t._previewX ?? t.x, y: t._previewY ?? t.y };
   }
   setGridPx(px) { this.gridPx = px || 70; this._ensureFogMask(); this._markDirty(); }
   setMapSize(w, h) {
@@ -461,7 +477,8 @@ export class VttCanvas {
     if (!this._isDm && this._isFogged(worldX, worldY)) return null;
     for (let i = this.tokens.length - 1; i >= 0; i--) {
       const t = this.tokens[i];
-      const tw = this.gridToWorld(t.x, t.y);
+      const p = this._posOf(t);
+      const tw = this.gridToWorld(p.x, p.y);
       const size = this.gridToWorld(t.w || 1, t.h || 1);
       if (worldX >= tw.x && worldX <= tw.x + size.x && worldY >= tw.y && worldY <= tw.y + size.y) return t;
     }
@@ -502,7 +519,7 @@ export class VttCanvas {
             grabOffset: { x: world.x - tw.x, y: world.y - tw.y }
           };
         } else {
-          this.drag = { type: "click", token };
+          this.drag = { type: "click", token, startScreen: { x: sx, y: sy }, moved: false };
         }
         this._markDirty();
         return;
@@ -569,6 +586,11 @@ export class VttCanvas {
       this._updateCursor();
     }
 
+    if (this.drag.type === "click") {
+      // Tried to drag a token that can't move (Speed 0, grappled, not yours): say why once
+      if (this.drag.moved && !this.drag.blockedShown) { this.drag.blockedShown = true; this.opts.onTokenBlocked?.(this.drag.token); }
+      return;
+    }
     if (this.drag.type === "pan") {
       if (!this.drag.moved) return;
       this.pan = { x: this.drag.startPan.x + (sx - this.drag.startScreen.x), y: this.drag.startPan.y + (sy - this.drag.startScreen.y) };
@@ -644,12 +666,18 @@ export class VttCanvas {
         const finalX = Math.round((t._previewX ?? t.x) * 4) / 4;
         const finalY = Math.round((t._previewY ?? t.y) * 4) / 4;
         delete t._previewX; delete t._previewY;
+        const dx = finalX - t.x, dy = finalY - t.y;
         t.x = finalX; t.y = finalY;
         this._pendingMoves.set(t.id, { x: finalX, y: finalY, until: Date.now() + PENDING_MOVE_TTL_MS });
-        this.opts.onTokenMoved?.(t, finalX, finalY);
+        // Creatures it is grappling come along (they keep their offset)
+        const followers = this.tokens.filter(o => o._st?.follow?.id === t.id).map(o => {
+          const x = Math.round((t.x + o._st.follow.dx) * 4) / 4, y = Math.round((t.y + o._st.follow.dy) * 4) / 4;
+          return { token: o, x, y, dx, dy };
+        });
+        this.opts.onTokenMoved?.(t, finalX, finalY, followers);
       }
     } else if (drag.type === "click") {
-      this.opts.onTokenClicked?.(drag.token);
+      if (!drag.moved) this.opts.onTokenClicked?.(drag.token);
     } else if (drag.type === "shape-drag") {
       // A plain click keeps the shape selected (Delete removes it); a drag persists the move
       if (drag.moved) {
@@ -845,13 +873,13 @@ export class VttCanvas {
       const w = img.naturalWidth * s, h = img.naturalHeight * s;
       g.drawImage(img, (bucket - w) / 2, (bucket - h) / 2, w, h);
     } else {
-      g.fillStyle = t.kind === "npc" ? "#9a3838" : "#3f8f80";
+      g.fillStyle = t.kind !== "pc" ? "#9a3838" : "#3f8f80";
       g.fillRect(0, 0, bucket, bucket);
       g.fillStyle = "#fff"; g.font = `${Math.round(r)}px sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
       g.fillText((t.name || "?")[0].toUpperCase(), r, r + bucket * 0.03);
     }
     g.restore();
-    g.strokeStyle = t.kind === "npc" ? "#c24b4b" : "#c69a3e";
+    g.strokeStyle = t.kind === "monster" ? "#e07a3a" : t.kind === "npc" ? "#c24b4b" : "#c69a3e";
     g.lineWidth = ring;
     g.beginPath(); g.arc(r, r, r - ring / 2, 0, Math.PI * 2); g.stroke();
     if (img || !t.imageBase64) {   // don't cache the placeholder while a portrait is still decoding
@@ -903,17 +931,33 @@ export class VttCanvas {
       ctx.stroke();
     }
 
+    // Grapple tethers under the tokens
+    if (!fogPending) this.tokens.forEach(t => {
+      const f = t._st?.follow;
+      const leader = f && this._byId?.get(f.id);
+      if (!leader) return;
+      const a = this._posOf(t), b = this._posOf(leader);
+      ctx.strokeStyle = "rgba(224,185,92,0.85)"; ctx.lineWidth = 3 / this.zoom; ctx.setLineDash([6 / this.zoom, 4 / this.zoom]);
+      ctx.beginPath();
+      ctx.moveTo((a.x + (t.w || 1) / 2) * this.gridPx, (a.y + (t.h || 1) / 2) * this.gridPx);
+      ctx.lineTo((b.x + (leader.w || 1) / 2) * this.gridPx, (b.y + (leader.h || 1) / 2) * this.gridPx);
+      ctx.stroke(); ctx.setLineDash([]);
+    });
+
     // Tokens
     const dpr = Math.min(devicePixelRatio || 1, 2);
     if (!fogPending) this.tokens.forEach(t => {
-      const gx = t._previewX ?? t.x, gy = t._previewY ?? t.y;
+      const { x: gx, y: gy } = this._posOf(t);
       const pos = this.gridToWorld(gx, gy);
       const size = this.gridToWorld(t.w || 1, t.h || 1);
       if (pos.x > view.x1 || pos.y > view.y1 || pos.x + size.x < view.x0 || pos.y + size.y + this.gridPx < view.y0) return;
+      const st = t._st || {};
       if (t.kind === "component") {
+        if (t.hidden) ctx.globalAlpha = 0.45;
         const img = this._getImage(t.imageBase64);
         if (img) ctx.drawImage(img, pos.x, pos.y, size.x, size.y);
         else { ctx.fillStyle = "rgba(198,154,62,0.35)"; ctx.fillRect(pos.x, pos.y, size.x, size.y); }
+        ctx.globalAlpha = 1;
         if (t.isCover) {
           ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
           ctx.strokeRect(pos.x, pos.y, size.x, size.y);
@@ -921,15 +965,66 @@ export class VttCanvas {
       } else {
         const d = Math.min(size.x, size.y);
         const cx = pos.x + size.x / 2, cy = pos.y + size.y / 2, r = d / 2;
+        if (st.turn) {
+          ctx.save();
+          ctx.shadowColor = "rgba(255,216,118,0.9)"; ctx.shadowBlur = 14 / this.zoom;
+          ctx.strokeStyle = "#ffd876"; ctx.lineWidth = 3 / this.zoom;
+          ctx.beginPath(); ctx.arc(cx, cy, r + 3 / this.zoom, 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
+        }
         const sprite = this._tokenSprite(t, d * this.zoom * dpr);
+        ctx.globalAlpha = t.hidden ? 0.45 : st.invisible ? 0.5 : 1;
         ctx.drawImage(sprite, cx - r, cy - r, d, d);
+        ctx.globalAlpha = 1;
+        if (st.dead) {
+          ctx.fillStyle = "rgba(10,10,14,0.6)";
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = "#c24b4b"; ctx.lineWidth = Math.max(2 / this.zoom, r * 0.12);
+          const k = r * 0.5;
+          ctx.beginPath(); ctx.moveTo(cx - k, cy - k); ctx.lineTo(cx + k, cy + k); ctx.moveTo(cx + k, cy - k); ctx.lineTo(cx - k, cy + k); ctx.stroke();
+        }
+        if (t.hidden) {
+          ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 1.5 / this.zoom; ctx.setLineDash([4 / this.zoom, 3 / this.zoom]);
+          ctx.beginPath(); ctx.arc(cx, cy, r + 1.5 / this.zoom, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (st.hpFrac != null && !st.dead) {
+          const bw = d * 0.8, bh = Math.max(3 / this.zoom, Math.min(d * 0.09, this.gridPx * 0.09));
+          const bx = cx - bw / 2, by = pos.y + size.y - bh * 1.6;
+          ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(bx - 1 / this.zoom, by - 1 / this.zoom, bw + 2 / this.zoom, bh + 2 / this.zoom);
+          ctx.fillStyle = st.hpFrac <= 0.25 ? "#d65252" : st.hpFrac <= 0.5 ? "#e0b95c" : "#56b8a5";
+          ctx.fillRect(bx, by, bw * Math.max(0, Math.min(1, st.hpFrac)), bh);
+        }
+        if (st.conds?.length) {
+          // Condition badges along the top edge, right to left
+          const br = Math.max(6 / this.zoom, Math.min(r * 0.3, this.gridPx * 0.17));
+          const max = Math.max(1, Math.floor(d / (br * 2.1)));
+          const shown = st.conds.length > max ? [...st.conds.slice(0, max - 1), `+${st.conds.length - max + 1}`] : st.conds;
+          ctx.font = `bold ${br * 0.95}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          shown.forEach((c, i) => {
+            const bxc = pos.x + size.x / 2 + r - br - i * br * 2.1, byc = pos.y + size.y / 2 - r + br * 0.4;
+            ctx.fillStyle = c === "Gr" ? "#b8742a" : c === "Pr" ? "#5a5f80" : c === "Iv" ? "#3f6fb8" : c === "Ex" ? "#8a6d1f" : "#9a3838";
+            ctx.beginPath(); ctx.arc(bxc, byc, br, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.lineWidth = 1 / this.zoom; ctx.stroke();
+            ctx.fillStyle = "#fff"; ctx.fillText(c, bxc, byc + br * 0.05);
+          });
+          ctx.textBaseline = "alphabetic";
+        }
         // Label size is capped so Huge/Gargantuan tokens don't get giant names
         const labelPx = Math.max(10, Math.min(r * 0.4, this.gridPx * 0.3));
         ctx.font = `bold ${labelPx}px sans-serif`; ctx.textAlign = "center";
         ctx.lineWidth = Math.max(2, labelPx / 4); ctx.strokeStyle = "rgba(0,0,0,0.75)"; ctx.lineJoin = "round";
-        ctx.strokeText(t.name || "", cx, pos.y + size.y + labelPx);
+        // Keep names about as wide as the token so neighbours' labels don't run together
+        let label = t.name || "";
+        const maxW = Math.max(size.x * 1.15, this.gridPx * 1.1);
+        if (ctx.measureText(label).width > maxW) {
+          while (label.length > 1 && ctx.measureText(label + "\u2026").width > maxW) label = label.slice(0, -1);
+          // keep a trailing copy number ("Goblin Warrior 2" -> "Goblin W\u2026 2")
+          const num = (t.name || "").match(/ (\d+)$/);
+          label = num ? label.slice(0, Math.max(1, label.length - num[0].length)) + "\u2026" + num[0] : label + "\u2026";
+        }
+        ctx.strokeText(label, cx, pos.y + size.y + labelPx);
         ctx.fillStyle = "#fff";
-        ctx.fillText(t.name || "", cx, pos.y + size.y + labelPx);
+        ctx.fillText(label, cx, pos.y + size.y + labelPx);
       }
     });
 
@@ -985,138 +1080,4 @@ export class VttCanvas {
     for (const shape of this.persistentShapes) {
       // Draw highlight for selected shape
       if (this.selectedShape && this.selectedShape.id === shape.id) {
-        this._drawShapeHighlight(shape);
-      }
-      if (shape.kind === "rect") {
-        const pos = this.gridToWorld(shape.x, shape.y);
-        const size = this.gridToWorld(shape.w, shape.h);
-        ctx.fillStyle = "rgba(63,143,128,0.25)";
-        ctx.strokeStyle = "#56b8a5";
-        ctx.lineWidth = 2 / this.zoom;
-        ctx.fillRect(pos.x, pos.y, size.x, size.y);
-        ctx.strokeRect(pos.x, pos.y, size.x, size.y);
-        // Size label
-        const feetW = Math.round(shape.w * FEET_PER_GRID);
-        const feetH = Math.round(shape.h * FEET_PER_GRID);
-        this._shapeLabel(`${feetW}×${feetH} ft`, pos.x + size.x / 2, pos.y + size.y + 16 / this.zoom);
-      } else if (shape.kind === "circle") {
-        const pos = this.gridToWorld(shape.x, shape.y);
-        const r = shape.radius * this.gridPx;
-        ctx.fillStyle = "rgba(63,143,128,0.25)";
-        ctx.strokeStyle = "#56b8a5";
-        ctx.lineWidth = 2 / this.zoom;
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        // Size label
-        const feet = Math.round(shape.radius * FEET_PER_GRID);
-        this._shapeLabel(`${feet} ft radius`, pos.x, pos.y + r + 16 / this.zoom);
-      } else if (shape.kind === "cone") {
-        this._drawConeTriangle(this._shapeCone(shape), `${Math.round(shape.distance * FEET_PER_GRID)} ft`);
-      }
-    }
-  }
-
-  _shapeLabel(text, x, y) {
-    const ctx = this.ctx;
-    ctx.fillStyle = "#56b8a5"; ctx.font = `bold ${12 / this.zoom}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 3;
-    ctx.fillText(text, x, y);
-    ctx.shadowBlur = 0;
-  }
-
-  _drawConeTriangle([a, b, c], label) {
-    const ctx = this.ctx;
-    ctx.fillStyle = "rgba(63,143,128,0.25)";
-    ctx.strokeStyle = "#56b8a5";
-    ctx.lineWidth = 2 / this.zoom;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.lineTo(c.x, c.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Label at the centroid
-    this._shapeLabel(label, (a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3);
-  }
-
-  _drawShapeHighlight(shape) {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.setLineDash([4 / this.zoom, 4 / this.zoom]);
-    ctx.strokeStyle = "#e0b95c";
-    ctx.lineWidth = 2 / this.zoom;
-    const pad = 3 / this.zoom;
-    if (shape.kind === "rect") {
-      const pos = this.gridToWorld(shape.x, shape.y);
-      const size = this.gridToWorld(shape.w, shape.h);
-      ctx.strokeRect(pos.x - pad, pos.y - pad, size.x + pad * 2, size.y + pad * 2);
-    } else if (shape.kind === "circle") {
-      const pos = this.gridToWorld(shape.x, shape.y);
-      const r = shape.radius * this.gridPx;
-      ctx.beginPath(); ctx.arc(pos.x, pos.y, r + pad, 0, Math.PI * 2); ctx.stroke();
-    } else if (shape.kind === "cone") {
-      const [a, b, c] = this._shapeCone(shape);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.closePath();
-      ctx.lineWidth = 4 / this.zoom;
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-    ctx.restore();
-  }
-
-  _drawShapePreview() {
-    const ctx = this.ctx;
-    const { kind, startWorld, endWorld } = this.shape;
-
-    if (kind === "rect") {
-      const x = Math.min(startWorld.x, endWorld.x), y = Math.min(startWorld.y, endWorld.y);
-      const w2 = Math.abs(endWorld.x - startWorld.x), h2 = Math.abs(endWorld.y - startWorld.y);
-      ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
-      ctx.fillRect(x, y, w2, h2); ctx.strokeRect(x, y, w2, h2);
-      const feetW = Math.round((w2 / this.gridPx) * FEET_PER_GRID);
-      const feetH = Math.round((h2 / this.gridPx) * FEET_PER_GRID);
-      this._shapeLabel(`${feetW}×${feetH} ft`, x + w2 / 2, y + h2 + 16 / this.zoom);
-    } else if (kind === "circle") {
-      const diameter = this.shape._diameter || 0;
-      const center = this.shape._centerWorld || startWorld;
-      const r = diameter / 2;
-      ctx.fillStyle = "rgba(63,143,128,0.25)"; ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
-      ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      const feet = Math.round((r / this.gridPx) * FEET_PER_GRID);
-      this._shapeLabel(`${feet} ft radius`, center.x, center.y + r + 16 / this.zoom);
-    } else if (kind === "cone") {
-      const { origin, _dist = 0, _angle = 0 } = this.shape;
-      const feet = Math.round(_dist / this.gridPx * FEET_PER_GRID);
-      this._drawConeTriangle(this._coneVertices(origin.x, origin.y, _angle, _dist), `${feet} ft`);
-    }
-  }
-
-  // Bounding-box overlap check used for auto cover application.
-  tokenOverlapsCover(token) {
-    const tw = this.gridToWorld(token.x, token.y);
-    const tsize = this.gridToWorld(token.w || 1, token.h || 1);
-    const cx1 = tw.x, cy1 = tw.y, cx2 = tw.x + tsize.x, cy2 = tw.y + tsize.y;
-    for (const other of this.tokens) {
-      if (other.id === token.id || other.kind !== "component" || !other.isCover) continue;
-      const ow = this.gridToWorld(other.x, other.y);
-      const osize = this.gridToWorld(other.w || 1, other.h || 1);
-      const ox1 = ow.x, oy1 = ow.y, ox2 = ow.x + osize.x, oy2 = ow.y + osize.y;
-      if (cx1 < ox2 && cx2 > ox1 && cy1 < oy2 && cy2 > oy1) return other.coverType || "half";
-    }
-    return null;
-  }
-
-  dispose() {
-    if (this._viewKey) viewCache.set(this._viewKey, { pan: { ...this.pan }, zoom: this.zoom });
-    cancelAnimationFrame(this._raf);
-    this._resizeObserver.disconnect();
-    window.removeEventListener("pointermove", this._onPointerMove);
-    window.removeEventListener("pointerup", this._onPointerUp);
-    this.canvas.remove();
-  }
-}
+        this._drawShapeHighligh

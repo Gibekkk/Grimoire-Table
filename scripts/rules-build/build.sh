@@ -31,8 +31,8 @@ PY
 fi
 python3 bbox_cols.py "../../docs/Dungeon Master's Guide (2024).pdf" 220 331 txt/dmg-items.txt
 [ -s txt/dmg-full.txt ] || pdftotext -layout "../../docs/Dungeon Master's Guide (2024).pdf" txt/dmg-full.txt
-for step in species_bg equipment spells2 spells3 spells_final feats_final options options2 options_patch build_classes finalize_features items_raw items_final; do
+for step in species_bg equipment spells2 spells3 spells_final feats_final options options2 options_patch build_classes finalize_features items_raw items_final item_themes mm_treasure; do
   echo "== $step"
   python3 "$step.py"
 done
-echo "Done. Bump DATA_VERSION in js/data-loader.js so browsers fetch the new files."
+echo "Done. Bump DATA_VERSION in js/data-loader.js so browser

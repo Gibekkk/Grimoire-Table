@@ -299,8 +299,11 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
       const grid = h("div", { class: "condition-grid" });
       CONDITIONS.forEach(c => {
         const on = active.includes(c);
-        const b = h("button", { class: `btn sm ${on ? "primary" : "ghost"}` }, c);
-        b.addEventListener("click", () => patch({ conditions: on ? active.filter(x => x !== c) : [...active, c] }));
+        const immune = !on && (character.conditionImmunities || []).includes(c);
+        const b = h("button", { class: `btn sm ${on ? "primary" : "ghost"}`, title: immune ? `Immune to ${c}` : "" }, c);
+        b.disabled = immune;
+        // Unconscious also knocks you Prone (and you stay Prone when it ends)
+        b.addEventListener("click", () => patch({ conditions: on ? active.filter(x => x !== c) : [...new Set([...active, c, ...(c === "Unconscious" ? ["Prone"] : [])])] }));
         grid.appendChild(b);
       });
       manage.appendChild(grid);
@@ -610,9 +613,4 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
     requestAnimationFrame(() => { renderQueued = false; render(); });
   }
   const unsubChar = db.characters.subscribe(characterId, (updated) => { if (updated) { character = updated; scheduleRender(); } });
-  const unsubInv = db.inventory.subscribe(characterId, (items) => { inventory = items; scheduleRender(); });
-  if (character.campaignId) db.campaigns.get(character.campaignId).then(c => { campaignName = c?.name || null; scheduleRender(); });
-  ready = true;
-  await render();
-  return () => { ready = false; unsubChar(); unsubInv(); };
-}
+  const unsubInv = db.inventory.subscribe(characterId

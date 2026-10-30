@@ -72,18 +72,18 @@ export async function monsterImageFor(campaignId, monsterId) {
 }
 
 // Saves a monster's campaign artwork and pushes it onto every NPC made from
-// that monster and onto their tokens on every map, so existing copies update too.
+// that monster, every monster token of it, and NPC tokens on every map, so
+// existing copies update too.
 export async function applyMonsterImage(campaignId, monsterId, imageBase64) {
   if (imageBase64) await db.monsterImages.set(campaignId, monsterId, imageBase64);
   else await db.monsterImages.remove(campaignId, monsterId);
   const npcs = (await once(cb => db.characters.subscribeCampaignNpcs(campaignId, cb))).filter(n => n.monsterId === monsterId);
-  if (!npcs.length) return;
   const npcIds = new Set(npcs.map(n => n.id));
   await Promise.all(npcs.map(n => db.characters.update(n.id, { portraitBase64: imageBase64 || null })));
   const maps = await db.maps.listAll(campaignId);
   for (const map of maps) {
     const tokens = await once(cb => db.tokens.subscribe(campaignId, map.id, cb));
-    await Promise.all(tokens.filter(t => npcIds.has(t.refId)).map(t => db.tokens.update(campaignId, map.id, t.id, { imageBase64: imageBase64 || null })));
+    await Promise.all(tokens.filter(t => npcIds.has(t.refId) || (t.kind === "monster" && t.monsterId === monsterId)).map(t => db.tokens.update(campaignId, map.id, t.id, { imageBase64: imageBase64 || null })));
   }
 }
 
@@ -202,7 +202,9 @@ export function renderMonsterList(container, monsters, onPick, { maxShown = 60, 
 }
 
 // Modal version of the list, used by the VTT. Resolves to the picked monster or null.
-export function pickMonster(monsters, { title = "Add a Monster", campaignId = null } = {}) {
+// With `placement`, it also asks how many to place and whether to hide them from
+// players, and resolves to { monster, count, hidden }.
+export function pickMonster(monsters, { title = "Add a Monster", campaignId = null, placement = false } = {}) {
   return new Promise(resolve => {
     const overlay = h("div", { class: "modal-overlay" });
     const box = h("div", { class: "modal-box monster-picker" });
@@ -216,13 +218,10 @@ export function pickMonster(monsters, { title = "Add a Monster", campaignId = nu
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
-    let cleanup = null;
-    const finish = (m) => { cleanup?.(); overlay.remove(); document.removeEventListener("keydown", onKey); resolve(m); };
-    const onKey = (e) => { if (e.key === "Escape") finish(null); };
-    document.addEventListener("keydown", onKey);
-    closeBtn.addEventListener("click", () => finish(null));
-    overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) finish(null); });
-    if (campaignId) body.appendChild(h("p", { class: "meta", style: "margin-top:0;" }, "Click a monster to place it. Use \u{1F5BC} to give a monster an image \u2014 every copy of it in this campaign uses it."));
-    cleanup = renderMonsterList(body, monsters, finish, { maxShown: 40, campaignId });
-  });
-}
+    let countInput = null, hiddenInput = null;
+    if (placement) {
+      const opts = h("div", { class: "monster-place-opts" });
+      countInput = h("input", { type: "number", min: "1", max: "20", value: "1", title: "How many copies to place" });
+      hiddenInput = h("input", { type: "checkbox", title: "Players won't see them until you show them" });
+      const c = h("label", {}, "Place "); c.appendChild(countInput);
+      const hd = h("label", {}); hd.appendChild(hiddenInput); hd.appendChild(document.create

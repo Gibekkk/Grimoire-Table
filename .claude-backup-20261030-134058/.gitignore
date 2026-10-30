@@ -1,0 +1,13 @@
+.DS_Store
+*.log
+scripts/service-account.json
+scripts/node_modules
+*.pdf
+scripts/rules-build/txt/
+scripts/rules-build/__pycache__/
+scripts/rules-build/*_raw.json
+scripts/rules-build/*_out.json
+scripts/rules-build/spell_blocks.json
+scripts/rules-build/class_options.json
+scripts/rules-build/items_hits.json
+scripts/rules-build/names_check.txt

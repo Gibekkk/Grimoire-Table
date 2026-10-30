@@ -120,7 +120,9 @@ export function renderCoreTab(ctx) {
     ["Speed", `${speed} ft.`],
     ["Size", character.size || sp?.size?.[0] || "\u2014"],
     ["Senses", darkvision ? `Darkvision ${darkvision} ft.` : "\u2014"],
-    ["Resistances", resist.length ? [...new Set(resist)].map(titleCase).join(", ") : "\u2014"],
+    ["Resistances", resist.length || character.damageResistances?.length ? [...new Set([...resist, ...(character.damageResistances || [])].map(x => String(x).toLowerCase()))].map(titleCase).join(", ") : "\u2014"],
+    ...[["Immunities", character.damageImmunities], ["Vulnerabilities", character.damageVulnerabilities], ["Condition Immunities", character.conditionImmunities]]
+      .filter(([, v]) => v?.length).map(([k, v]) => [k, v.map(titleCase).join(", ")]),
     ["Armor Training", armorTraining.map(a => a === "shield" ? "Shields" : titleCase(a)).join(", ") || "\u2014"],
     ["Weapons", weaponTraining.map(w => ({ simple: "Simple", martial: "Martial", "martial-light": "Martial (Light)", "martial-finesse-light": "Martial (Finesse/Light)" }[w] || w)).join(", ") || "\u2014"],
     ["Tools", (character.toolProficiencies || []).join(", ") || "\u2014"],
@@ -133,16 +135,4 @@ export function renderCoreTab(ctx) {
     const editRow = h("div", { class: "field-row wrap" });
     [["languages", "Edit languages"], ["toolProficiencies", "Edit tools"]].forEach(([key, label]) => {
       const b = h("button", { class: "btn sm ghost" }, label);
-      b.addEventListener("click", () => {
-        const val = prompt(`${label} (comma separated):`, (character[key] || []).join(", "));
-        if (val === null) return;
-        patch({ [key]: val.split(",").map(x => x.trim()).filter(Boolean) });
-      });
-      editRow.appendChild(b);
-    });
-    profCard.appendChild(editRow);
-  }
-  wrap.appendChild(profCard);
-
-  return wrap;
-}
+      b.addEve

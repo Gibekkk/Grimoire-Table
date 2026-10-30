@@ -7,7 +7,7 @@ import { initFirebase } from "./firebase-init.js";
 // RULES_SOURCE to "firestore" to read the seeded rules_* collections instead (e.g. to
 // hot-edit data in the Firebase console); bundled JSON then fills anything missing.
 const RULES_SOURCE = "bundled";
-const DATA_VERSION = "2024.3";
+const DATA_VERSION = "2024.4";
 
 let cache = null;
 let pending = null;
