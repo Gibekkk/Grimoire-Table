@@ -5,7 +5,7 @@ import { mountCharacterSheet } from "../../character-sheet.js";
 import { COVER_AC_BONUS, COVER_LABELS } from "../../rules-engine.js";
 import { navigate } from "../../router.js";
 import { loadRuleset } from "../../data-loader.js";
-import { pickMonster, tokenSquaresForSize, monsterImageFor, once } from "../../monsters.js";
+import { pickMonster, tokenSquaresForSize, monsterImageFor, monsterDefaultArt, once } from "../../monsters.js";
 import { createCreatureTools } from "../../vtt/creature-panel.js";
 import { SIZES, CONDITION_ABBR, SPEED_ZERO, hasSpeedZero, monsterTokenStats } from "../../vtt/creatures.js";
 
@@ -70,6 +70,13 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   const charById = new Map();
   let party = [], npcs = [];
 
+  // Tokens saved before bundled art existed have no image: show the default for their monster
+  function artOf(t) {
+    if (t.imageBase64) return t.imageBase64;
+    const monsterId = t.kind === "monster" ? t.monsterId : t.kind === "npc" ? charById.get(t.refId)?.monsterId : null;
+    return monsterDefaultArt(monstersById.get(monsterId));
+  }
+
   const tools = createCreatureTools({
     campaignId, user, isDm,
     mapId: () => currentMap?.id,
@@ -77,7 +84,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     charOf: (t) => charById.get(t.refId),
     monsterOf: (t) => monstersById.get(t.monsterId),
     ruleset: () => ruleset,
-    combat: () => combat
+    combat: () => combat,
+    artOf
   });
 
   const canvas = new VttCanvas(canvasHost, {
@@ -107,7 +115,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     const follow = g && st.conditions.includes("Grappled") ? { id: g.id, dx: t.grappleOffset?.dx ?? (t.x - g.x), dy: t.grappleOffset?.dy ?? (t.y - g.y) } : null;
     const cur = combat?.active ? combat.combatants?.[combat.currentTurnIndex] : null;
     const showHp = isDm || t.kind === "pc";
-    return { ...t, _st: {
+    return { ...t, imageBase64: artOf(t), _st: {
       conds, follow, dead: st.dead, invisible: st.conditions.includes("Invisible"),
       hpFrac: showHp && st.hp.max ? st.hp.current / st.hp.max : null,
       turn: !!cur && cur.id === (t.kind === "monster" ? t.id : t.refId)
@@ -281,7 +289,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     const pick = await pickMonster(ruleset.monsters || [], { campaignId, placement: true });
     if (!pick) return;
     const { monster, count, hidden } = pick;
-    const img = await monsterImageFor(campaignId, monster.id);
+    const img = await monsterImageFor(campaignId, monster);
     const sq = tokenSquaresForSize(monster.size);
     const start = viewCenterSpot(sq * Math.min(count, 4), sq * Math.ceil(count / 4));
     const names = nextTokenNames(monster.name, count);

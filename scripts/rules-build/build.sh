@@ -35,4 +35,8 @@ for step in species_bg equipment spells2 spells3 spells_final feats_final option
   echo "== $step"
   python3 "$step.py"
 done
+TILES=txt/dungeon-crawl-tiles.zip
+[ -s "$TILES" ] || curl -fsSL -A "Mozilla/5.0" -o "$TILES" "https://opengameart.org/sites/default/files/Dungeon%20Crawl%20Stone%20Soup%20Full_0.zip"
+echo "== monster_tokens"
+python3 monster_tokens.py "$TILES"
 echo "Done. Bump DATA_VERSION in js/data-loader.js so browsers fetch the new files."

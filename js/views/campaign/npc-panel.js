@@ -53,10 +53,11 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
     const del = h("button", { class: "btn sm danger" }, "Delete NPC");
     del.addEventListener("click", async () => {
       if (!confirm(`Delete ${npc.name} permanently? Its tokens stay on maps until you remove them.`)) return;
-      await db.characters.remove(npc.id);
-      activeId = null;
+      // Close the sheet's listeners first: reading a deleted character is denied by the rules
       sheetUnsub?.(); sheetUnsub = null;
       sheetHost.innerHTML = "";
+      activeId = null;
+      await db.characters.remove(npc.id);
       toast(`${npc.name} deleted`);
     });
     npcBar.appendChild(hide);
@@ -111,13 +112,13 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
     const card = h("div", { class: "card" });
     card.appendChild(h("h3", {}, "Monster Catalog"));
     card.appendChild(h("p", { class: "hint" }, "For ordinary encounters, place monsters straight onto the VTT with the \u{1F409} button \u2014 they live on the map only. Use this for named, recurring monsters you want a full sheet for."));
-    card.appendChild(h("p", {}, "Pick a stat block to instantly create an enemy NPC \u2014 ability scores, AC, HP, and attacks (as ready-to-roll weapons) are filled in for you. Traits and reactions land in Notes for quick reference. Use \u{1F5BC} on a monster to give it an image; every copy of it in this campaign uses that image."));
+    card.appendChild(h("p", {}, "Pick a stat block to instantly create an enemy NPC \u2014 ability scores, AC, HP, and attacks (as ready-to-roll weapons) are filled in for you. Traits and reactions land in Notes for quick reference. Every monster has default art; use \u{1F5BC} to swap in your own for every copy in this campaign."));
     pickerCleanup = renderMonsterList(card, ruleset.monsters || [], createFromMonster, { campaignId });
     return card;
   }
 
   async function createFromMonster(m) {
-    const [name, portraitBase64] = await Promise.all([nextMonsterName(campaignId, m.name), monsterImageFor(campaignId, m.id)]);
+    const [name, portraitBase64] = await Promise.all([nextMonsterName(campaignId, m.name), monsterImageFor(campaignId, m)]);
     const id = await createNpcFromMonster(m, { name, user, campaignId, portraitBase64 });
     toast(`${name} created from ${m.name}`);
     openNpc(id);

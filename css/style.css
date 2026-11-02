@@ -414,6 +414,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
   font-family: var(--font-display); color: var(--gold-bright); font-size: 1.1rem;
 }
 .portrait-preview img { width: 100%; height: 100%; object-fit: cover; }
+.portrait-preview img[src^="assets/monster-tokens/"] { object-fit: contain; image-rendering: pixelated; background: #1c1d2b; }
 .portrait-preview.sm { width: 30px; height: 30px; font-size: 0.85rem; border-width: 1px; }
 .portrait-preview.lg { width: 84px; height: 84px; font-size: 2rem; }
 

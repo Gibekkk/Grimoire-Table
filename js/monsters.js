@@ -65,25 +65,33 @@ export async function nextMonsterName(campaignId, baseName) {
   return `${baseName} ${n}`;
 }
 
-// The campaign's artwork for a monster, or null.
-export async function monsterImageFor(campaignId, monsterId) {
+// Bundled CC0 token art (assets/monster-tokens/CREDITS.txt). Relative to index.html,
+// so a path saved on a token keeps working on any host.
+export function monsterDefaultArt(m) {
+  return m?.token ? `assets/monster-tokens/${m.token}` : null;
+}
+
+// The campaign's artwork for a monster, else its bundled art.
+export async function monsterImageFor(campaignId, monster) {
   const map = await once(cb => db.monsterImages.subscribe(campaignId, cb));
-  return map?.[monsterId] || null;
+  return map?.[monster.id] || monsterDefaultArt(monster);
 }
 
 // Saves a monster's campaign artwork and pushes it onto every NPC made from
 // that monster, every monster token of it, and NPC tokens on every map, so
 // existing copies update too.
-export async function applyMonsterImage(campaignId, monsterId, imageBase64) {
+export async function applyMonsterImage(campaignId, monster, imageBase64) {
+  const monsterId = monster.id;
+  const art = imageBase64 || monsterDefaultArt(monster);
   if (imageBase64) await db.monsterImages.set(campaignId, monsterId, imageBase64);
   else await db.monsterImages.remove(campaignId, monsterId);
   const npcs = (await once(cb => db.characters.subscribeCampaignNpcs(campaignId, cb))).filter(n => n.monsterId === monsterId);
   const npcIds = new Set(npcs.map(n => n.id));
-  await Promise.all(npcs.map(n => db.characters.update(n.id, { portraitBase64: imageBase64 || null })));
+  await Promise.all(npcs.map(n => db.characters.update(n.id, { portraitBase64: art })));
   const maps = await db.maps.listAll(campaignId);
   for (const map of maps) {
     const tokens = await once(cb => db.tokens.subscribe(campaignId, map.id, cb));
-    await Promise.all(tokens.filter(t => npcIds.has(t.refId) || (t.kind === "monster" && t.monsterId === monsterId)).map(t => db.tokens.update(campaignId, map.id, t.id, { imageBase64: imageBase64 || null })));
+    await Promise.all(tokens.filter(t => npcIds.has(t.refId) || (t.kind === "monster" && t.monsterId === monsterId)).map(t => db.tokens.update(campaignId, map.id, t.id, { imageBase64: art })));
   }
 }
 
@@ -98,11 +106,11 @@ export function chooseMonsterImage(campaignId, monster, currentImage, anchor) {
       if (!file) return;
       try {
         const { dataUrl } = await compressImageToBase64(file, IMAGE_PRESETS.portrait);
-        await applyMonsterImage(campaignId, monster.id, dataUrl);
+        await applyMonsterImage(campaignId, monster, dataUrl);
         toast(`Image set for ${monster.name}`);
       } catch (err) {
         console.error(err);
-        toast("Couldn't save that image", "error");
+        toast(err?.code === "permission-denied" ? "Firestore rejected the image: publish the monsterImages rule in the Firebase console" : "Couldn't save that image", "error");
       }
     });
     input.click();
@@ -111,7 +119,7 @@ export function chooseMonsterImage(campaignId, monster, currentImage, anchor) {
   const rect = anchor?.getBoundingClientRect();
   showContextMenu(rect?.left ?? 100, rect?.bottom ?? 100, [
     { label: "Change image\u2026", action: pickFile },
-    { label: "Remove image", danger: true, action: async () => { await applyMonsterImage(campaignId, monster.id, null); toast(`Image removed from ${monster.name}`); } }
+    { label: "Back to default art", danger: true, action: async () => { await applyMonsterImage(campaignId, monster, null); toast(`${monster.name} is back to its default art`); } }
   ]);
 }
 
@@ -172,8 +180,9 @@ export function renderMonsterList(container, monsters, onPick, { maxShown = 60, 
     matches.slice(0, maxShown).forEach(m => {
       const card = h("div", { class: "choice-card monster-card" });
       const img = images[m.id];
+      const art = img || monsterDefaultArt(m);
       card.innerHTML = `
-        <div class="portrait-preview">${img ? `<img src="${img}">` : `<span>${escapeHtml(m.name[0].toUpperCase())}</span>`}</div>
+        <div class="portrait-preview">${art ? `<img src="${art}" loading="lazy">` : `<span>${escapeHtml(m.name[0].toUpperCase())}</span>`}</div>
         <div class="monster-card-text">
           <h4>${escapeHtml(m.name)}</h4>
           <div class="meta">${escapeHtml(`${m.size} ${m.creatureType}`)} \u2022 CR ${escapeHtml(String(m.cr))} \u2022 AC ${m.ac} \u2022 HP ${m.hpAverage}</div>
@@ -181,7 +190,7 @@ export function renderMonsterList(container, monsters, onPick, { maxShown = 60, 
         </div>
       `;
       if (campaignId) {
-        const imgBtn = h("button", { class: "icon-btn monster-img-btn", title: img ? "Change or remove this monster's image" : "Add an image for this monster" }, "\u{1F5BC}");
+        const imgBtn = h("button", { class: "icon-btn monster-img-btn", title: img ? "Change this monster's image or go back to the default art" : "Use your own image for this monster" }, "\u{1F5BC}");
         imgBtn.addEventListener("click", (e) => { e.stopPropagation(); chooseMonsterImage(campaignId, m, img, imgBtn); });
         card.appendChild(imgBtn);
       }
@@ -239,7 +248,7 @@ export function pickMonster(monsters, { title = "Add a Monster", campaignId = nu
     closeBtn.addEventListener("click", () => finish(null));
     overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) finish(null); });
     if (campaignId) body.appendChild(h("p", { class: "meta", style: "margin-top:0;" }, placement
-      ? "Click a monster to place it on the map. Monsters live on the map only (not in the NPC roster) \u2014 removing the token removes it. Use \u{1F5BC} to give a monster an image for every copy in this campaign."
+      ? "Click a monster to place it on the map. Monsters live on the map only (not in the NPC roster) \u2014 removing the token removes it. Every monster has default art; use \u{1F5BC} to swap in your own for every copy in this campaign."
       : "Click a monster to place it. Use \u{1F5BC} to give a monster an image \u2014 every copy of it in this campaign uses it."));
     cleanup = renderMonsterList(body, monsters, finish, { maxShown: 40, campaignId });
   });

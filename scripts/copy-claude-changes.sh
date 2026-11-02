@@ -75,6 +75,7 @@ FILES=(
   "scripts/rules-build/items_final.py"
   "scripts/rules-build/item_themes.py"
   "scripts/rules-build/mm_treasure.py"
+  "scripts/rules-build/monster_tokens.py"
   "scripts/rules-build/items_names.py"
   "scripts/rules-build/items_raw.py"
   "scripts/rules-build/subclass_spells.py"
@@ -87,6 +88,11 @@ fi
 
 BACKUP="$DEST/.claude-backup-$(date +%Y%m%d-%H%M%S)"
 copied=0
+# Bundled monster token art: every file in the folder
+for f in "$SRC"/assets/monster-tokens/*; do
+  FILES+=("assets/monster-tokens/$(basename "$f")")
+done
+
 for f in "${FILES[@]}"; do
   if [ ! -f "$SRC/$f" ]; then
     echo "  ! missing in source, skipped: $f"

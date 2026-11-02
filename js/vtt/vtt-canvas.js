@@ -867,7 +867,14 @@ export class VttCanvas {
     const r = bucket / 2, ring = Math.max(2, bucket / 28);
     g.save();
     g.beginPath(); g.arc(r, r, r - ring / 2, 0, Math.PI * 2); g.closePath(); g.clip();
-    if (img) {
+    if (img && img.naturalWidth <= 64 && img.naturalHeight <= 64) {
+      // Small pixel-art tile: the whole sprite on a dark disc, kept crisp
+      g.fillStyle = "#1c1d2b";
+      g.fillRect(0, 0, bucket, bucket);
+      g.imageSmoothingEnabled = false;
+      const size = bucket * 0.76, at = (bucket - size) / 2;
+      g.drawImage(img, at, at, size, size);
+    } else if (img) {
       // cover-fit the portrait into the circle
       const s = Math.max(bucket / img.naturalWidth, bucket / img.naturalHeight);
       const w = img.naturalWidth * s, h = img.naturalHeight * s;

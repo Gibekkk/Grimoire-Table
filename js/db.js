@@ -603,12 +603,19 @@ const localDb = {
 // a permission-denied (e.g. a listener outliving a campaign you just left, or
 // a doc deleted mid-session) kills the listener silently and the SDK logs
 // "Uncaught Error in snapshot listener" with no indication of why.
-function onSnapshotError(err) {
-  if (err?.code === "permission-denied") {
-    console.warn("[grimoire] A live update stopped because access was denied (left the campaign? item deleted?):", err.message);
-  } else {
-    console.error("[grimoire] Firestore listener error:", err);
-  }
+// Error handler for one live listener. It names the path so a rule that was never
+// published can be told apart from really having lost access. `onDenied` lets
+// optional data carry on without it.
+function listenFailed(path, onDenied) {
+  return (err) => {
+    if (err?.code === "permission-denied") {
+      // Signing out closes every open listener this way; nothing is wrong then
+      if (getFirebase().auth?.currentUser) console.warn(`[grimoire] Live update denied by Firestore rules for ${path}:`, err.message);
+      onDenied?.();
+    } else {
+      console.error(`[grimoire] Firestore listener error for ${path}:`, err);
+    }
+  };
 }
 
 const firestoreDb = {
@@ -708,7 +715,7 @@ const firestoreDb = {
       initFirebase().then(({ db, fx }) => {
         unsub = fx.onSnapshot(fx.doc(db, "campaigns", id), (snap) => {
           cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-        }, onSnapshotError);
+        }, listenFailed(`campaigns/${id}`));
       });
       return () => unsub();
     }
@@ -746,7 +753,7 @@ const firestoreDb = {
       initFirebase().then(({ db, fx }) => {
         unsub = fx.onSnapshot(fx.doc(db, "characters", id), (snap) => {
           cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-        }, onSnapshotError);
+        }, listenFailed(`characters/${id}`));
       });
       return () => unsub();
     },
@@ -754,7 +761,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isNpc)), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isNpc)), listenFailed(`characters where campaignId == ${campaignId}`));
       });
       return () => unsub();
     },
@@ -762,7 +769,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "characters"), fx.where("campaignId", "==", campaignId));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.isNpc)), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.isNpc)), listenFailed(`characters where campaignId == ${campaignId}`));
       });
       return () => unsub();
     }
@@ -778,7 +785,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "log"), fx.orderBy("createdAt", "asc"), fx.limitToLast(300));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/log`));
       });
       return () => unsub();
     }
@@ -803,7 +810,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "characters", characterId, "inventory"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`characters/${characterId}/inventory`));
       });
       return () => unsub();
     }
@@ -828,7 +835,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "partyInventory"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/partyInventory`));
       });
       return () => unsub();
     }
@@ -852,7 +859,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "notes"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/notes`));
       });
       return () => unsub();
     }
@@ -909,14 +916,14 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/maps`));
       });
       return () => unsub();
     },
     subscribe(campaignId, mapId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId), (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null), onSnapshotError);
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId), (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null), listenFailed(`campaigns/${campaignId}/maps/${mapId}`));
       });
       return () => unsub();
     }
@@ -941,7 +948,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "campaignItems"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/campaignItems`));
       });
       return () => unsub();
     }
@@ -966,7 +973,7 @@ const firestoreDb = {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps", mapId, "roomInventory"), fx.orderBy("createdAt", "asc"));
-        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/maps/${mapId}/roomInventory`));
       });
       return () => unsub();
     }
@@ -980,7 +987,7 @@ const firestoreDb = {
     subscribe(campaignId, mapId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask"), (snap) => cb(snap.exists() ? snap.data() : null), onSnapshotError);
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask"), (snap) => cb(snap.exists() ? snap.data() : null), listenFailed(`campaigns/${campaignId}/maps/${mapId}/fogs/mask`));
       });
       return () => unsub();
     }
@@ -1001,7 +1008,7 @@ const firestoreDb = {
         unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "aoeShapes"), (snap) => cb(snap.docs.map(d => {
           const { updatedAt, ...rest } = d.data();
           return { id: d.id, ...rest };
-        })), onSnapshotError);
+        })), listenFailed(`campaigns/${campaignId}/maps/${mapId}/aoeShapes`));
       });
       return () => unsub();
     }
@@ -1025,7 +1032,7 @@ const firestoreDb = {
     subscribe(campaignId, mapId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/maps/${mapId}/tokens`));
       });
       return () => unsub();
     },
@@ -1050,7 +1057,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentFolders"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentFolders"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/componentFolders`));
       });
       return () => unsub();
     }
@@ -1074,7 +1081,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentLibrary"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "componentLibrary"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/componentLibrary`));
       });
       return () => unsub();
     }
@@ -1092,7 +1099,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "monsterImages"), (snap) => cb(Object.fromEntries(snap.docs.map(d => [d.id, d.data().imageBase64]))), onSnapshotError);
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "monsterImages"), (snap) => cb(Object.fromEntries(snap.docs.map(d => [d.id, d.data().imageBase64]))), listenFailed(`campaigns/${campaignId}/monsterImages`, () => cb({})));
       });
       return () => unsub();
     }
@@ -1116,7 +1123,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "relationships"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onSnapshotError);
+        unsub = fx.onSnapshot(fx.collection(db, "campaigns", campaignId, "relationships"), (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/relationships`));
       });
       return () => unsub();
     }
@@ -1135,7 +1142,7 @@ const firestoreDb = {
     subscribe(campaignId, cb) {
       let unsub = () => {};
       initFirebase().then(({ db, fx }) => {
-        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "combat", "state"), (snap) => cb(snap.exists() ? snap.data() : null), onSnapshotError);
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "combat", "state"), (snap) => cb(snap.exists() ? snap.data() : null), listenFailed(`campaigns/${campaignId}/combat/state`));
       });
       return () => unsub();
     }

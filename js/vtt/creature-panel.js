@@ -17,7 +17,7 @@ const CHAR_FIELDS = { resist: "damageResistances", immune: "damageImmunities", v
 const ui = { amount: "", dmgType: "", open: {}, privateRolls: false };
 try { ui.privateRolls = sessionStorage.getItem("gt_vtt_private_rolls") === "1"; } catch { /* noop */ }
 
-// ctx: { campaignId, user, isDm, mapId(), tokens(), charOf(token), monsterOf(token), ruleset(), combat(), anchorEl }
+// ctx: { campaignId, user, isDm, mapId(), tokens(), charOf(token), monsterOf(token), ruleset(), combat(), artOf(token) }
 export function createCreatureTools(ctx) {
   const isCreature = (t) => t && (t.kind === "pc" || t.kind === "npc" || t.kind === "monster");
 
@@ -240,7 +240,7 @@ export function createCreatureTools(ctx) {
       if (have.has(id)) continue;
       have.add(id);
       const initMod = token.kind === "monster" ? st.init : null;
-      const c = { id, type: token.kind, name: st.name, portraitBase64: token.imageBase64 || null, ownerUid: st.ownerUid || null, initiative: null, initMod,
+      const c = { id, type: token.kind, name: st.name, portraitBase64: ctx.artOf(token) || null, ownerUid: st.ownerUid || null, initiative: null, initMod,
         actionUsed: false, bonusActionUsed: false, reactionUsed: false, movementUsed: false };
       if (token.kind === "monster") {
         const mode = st.conditions.includes("Invisible") ? "advantage" : "normal";
@@ -320,8 +320,9 @@ export function createCreatureTools(ctx) {
 
     // Header
     const head = h("div", { class: "cp-head" });
+    const art = ctx.artOf(token);
     head.innerHTML = `
-      <div class="portrait-preview sm">${token.imageBase64 ? `<img src="${token.imageBase64}">` : `<span>${escapeHtml((st.name || "?")[0].toUpperCase())}</span>`}</div>
+      <div class="portrait-preview sm">${art ? `<img src="${art}">` : `<span>${escapeHtml((st.name || "?")[0].toUpperCase())}</span>`}</div>
       <div class="cp-title">
         <h4>${escapeHtml(st.name)}</h4>
         <div class="cp-badges">
