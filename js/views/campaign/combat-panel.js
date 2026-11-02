@@ -5,6 +5,14 @@ import { computeRoll, formatBreakdown } from "../../dice/roll-logic.js";
 
 const ACTION_LABELS = { action: "Action", bonusAction: "Bonus Action", reaction: "Reaction", movement: "Movement" };
 
+// The combat-doc changes that advance to the next combatant's turn
+export function nextTurnPatch(combat) {
+  const n = combat.combatants.length;
+  const currentTurnIndex = (combat.currentTurnIndex + 1) % n;
+  const combatants = combat.combatants.map((c, i) => i === currentTurnIndex ? { ...c, actionUsed: false, bonusActionUsed: false, reactionUsed: false, movementUsed: false } : c);
+  return { currentTurnIndex, round: combat.round + (currentTurnIndex === 0 ? 1 : 0), combatants };
+}
+
 function portraitOrInitial(entity) {
   return entity.portraitBase64 ? `<img src="${entity.portraitBase64}">` : `<span>${escapeHtml((entity.name || "?")[0].toUpperCase())}</span>`;
 }
@@ -41,7 +49,7 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
         initiative: null, actionUsed: false, bonusActionUsed: false, reactionUsed: false, movementUsed: false
       }));
       if (combatants.length === 0) { toast("Select at least one combatant", "error"); return; }
-      await db.combat.set(campaignId, { active: true, round: 1, currentTurnIndex: 0, combatants, pendingRollRequest: null });
+      await db.combat.set(campaignId, { active: true, round: 1, currentTurnIndex: 0, combatants, pendingRollRequest: null, effectsTurn: null });
       toast("Combat started \u2014 roll initiative below, then reorder or Sort by Initiative before the first turn if you like.");
     });
     setupCard.appendChild(startBtn);
@@ -195,11 +203,7 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
   }
 
   function endTurn() {
-    const n = combat.combatants.length;
-    let nextIndex = (combat.currentTurnIndex + 1) % n;
-    let nextRound = combat.round + (nextIndex === 0 ? 1 : 0);
-    const combatants = combat.combatants.map((c, i) => i === nextIndex ? { ...c, actionUsed: false, bonusActionUsed: false, reactionUsed: false, movementUsed: false } : c);
-    db.combat.set(campaignId, { currentTurnIndex: nextIndex, round: nextRound, combatants });
+    db.combat.set(campaignId, nextTurnPatch(combat));
   }
 
   async function render() {

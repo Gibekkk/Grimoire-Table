@@ -96,7 +96,7 @@ export function renderActionsTab(ctx) {
         const dmg = scaledDamage(s, s.level, level);
         const hit = s.attackRoll ? formatModifier(spellAttackBonus(character, ability)) : s.save ? `DC ${spellSaveDc(character, ability)} ${s.save.toUpperCase()}` : "—";
         addRow(s.name, s.level === 0 ? "Cantrip" : `Level ${s.level} spell`, s.range, hit, dmg ? `${dmg.count}d${dmg.sides}${dmg.modifier ? "+" + dmg.modifier : ""} ${s.damageType || ""}` : "—", () => {
-          if (s.attackRoll) ctx.onRoll({ sides: 20, count: 1, modifier: spellAttackBonus(character, ability), label: `${s.name} — Spell Attack`, mode: ctx.currentAdvMode() });
+          if (s.attackRoll) ctx.onRoll({ kind: "attack", sides: 20, count: 1, modifier: spellAttackBonus(character, ability), label: `${s.name} — Spell Attack`, mode: ctx.currentAdvMode() });
           if (dmg) ctx.onRoll({ sides: dmg.sides, count: dmg.count, modifier: dmg.modifier, mode: "normal", label: `${s.name} — ${s.damageType || ""} damage` });
           if (s.concentration) ctx.setConcentration?.(s.name);
         });

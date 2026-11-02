@@ -44,6 +44,13 @@ export function sizeSquares(size) {
   const first = String(size || "").trim().split(/\s+/)[0]?.toLowerCase();
   return SIZES.find(s => s.id === first)?.squares || 1;
 }
+// A character's walking speed from its species / lineage
+export function characterSpeed(character, ruleset) {
+  const sp = (ruleset?.species || []).find(s => s.id === character?.speciesId);
+  const opts = (sp?.choices || []).filter(c => c.type === "option").map(c => c.options.find(o => o.id === character.speciesChoices?.[c.id])).filter(Boolean);
+  return opts.find(o => o.speed)?.speed || sp?.speed || 30;
+}
+
 export function sizeIdForSquares(w) {
   return SIZES.find(s => s.squares === w && s.id !== "small")?.id || null;
 }
@@ -75,34 +82,204 @@ export function withCondition(conditions = [], name, on) {
   return [...set];
 }
 
-// d20 mode for this creature's own attack rolls, with the reasons.
+// ---------------- Status effects ----------------
+// Spells, actions and hazards a creature can be under, beyond the 14 conditions.
+// Wording follows the PHB 2024 spell, class and Rules Glossary entries. Each active
+// effect is stored as { id, rounds?, value?, custom fields } on the creature.
+//   attack / attacked: "advantage" | "disadvantage" on its attacks / on attacks against it
+//   attackDie, saveDie: dice added to attack rolls / saves (negative sides subtract)
+//   saveMode, checkMode: { ability: mode }; saveMod: { ability: flat bonus }
+//   ac, acMin, speedMult, speedBonus, speedZero, resist, immune, condImmune
+//   ends: "turnStart" / "turnEnd" removes it at the start / end of the creature's turn
+//   rounds: default duration, counted down at the start of each of its turns
+//   tick: dice / type rolled at the start of its turn; temp / table are the other turn effects
+const PHYSICAL = ["bludgeoning", "piercing", "slashing"];
+export const STATUS_EFFECTS = [
+  { id: "bless", name: "Bless", abbr: "Bs", group: "Spells", tone: "buff", rounds: 10, attackDie: 4, saveDie: 4, text: "Adds 1d4 to attack rolls and saving throws." },
+  { id: "bane", name: "Bane", abbr: "Bn", group: "Spells", tone: "debuff", rounds: 10, attackDie: -4, saveDie: -4, text: "Subtracts 1d4 from attack rolls and saving throws." },
+  { id: "haste", name: "Haste", abbr: "Ha", group: "Spells", tone: "buff", rounds: 10, speedMult: 2, ac: 2, saveMode: { dex: "advantage" }, endsInto: "lethargy", text: "Speed doubled, +2 AC, Advantage on Dex saves, one extra limited action each turn. When it ends: Incapacitated and Speed 0 until the end of its next turn." },
+  { id: "lethargy", name: "Haste Lethargy", abbr: "Lt", group: "Spells", tone: "debuff", ends: "turnEnd", speedZero: true, addsConditions: ["Incapacitated"], hideInMenu: true, text: "Incapacitated and Speed 0 until the end of its next turn." },
+  { id: "slow", name: "Slow", abbr: "Sl", group: "Spells", tone: "debuff", rounds: 10, speedMult: 0.5, ac: -2, saveMod: { dex: -2 }, text: "Speed halved, −2 to AC and Dex saves, no Reactions; an action or a Bonus Action, not both; one attack only." },
+  { id: "shield-of-faith", name: "Shield of Faith", abbr: "SF", group: "Spells", tone: "buff", ac: 2, text: "+2 AC." },
+  { id: "shield", name: "Shield", abbr: "Sh", group: "Spells", tone: "buff", ac: 5, ends: "turnStart", text: "+5 AC until the start of its next turn; no damage from Magic Missile." },
+  { id: "barkskin", name: "Barkskin", abbr: "Bk", group: "Spells", tone: "buff", acMin: 17, text: "AC of 17 if its AC is lower." },
+  { id: "blur", name: "Blur", abbr: "Bu", group: "Spells", tone: "buff", rounds: 10, attacked: "disadvantage", text: "Attacks against it have Disadvantage (not from Blindsight or Truesight)." },
+  { id: "faerie-fire", name: "Faerie Fire", abbr: "FF", group: "Spells", tone: "debuff", rounds: 10, attacked: "advantage", noInvisible: true, outline: true, text: "Attacks against it have Advantage if the attacker can see it; it can't benefit from Invisible." },
+  { id: "guiding-bolt", name: "Guiding Bolt", abbr: "GB", group: "Spells", tone: "debuff", rounds: 1, attacked: "advantage", text: "The next attack against it has Advantage. Remove it after that attack." },
+  { id: "hex", name: "Hex", abbr: "Hx", group: "Spells", tone: "debuff", text: "The caster's hits deal an extra 1d6 Necrotic; Disadvantage on checks with one chosen ability." },
+  { id: "hunters-mark", name: "Hunter's Mark", abbr: "HM", group: "Spells", tone: "debuff", text: "The caster's hits deal an extra 1d6 Force." },
+  { id: "stoneskin", name: "Stoneskin", abbr: "Sk", group: "Spells", tone: "buff", resist: PHYSICAL, text: "Resistance to Bludgeoning, Piercing and Slashing." },
+  { id: "enlarge", name: "Enlarged", abbr: "En", group: "Spells", tone: "buff", rounds: 10, sizeStep: 1, saveMode: { str: "advantage" }, checkMode: { str: "advantage" }, text: "One size larger (the token grows); Advantage on Str checks and saves; weapon hits deal an extra 1d4." },
+  { id: "reduce", name: "Reduced", abbr: "Rd", group: "Spells", tone: "debuff", rounds: 10, sizeStep: -1, saveMode: { str: "disadvantage" }, checkMode: { str: "disadvantage" }, text: "One size smaller (the token shrinks); Disadvantage on Str checks and saves; weapon hits deal 1d4 less." },
+  { id: "aid", name: "Aid", abbr: "Ad", group: "Spells", tone: "buff", hpBonus: 5, text: "Hit Point maximum and current Hit Points +5." },
+  { id: "heroism", name: "Heroism", abbr: "He", group: "Spells", tone: "buff", rounds: 10, condImmune: ["Frightened"], tempFromValue: true, askValue: "Caster's spellcasting modifier (Temporary HP each turn):", text: "Immune to Frightened; Temporary HP equal to the caster's modifier at the start of each turn." },
+  { id: "freedom", name: "Freedom of Movement", abbr: "FM", group: "Spells", tone: "buff", condImmune: ["Paralyzed", "Restrained"], text: "Can't be Paralyzed or Restrained by magic; 5 ft of movement escapes nonmagical restraints or a grapple." },
+  { id: "death-ward", name: "Death Ward", abbr: "DW", group: "Spells", tone: "buff", deathWard: true, text: "The first time it would drop to 0 HP it drops to 1 HP instead, and the spell ends." },
+  { id: "silence", name: "Silence", abbr: "Si", group: "Spells", tone: "debuff", immune: ["thunder"], addsConditions: ["Deafened"], text: "While inside: Deafened, immune to Thunder, no spells with a Verbal component." },
+  { id: "sanctuary", name: "Sanctuary", abbr: "Sa", group: "Spells", tone: "buff", rounds: 10, text: "Attackers must pass a Wis save or pick a new target; ends if it attacks, casts a spell or deals damage." },
+  { id: "protection-evil-good", name: "Protection from Evil and Good", abbr: "PE", group: "Spells", tone: "buff", text: "Aberrations, Celestials, Elementals, Fey, Fiends and Undead have Disadvantage on attacks against it and can't Charm or Frighten it." },
+  { id: "mirror-image", name: "Mirror Image", abbr: "MI", group: "Spells", tone: "buff", rounds: 10, text: "When hit, roll a d6 per duplicate: on 3+ a duplicate is hit and destroyed instead." },
+  { id: "confusion", name: "Confusion", abbr: "Cf", group: "Spells", tone: "debuff", rounds: 10, table: "confusion", text: "No Bonus Actions or Reactions; rolls 1d10 at the start of each turn for its behavior; repeats the Wis save at the end of each turn." },
+  { id: "rage", name: "Raging", abbr: "Rg", group: "Actions", tone: "buff", rounds: 100, resist: PHYSICAL, saveMode: { str: "advantage" }, checkMode: { str: "advantage" }, text: "Resistance to Bludgeoning, Piercing and Slashing; Advantage on Str checks and saves; Rage damage on Str attacks." },
+  { id: "reckless", name: "Reckless", abbr: "Rk", group: "Actions", tone: "neutral", ends: "turnStart", attack: "advantage", attacked: "advantage", text: "Advantage on Str attacks, and attacks against it have Advantage, until the start of its next turn." },
+  { id: "dodge", name: "Dodging", abbr: "Dg", group: "Actions", tone: "buff", ends: "turnStart", attacked: "disadvantage", saveMode: { dex: "advantage" }, text: "Attacks against it have Disadvantage if it can see the attacker; Advantage on Dex saves, until the start of its next turn." },
+  { id: "dash", name: "Dashing", abbr: "Da", group: "Actions", tone: "buff", ends: "turnEnd", speedMult: 2, text: "Extra movement equal to its Speed this turn." },
+  { id: "disengage", name: "Disengaged", abbr: "Dn", group: "Actions", tone: "buff", ends: "turnEnd", text: "Its movement doesn't provoke Opportunity Attacks this turn." },
+  { id: "half-cover", name: "Half Cover", abbr: "½C", group: "Actions", tone: "buff", ac: 2, saveMod: { dex: 2 }, text: "+2 to AC and Dex saves." },
+  { id: "three-quarters-cover", name: "Three-Quarters Cover", abbr: "¾C", group: "Actions", tone: "buff", ac: 5, saveMod: { dex: 5 }, text: "+5 to AC and Dex saves." },
+  { id: "surprised", name: "Surprised", abbr: "Su", group: "Actions", tone: "debuff", initiative: "disadvantage", text: "Disadvantage on its Initiative roll." },
+  { id: "burning", name: "Burning", abbr: "Bg", group: "Hazards", tone: "hazard", tick: { dice: "1d4", type: "fire" }, text: "1d4 Fire at the start of each turn. Action: go Prone and roll to put it out." },
+  { id: "suffocating", name: "Suffocating", abbr: "Sf", group: "Hazards", tone: "hazard", exhaustionAtTurnEnd: true, text: "Gains 1 Exhaustion level at the end of each turn; removes those levels when it can breathe again." }
+];
+const EFFECT_BY_ID = new Map(STATUS_EFFECTS.map(e => [e.id, e]));
+
+// Rules for an active effect (built-in, or a custom one carrying its own fields)
+export function effectDef(e) {
+  const id = typeof e === "string" ? e : e.id;
+  return EFFECT_BY_ID.get(id) || (typeof e === "object" ? { tone: "neutral", abbr: (e.name || "?").slice(0, 2), text: e.text || "Custom effect.", ...e } : null);
+}
+export function hasEffect(effects = [], id) { return effects.some(e => e.id === id); }
+const defsOf = (effects = []) => effects.map(effectDef).filter(Boolean);
+
+export function newEffect(id, extra = {}) {
+  const def = effectDef(id);
+  const out = { id, ...extra };
+  if (def?.rounds && out.rounds == null) out.rounds = def.rounds;
+  return out;
+}
+
+// The state changes from switching an effect on or off. `st` has effects, hp, conditions, exhaustion.
+export function effectPatch(st, id, on, extra = {}) {
+  const def = effectDef(id) || effectDef((st.effects || []).find(e => e.id === id) || id);
+  const rest = (st.effects || []).filter(e => e.id !== id);
+  const patch = { effects: on ? [...rest, id.startsWith("custom:") ? { id, ...extra } : newEffect(id, extra)] : rest };
+  if (def?.hpBonus) {
+    const d = on ? def.hpBonus : -def.hpBonus, hp = st.hp || { current: 0, max: 0, temp: 0 };
+    patch.hp = { ...hp, max: Math.max(1, hp.max + d), current: Math.max(on ? 0 : Math.min(1, hp.current), Math.min(hp.max + d, hp.current + (on ? d : 0))) };
+  }
+  let conditions = st.conditions || [];
+  (def?.addsConditions || []).forEach(c => { conditions = withCondition(conditions, c, on); });
+  if (!on && def?.endsInto) {
+    const after = effectDef(def.endsInto);
+    patch.effects = [...patch.effects, newEffect(def.endsInto)];
+    (after.addsConditions || []).forEach(c => { conditions = withCondition(conditions, c, true); });
+  }
+  if (conditions !== (st.conditions || [])) patch.conditions = conditions;
+  return patch;
+}
+
+// Conditions it can't gain right now: its own immunities plus those from effects
+export function conditionImmunities(st) {
+  return [...new Set([...(st.condImmune || []), ...defsOf(st.effects).flatMap(d => d.condImmune || [])])];
+}
+
+export function effectAc(baseAc, effects = []) {
+  const defs = defsOf(effects);
+  const parts = defs.filter(d => d.ac).map(d => ({ label: d.name, value: d.ac }));
+  let ac = baseAc + parts.reduce((s, p) => s + p.value, 0);
+  defs.filter(d => d.acMin).forEach(d => { if (ac < d.acMin) { parts.push({ label: d.name, value: d.acMin - ac }); ac = d.acMin; } });
+  return { ac, parts };
+}
+
+// Speed in feet after conditions, Exhaustion and effects, with what's holding it at 0
+export function effectiveSpeed(base, conditions = [], exhaustion = 0, effects = []) {
+  const defs = defsOf(effects);
+  const stuck = conditions.find(c => SPEED_ZERO.includes(c)) || defs.find(d => d.speedZero)?.name;
+  if (stuck) return { ft: 0, why: stuck };
+  let ft = base + defs.reduce((s, d) => s + (d.speedBonus || 0), 0);
+  defs.forEach(d => { if (d.speedMult) ft *= d.speedMult; });
+  return { ft: Math.max(0, Math.floor(ft / 5) * 5 - 5 * (exhaustion || 0)), why: null };
+}
+export function isImmobile(conditions = [], effects = []) {
+  return hasSpeedZero(conditions) || defsOf(effects).some(d => d.speedZero);
+}
+
+function pickMode(adv, dis) { return adv.length && !dis.length ? "advantage" : dis.length && !adv.length ? "disadvantage" : "normal"; }
+const invisibleCounts = (conditions, effects) => conditions.includes("Invisible") && !defsOf(effects).some(d => d.noInvisible);
+
+// d20 mode for this creature's own attack rolls, with the reasons and any dice to add.
 // `vsGrappler` is true when the target is the creature grappling it.
-export function attackMode(conditions = [], exhaustion = 0, { vsGrappler = false } = {}) {
+export function attackMode(conditions = [], exhaustion = 0, { vsGrappler = false, effects = [] } = {}) {
   const dis = [], adv = [];
   ["Blinded", "Frightened", "Poisoned", "Prone", "Restrained"].forEach(c => { if (conditions.includes(c)) dis.push(c); });
   if (conditions.includes("Grappled") && !vsGrappler) dis.push("Grappled");
-  if (conditions.includes("Invisible")) adv.push("Invisible");
-  const mode = adv.length && !dis.length ? "advantage" : dis.length && !adv.length ? "disadvantage" : "normal";
-  return { mode, reasons: [...adv.map(r => `+${r}`), ...dis.map(r => `−${r}`)], penalty: -2 * (exhaustion || 0) };
+  if (invisibleCounts(conditions, effects)) adv.push("Invisible");
+  const defs = defsOf(effects);
+  defs.forEach(d => { if (d.attack === "advantage") adv.push(d.name); if (d.attack === "disadvantage") dis.push(d.name); });
+  return { mode: pickMode(adv, dis), reasons: [...adv.map(r => `+${r}`), ...dis.map(r => `−${r}`)], penalty: -2 * (exhaustion || 0),
+    dice: defs.filter(d => d.attackDie).map(d => ({ sides: d.attackDie, name: d.name })) };
 }
 
-// Saving throw adjustments: auto-fail Str/Dex when paralyzed etc., Disadvantage on Dex when Restrained.
-export function saveRule(ability, conditions = [], exhaustion = 0) {
+// Saving throws: auto-fail Str/Dex when Paralyzed etc., Disadvantage on Dex when Restrained, plus effects.
+export function saveRule(ability, conditions = [], exhaustion = 0, effects = []) {
   if ((ability === "str" || ability === "dex") && conditions.some(c => FAILS_STR_DEX.includes(c))) {
-    return { autoFail: true, reason: conditions.find(c => FAILS_STR_DEX.includes(c)), mode: "normal", penalty: 0 };
+    return { autoFail: true, reason: conditions.find(c => FAILS_STR_DEX.includes(c)), mode: "normal", penalty: 0, dice: [] };
   }
-  const mode = ability === "dex" && conditions.includes("Restrained") ? "disadvantage" : "normal";
-  return { autoFail: false, mode, reason: mode === "disadvantage" ? "Restrained" : null, penalty: -2 * (exhaustion || 0) };
+  const adv = [], dis = [];
+  if (ability === "dex" && conditions.includes("Restrained")) dis.push("Restrained");
+  const defs = defsOf(effects);
+  defs.forEach(d => { if (d.saveMode?.[ability] === "advantage") adv.push(d.name); if (d.saveMode?.[ability] === "disadvantage") dis.push(d.name); });
+  const flat = defs.reduce((s, d) => s + (d.saveMod?.[ability] || 0), 0);
+  return { autoFail: false, mode: pickMode(adv, dis), reason: [...adv, ...dis].join(", ") || null, penalty: flat - 2 * (exhaustion || 0),
+    dice: defs.filter(d => d.saveDie).map(d => ({ sides: d.saveDie, name: d.name })) };
+}
+
+// Ability checks: Disadvantage when Poisoned or Frightened, plus effects.
+export function checkRule(ability, conditions = [], exhaustion = 0, effects = []) {
+  const adv = [], dis = [];
+  ["Poisoned", "Frightened"].forEach(c => { if (conditions.includes(c)) dis.push(c); });
+  defsOf(effects).forEach(d => { if (d.checkMode?.[ability] === "advantage") adv.push(d.name); if (d.checkMode?.[ability] === "disadvantage") dis.push(d.name); });
+  return { mode: pickMode(adv, dis), reason: [...adv, ...dis].join(", ") || null, penalty: -2 * (exhaustion || 0), dice: [] };
+}
+
+export function initiativeRule(conditions = [], exhaustion = 0, effects = []) {
+  const adv = [], dis = [];
+  if (invisibleCounts(conditions, effects)) adv.push("Invisible");
+  if (isIncapacitated(conditions)) dis.push("Incapacitated");
+  defsOf(effects).forEach(d => { if (d.initiative === "disadvantage") dis.push(d.name); });
+  return { mode: pickMode(adv, dis), reason: [...adv, ...dis].join(", ") || null, penalty: -2 * (exhaustion || 0), dice: [] };
+}
+
+// Rolls the extra dice (Bless, Bane) into a flat modifier; returns the total and a label suffix
+export function rollExtraDice(dice = []) {
+  let total = 0;
+  const notes = dice.map(d => {
+    const n = rollDie(Math.abs(d.sides)), v = d.sides < 0 ? -n : n;
+    total += v;
+    return `${d.name} ${v >= 0 ? "+" : "−"}${Math.abs(v)}`;
+  });
+  return { total, note: notes.join(", ") };
 }
 
 // What attackers get against this creature
-export function defenseNotes(conditions = []) {
+export function defenseNotes(conditions = [], effects = []) {
   const notes = [];
   if (conditions.some(c => ["Blinded", "Paralyzed", "Petrified", "Restrained", "Stunned", "Unconscious"].includes(c))) notes.push("Attacks against it have Advantage");
   if (conditions.includes("Prone")) notes.push("Prone: Advantage within 5 ft, Disadvantage from farther");
-  if (conditions.includes("Invisible")) notes.push("Attacks against it have Disadvantage");
+  if (invisibleCounts(conditions, effects)) notes.push("Attacks against it have Disadvantage");
   if (conditions.some(c => c === "Paralyzed" || c === "Unconscious")) notes.push("Hits from within 5 ft are Critical Hits");
+  defsOf(effects).forEach(d => {
+    if (d.attacked === "advantage") notes.push(`Attacks against it have Advantage (${d.name})`);
+    if (d.attacked === "disadvantage") notes.push(`Attacks against it have Disadvantage (${d.name})`);
+  });
   return notes;
+}
+
+// One size category up or down from Enlarge / Reduce; custom non-square tokens stay as they are
+export function effectiveSquares(squares, effects = []) {
+  const step = defsOf(effects).reduce((s, d) => s + (d.sizeStep || 0), 0);
+  if (!step) return squares;
+  const order = [0.5, 1, 2, 3, 4];
+  const i = order.indexOf(squares);
+  return i < 0 ? squares : order[Math.max(0, Math.min(order.length - 1, i + step))];
+}
+
+// What a confused creature does this turn (Confusion's 1d10 table)
+export function confusionResult(d10, d4) {
+  if (d10 === 1) return `doesn't act and uses all its movement to move ${["north", "east", "south", "west"][d4 - 1]}`;
+  if (d10 <= 6) return "doesn't move or take actions";
+  if (d10 <= 8) return "doesn't move, and makes one melee attack against a random creature in reach (no action if none)";
+  return "chooses its own behavior";
 }
 
 // "Poison, Thunder; Exhaustion, Grappled" -> damage types + condition names
@@ -129,11 +306,12 @@ export function innateResistances(character, ruleset) {
 }
 
 // Damage after Immunity / Resistance / Vulnerability (PHB 2024: resistance, then vulnerability).
-export function adjustDamage(amount, type, def = {}, conditions = []) {
+export function adjustDamage(amount, type, def = {}, conditions = [], effects = []) {
   amount = Math.max(0, Math.floor(amount || 0));
   if (!type) return { amount, note: "" };
-  if ((def.immune || []).includes(type)) return { amount: 0, note: `immune to ${type}` };
-  const resists = (def.resist || []).includes(type) || conditions.includes("Petrified");
+  const defs = defsOf(effects);
+  if ((def.immune || []).includes(type) || defs.some(d => d.immune?.includes(type))) return { amount: 0, note: `immune to ${type}` };
+  const resists = (def.resist || []).includes(type) || conditions.includes("Petrified") || defs.some(d => d.resist?.includes(type));
   let out = amount, notes = [];
   if (resists) { out = Math.floor(out / 2); notes.push(`resists ${type}`); }
   if ((def.vulnerable || []).includes(type)) { out *= 2; notes.push(`vulnerable to ${type}`); }
@@ -164,11 +342,21 @@ export function footprintGap(a, b) {
 export function distanceFt(a, b) {
   return Math.round((footprintGap(a, b) + 1) * 5);
 }
-// Nearest spot for `t` that is within 5 ft of `g` (touching its footprint)
-export function snapAdjacent(t, g) {
-  const tw = t.w || 1, th = t.h || 1, gw = g.w || 1, gh = g.h || 1;
-  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  return { x: Math.round(clamp(t.x, g.x - tw, g.x + gw) * 4) / 4, y: Math.round(clamp(t.y, g.y - th, g.y + gh) * 4) / 4 };
+// Where a grappled token sits relative to its grappler. (dx, dy) is the wanted offset of
+// the target's corner from the grappler's corner; the result keeps that direction but
+// sits on the ring where the footprints touch, so it stays within 5 ft at any angle.
+export function ringOffset(g, t, dx, dy) {
+  const gw = g.w || 1, gh = g.h || 1, tw = t.w || 1, th = t.h || 1;
+  const hw = (gw + tw) / 2, hh = (gh + th) / 2;
+  let cx = dx + tw / 2 - gw / 2, cy = dy + th / 2 - gh / 2;
+  if (!cx && !cy) cx = hw;
+  const k = 1 / Math.max(Math.abs(cx) / hw, Math.abs(cy) / hh);
+  cx *= k; cy *= k;
+  // The axis against the edge stays exact; the other rounds toward the middle of the edge
+  const onEdgeX = Math.abs(cx) >= hw - 1e-6, onEdgeY = Math.abs(cy) >= hh - 1e-6;
+  const quarter = (v) => Math.trunc(v * 4) / 4;
+  const ox = onEdgeX ? Math.sign(cx) * hw : quarter(cx), oy = onEdgeY ? Math.sign(cy) * hh : quarter(cy);
+  return { dx: ox - tw / 2 + gw / 2, dy: oy - th / 2 + gh / 2 };
 }
 
 // ---------------- Monsters ----------------

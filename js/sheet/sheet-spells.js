@@ -123,7 +123,7 @@ export function renderSpellsTab(ctx) {
   }
   function rollSpell(spell, ability, slotLevel) {
     startConcentration(spell);
-    if (spell.attackRoll) onRoll({ sides: 20, count: 1, modifier: spellAttackBonus(character, ability), label: `${spell.name} — Spell Attack`, mode: currentAdvMode() });
+    if (spell.attackRoll) onRoll({ kind: "attack", sides: 20, count: 1, modifier: spellAttackBonus(character, ability), label: `${spell.name} — Spell Attack`, mode: currentAdvMode() });
     const dmg = scaledDamage(spell, slotLevel, charLevel);
     if (dmg) onRoll({ sides: dmg.sides, count: dmg.count, modifier: dmg.modifier, mode: "normal", label: `${spell.name} — ${spell.damageType || ""} damage${spell.save ? ` (DC ${spellSaveDc(character, ability)} ${spell.save.toUpperCase()} save)` : ""}` });
     if (spell.healDice) {

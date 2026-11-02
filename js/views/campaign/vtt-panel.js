@@ -1,5 +1,5 @@
 import { db } from "../../db.js";
-import { h, toast, showContextMenu } from "../../util.js";
+import { h, toast, escapeHtml, showContextMenu } from "../../util.js";
 import { VttCanvas, loadImageCached } from "../../vtt/vtt-canvas.js";
 import { mountCharacterSheet } from "../../character-sheet.js";
 import { COVER_AC_BONUS, COVER_LABELS } from "../../rules-engine.js";
@@ -7,7 +7,8 @@ import { navigate } from "../../router.js";
 import { loadRuleset } from "../../data-loader.js";
 import { pickMonster, tokenSquaresForSize, monsterImageFor, monsterDefaultArt, once } from "../../monsters.js";
 import { createCreatureTools } from "../../vtt/creature-panel.js";
-import { SIZES, CONDITION_ABBR, SPEED_ZERO, hasSpeedZero, monsterTokenStats } from "../../vtt/creatures.js";
+import { SIZES, CONDITION_ABBR, SPEED_ZERO, isImmobile, effectDef, hasEffect, monsterTokenStats } from "../../vtt/creatures.js";
+import { nextTurnPatch } from "./combat-panel.js";
 
 // Decoded map backgrounds and token images live in vtt-canvas.js's shared
 // session cache (loadImageCached), so switching maps never re-decodes them.
@@ -16,6 +17,9 @@ import { SIZES, CONDITION_ABBR, SPEED_ZERO, hasSpeedZero, monsterTokenStats } fr
 // carry their own state (`stats`, `loot`) and exist only on the map — removing
 // one removes the monster. Any token can be `hidden` (DM-only). A grappled
 // creature has `grappledBy` (grappler token id) + `grappleOffset` and moves with it.
+
+const CONDITION_COLORS = { Grappled: "#b8742a", Prone: "#5a5f80", Invisible: "#3f6fb8" };
+const EFFECT_COLORS = { buff: "#2f8f6f", debuff: "#7f4fb8", hazard: "#c2571a", neutral: "#50536e" };
 
 const TOOLS = [
   { id: "select", icon: "⬉", label: "Select", key: "v", title: "Select (V) — left-drag tokens and shapes, right-drag to pan, click a creature for its panel" },
@@ -64,6 +68,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   let allMaps = [];
   let currentMap = null;
   let tokens = [];
+  let tokensLoaded = false;
   let sidebarOpen = true;
   let unsubTokens = null, unsubMap = null;
   let combat = null;
@@ -85,7 +90,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     monsterOf: (t) => monstersById.get(t.monsterId),
     ruleset: () => ruleset,
     combat: () => combat,
-    artOf
+    artOf,
+    ready: () => tokensLoaded
   });
 
   const canvas = new VttCanvas(canvasHost, {
@@ -94,6 +100,9 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     onTokenMoved: (token, x, y, followers) => handleTokenMoved(token, x, y, followers),
     onTokenClicked: (token) => showTokenPopup(token),
     onTokenBlocked: (token) => explainBlocked(token),
+    onGrappledMoved: (token, dx, dy) => tools.moveGrappled(token, dx, dy),
+    moveBlockedWhy: (token, x, y) => tools.moveBlockedWhy(token, x, y),
+    onMoveRefused: (why) => toast(why, "error"),
     onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
     isDm: isDm,
     currentUid: user.uid,
@@ -109,14 +118,17 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (t.kind === "component") return t;
     const st = tools.stateOf(t);
     if (!st) return t;
-    const conds = st.conditions.map(c => CONDITION_ABBR[c]).filter(Boolean);
-    if (st.exhaustion) conds.push("Ex");
+    const conds = st.conditions.filter(c => CONDITION_ABBR[c]).map(c => ({ label: CONDITION_ABBR[c], color: CONDITION_COLORS[c] || "#9a3838" }));
+    if (st.exhaustion) conds.push({ label: "Ex", color: "#8a6d1f" });
+    st.effects.forEach(e => { const def = effectDef(e); if (def) conds.push({ label: def.abbr, color: EFFECT_COLORS[def.tone] }); });
     const g = t.grappledBy ? tokens.find(o => o.id === t.grappledBy) : null;
-    const follow = g && st.conditions.includes("Grappled") ? { id: g.id, dx: t.grappleOffset?.dx ?? (t.x - g.x), dy: t.grappleOffset?.dy ?? (t.y - g.y) } : null;
+    const follow = g && st.conditions.includes("Grappled") ? { id: g.id, ...tools.followOffset(t, g) } : null;
+    const { w, h: tall } = tools.footprint(t);
     const cur = combat?.active ? combat.combatants?.[combat.currentTurnIndex] : null;
     const showHp = isDm || t.kind === "pc";
-    return { ...t, imageBase64: artOf(t), _st: {
-      conds, follow, dead: st.dead, invisible: st.conditions.includes("Invisible"),
+    return { ...t, w, h: tall, imageBase64: artOf(t), _st: {
+      conds, follow, dead: st.dead, invisible: st.conditions.includes("Invisible") && !hasEffect(st.effects, "faerie-fire"),
+      outline: hasEffect(st.effects, "faerie-fire"),
       hpFrac: showHp && st.hp.max ? st.hp.current / st.hp.max : null,
       turn: !!cur && cur.id === (t.kind === "monster" ? t.id : t.refId)
     } };
@@ -125,12 +137,16 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   function refreshTokens() {
     if (refreshQueued) return;
     refreshQueued = true;
-    requestAnimationFrame(() => {
+    // A timer, not an animation frame: those pause in background tabs, and the DM's
+    // client has to keep grapples and turn effects running while it isn't in front.
+    setTimeout(() => {
       refreshQueued = false;
       canvas.setTokens(tokens.filter(t => isDm || !t.hidden).map(decorate));
       renderPopup();
+      renderTurnBar();
       tools.reconcile();
-    });
+      tools.processTurn();
+    }, 16);
   }
 
   const unsubCombat = db.combat.subscribe(campaignId, (c) => { combat = c; refreshTokens(); });
@@ -143,12 +159,14 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   // ---------------- Movement rules ----------------
   function canMove(token) {
-    if (!(isDm || (token.kind === "pc" && token.refId === myCharacter?.id))) return false;
-    if (token._st?.follow) return false;              // grappled: moves only with its grappler
-    if (!isDm) {
-      const st = tools.stateOf(token);
-      if (st && (st.dead || hasSpeedZero(st.conditions))) return false;
+    const st = tools.stateOf(token);
+    // Grappled: it can't move itself, but its grappler can swing it around
+    if (token._st?.follow) {
+      const g = tokens.find(t => t.id === token._st.follow.id);
+      return !!g && tools.canMoveHeld(g);
     }
+    if (!(isDm || (token.kind === "pc" && token.refId === myCharacter?.id))) return false;
+    if (!isDm && st && (st.dead || isImmobile(st.conditions, st.effects))) return false;
     return true;
   }
 
@@ -156,9 +174,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     const st = tools.stateOf(token);
     if (token._st?.follow) {
       const g = tokens.find(t => t.id === token._st.follow.id);
-      toast(`${st?.name || token.name} is Grappled by ${g?.name || "another creature"} — it moves when they move. Release the grapple to move it.`, "error");
-    } else if (st && hasSpeedZero(st.conditions)) {
-      toast(`${st.name} can't move — Speed 0 (${st.conditions.find(c => SPEED_ZERO.includes(c))})`, "error");
+      toast(`${st?.name || token.name} is Grappled by ${g?.name || "another creature"} \u2014 it moves when they move, and only they can drag it around.`, "error");
+    } else if (st && isImmobile(st.conditions, st.effects)) {
+      const why = st.conditions.find(c => SPEED_ZERO.includes(c)) || st.effects.map(effectDef).find(d => d?.speedZero)?.name;
+      toast(`${st.name} can't move \u2014 Speed 0 (${why})`, "error");
     } else if (st?.dead) {
       toast(`${st.name} is dead`, "error");
     } else if (!isDm) {
@@ -206,6 +225,21 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   const fsBtn = toolButton({ icon: "⛶", label: "Full", title: "Fullscreen (F) — Esc to leave" }, () => toggleVttFullscreen());
 
+  // Whose turn it is, with End Turn, so combat can be run from the map (and in fullscreen)
+  const turnBar = h("div", { class: "vtt-turn-bar", style: "display:none;" });
+  function renderTurnBar() {
+    const cur = combat?.active ? combat.combatants?.[combat.currentTurnIndex] : null;
+    turnBar.style.display = cur ? "inline-flex" : "none";
+    if (!cur) return;
+    turnBar.innerHTML = "";
+    turnBar.appendChild(h("span", { class: "vtt-turn-text", title: "Current turn" }, `Round ${combat.round}: <b>${escapeHtml(cur.name)}</b>`));
+    if (isDm || cur.ownerUid === user.uid) {
+      const end = h("button", { class: "vtt-tool", type: "button", title: "End this turn" }, '<span class="lbl">End Turn</span>');
+      end.addEventListener("click", () => db.combat.set(campaignId, nextTurnPatch(combat)));
+      turnBar.appendChild(end);
+    }
+  }
+
   function buildToolbar() {
     toolbar.innerHTML = "";
     toolButtons.clear();
@@ -245,6 +279,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       mapSel.addEventListener("change", () => loadMap(mapSel.value));
       toolbar.appendChild(mapSel);
     }
+    toolbar.appendChild(turnBar);
+    renderTurnBar();
     toolbar.appendChild(h("span", { style: "flex:1;" }));
     toolbar.appendChild(syncBadge);
     syncToolbar();
@@ -681,7 +717,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       fogMaskDoc = doc;
       applyFog();
     });
-    unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; refreshTokens(); });
+    tokensLoaded = false;
+    unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; tokensLoaded = true; refreshTokens(); });
     unsubShapes = db.shapes.subscribe(campaignId, mapId, (list) => { docShapes = list; refreshShapes(); });
     unsubFogs = db.maps.subscribe(campaignId, mapId, (m) => {
       if (!m) return;

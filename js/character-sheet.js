@@ -9,6 +9,7 @@ import {
 } from "./rules-engine.js";
 import { openLevelUp } from "./sheet/level-up.js";
 import { parseNotation } from "./dice/roll-logic.js";
+import { STATUS_EFFECTS, effectDef, hasEffect, effectPatch, effectAc, effectiveSpeed, conditionImmunities, attackMode, saveRule, checkRule, initiativeRule, rollExtraDice } from "./vtt/creatures.js";
 import { renderCoreTab } from "./sheet/sheet-core.js";
 import { renderActionsTab } from "./sheet/sheet-actions.js";
 import { renderSpellsTab } from "./sheet/sheet-spells.js";
@@ -50,11 +51,24 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
   function currentAdvMode() { return opts.getAdvMode ? opts.getAdvMode() : "normal"; }
   // Every roll from the sheet goes through here: Exhaustion (2024) subtracts 2 per
   // level from D20 Tests (attacks, checks, saves, initiative).
+  // Rolls tagged with a `kind` also follow the character's conditions and status effects:
+  // Advantage/Disadvantage, Bless/Bane dice, flat bonuses, and automatic save failures.
   function roll(spec) {
     const exh = character.exhaustion || 0;
-    if (exh && spec.sides === 20 && (spec.count || 1) === 1) {
-      opts.onRoll?.({ ...spec, modifier: (spec.modifier || 0) - 2 * exh, label: `${spec.label} (Exhaustion \u2212${2 * exh})` });
-    } else opts.onRoll?.(spec);
+    if (spec.sides !== 20 || (spec.count || 1) !== 1) { opts.onRoll?.(spec); return; }
+    const conds = character.conditions || [], fx = character.statusEffects || [];
+    const rule = spec.kind === "attack" ? attackMode(conds, exh, { effects: fx })
+      : spec.kind === "save" ? saveRule(spec.ability, conds, exh, fx)
+      : spec.kind === "check" ? checkRule(spec.ability, conds, exh, fx)
+      : spec.kind === "initiative" ? initiativeRule(conds, exh, fx)
+      : { mode: "normal", penalty: -2 * exh, dice: [] };
+    if (rule.autoFail) { toast(`${character.name} automatically fails: ${spec.label} (${rule.reason})`, "error"); return; }
+    const extra = rollExtraDice(rule.dice);
+    const notes = [exh ? `Exhaustion \u2212${2 * exh}` : "", extra.note, rule.mode !== "normal" ? (rule.reason || rule.reasons?.join(", ") || "") : ""].filter(Boolean);
+    // A picked Advantage or Disadvantage and the opposite one from the rules cancel out
+    const picked = spec.mode || "normal";
+    const mode = picked === "normal" ? rule.mode : rule.mode === "normal" || rule.mode === picked ? picked : "normal";
+    opts.onRoll?.({ ...spec, mode, modifier: (spec.modifier || 0) + rule.penalty + extra.total, label: notes.length ? `${spec.label} (${notes.join(", ")})` : spec.label });
   }
 
   // ---------------- Hit point management (damage / heal / temp, death saves) ----------------
@@ -126,7 +140,7 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
     const atkBonus = weaponAttackBonus(character, wd, item);
     const dmgBonus = weaponDamageBonus(character, wd, item);
     const parsed = parseNotation(wd.damageDice) || { count: 1, sides: 6, modifier: 0 };
-    roll({ sides: 20, count: 1, modifier: atkBonus, label: `${item.name} \u2014 Attack Roll`, mode: currentAdvMode() });
+    roll({ kind: "attack", sides: 20, count: 1, modifier: atkBonus, label: `${item.name} \u2014 Attack Roll`, mode: currentAdvMode() });
     roll({ sides: parsed.sides, count: parsed.count, modifier: dmgBonus + parsed.modifier, mode: "normal", label: `${item.name} \u2014 Damage (${wd.damageType})` });
     consumeAmmoFor(item);
     opts.onAction?.("action");
@@ -299,7 +313,7 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
       const grid = h("div", { class: "condition-grid" });
       CONDITIONS.forEach(c => {
         const on = active.includes(c);
-        const immune = !on && (character.conditionImmunities || []).includes(c);
+        const immune = !on && conditionImmunities({ condImmune: character.conditionImmunities, effects: character.statusEffects }).includes(c);
         const b = h("button", { class: `btn sm ${on ? "primary" : "ghost"}`, title: immune ? `Immune to ${c}` : "" }, c);
         b.disabled = immune;
         // Unconscious also knocks you Prone (and you stay Prone when it ends)
@@ -317,7 +331,51 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
       manage.appendChild(exRow);
       box.appendChild(manage);
     }
+    box.appendChild(renderEffects());
     return box;
+  }
+
+  // Status effects from spells, actions and hazards (shared with the VTT's creature panel)
+  function setEffect(id, on, extra) {
+    const p = effectPatch({ effects: character.statusEffects || [], hp: character.hp, conditions: character.conditions || [] }, id, on, extra);
+    const { effects, ...rest } = p;
+    patch({ statusEffects: effects, ...rest });
+  }
+  function renderEffects() {
+    const wrap = h("div", { class: "conditions-box" });
+    const active = character.statusEffects || [];
+    wrap.appendChild(h("span", { class: "lbl" }, "Status effects"));
+    const chips = h("div", { class: "condition-chips" });
+    if (!active.length) chips.appendChild(h("span", { class: "meta" }, "None"));
+    active.forEach(e => {
+      const def = effectDef(e);
+      if (!def) return;
+      const chip = h("button", { class: `condition-chip fx-${def.tone}`, title: def.text }, `${escapeHtml(def.name)}${e.rounds ? ` (${e.rounds})` : ""}${canEditVitals ? " \u2715" : ""}`);
+      if (canEditVitals) chip.addEventListener("click", () => setEffect(e.id, false));
+      chips.appendChild(chip);
+    });
+    wrap.appendChild(chips);
+    if (canEditVitals) {
+      const manage = h("details", { class: "conditions-manage" });
+      manage.appendChild(h("summary", {}, "Manage status effects"));
+      ["Spells", "Actions", "Hazards"].forEach(group => {
+        manage.appendChild(h("div", { class: "lbl", style: "margin-top:6px;" }, group));
+        const grid = h("div", { class: "condition-grid" });
+        STATUS_EFFECTS.filter(e => e.group === group && !e.hideInMenu).forEach(e => {
+          const on = hasEffect(active, e.id);
+          const b = h("button", { class: `btn sm ${on ? "primary" : "ghost"}`, title: e.text }, e.name);
+          b.addEventListener("click", () => {
+            let extra = {};
+            if (!on && e.askValue) { const v = prompt(e.askValue, "3"); if (v == null) return; extra = { value: parseInt(v, 10) || 0 }; }
+            setEffect(e.id, !on, extra);
+          });
+          grid.appendChild(b);
+        });
+        manage.appendChild(grid);
+      });
+      wrap.appendChild(manage);
+    }
+    return wrap;
   }
 
   async function render() {
@@ -344,7 +402,8 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
       .map(i => ({ label: i.name, value: i.magic.acBonus }));
     const magicAc = magicAcParts.reduce((s, a) => s + a.value, 0);
     ctx.saveBonus = activeMagic.reduce((s, i) => s + (i.magic.saveBonus || 0), 0);
-    const totalAc = baseAc + magicAc + acAdjustments.reduce((s, a) => s + a.value, 0);
+    const beforeEffects = baseAc + magicAc + acAdjustments.reduce((s, a) => s + a.value, 0);
+    const { ac: totalAc, parts: effectAcParts } = effectAc(beforeEffects, character.statusEffects);
     const initMod = initiativeModifier(character, ruleset);
 
     const shell = h("div", { class: "sheet-shell" });
@@ -389,7 +448,7 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
     const pbStat = h("div", { class: "combat-stat" }, `<div class="val">+${pb}</div><div class="lbl">Prof. Bonus</div>`);
     strip.appendChild(acStat); strip.appendChild(initStat); strip.appendChild(pbStat);
     combatCard.appendChild(strip);
-    attachRollMenu(initStat, { onRoll: (mode) => roll({ sides: 20, count: 1, modifier: initMod, label: "Initiative", mode }) });
+    attachRollMenu(initStat, { onRoll: (mode) => roll({ kind: "initiative", sides: 20, count: 1, modifier: initMod, label: "Initiative", mode }) });
 
     // AC breakdown (click to expand)
     let acOpen = false;
@@ -403,7 +462,7 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
       magicAcParts.forEach(adj => {
         acPanel.innerHTML += `<div class="breakdown-row"><span>${escapeHtml(adj.label)} (magic)</span><span class="amt">+${adj.value}</span></div>`;
       });
-      acAdjustments.forEach(adj => {
+      [...acAdjustments, ...effectAcParts].forEach(adj => {
         acPanel.innerHTML += `<div class="breakdown-row"><span>${escapeHtml(adj.label)}</span><span class="amt">${adj.value >= 0 ? "+" : ""}${adj.value}</span></div>`;
       });
       acPanel.innerHTML += `<div class="breakdown-row total"><span>Total AC</span><span class="amt">${totalAc}</span></div>`;
@@ -516,7 +575,7 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
     const sp2 = sp;
     const lin = (sp2?.choices || []).filter(c => c.type === "option").map(c => c.options.find(o => o.id === character.speciesChoices?.[c.id])).filter(Boolean);
     const baseSpeed = lin.find(o => o.speed)?.speed || sp2?.speed || 30;
-    const speed = Math.max(0, baseSpeed - 5 * (character.exhaustion || 0));
+    const speed = effectiveSpeed(baseSpeed, character.conditions || [], character.exhaustion || 0, character.statusEffects || []).ft;
     const dv = lin.find(o => o.darkvision)?.darkvision || sp2?.darkvision || 0;
     const perc = ruleset.skills.find(s => s.id === "perception");
     const pp = perc ? 10 + skillModifier(character, perc, ruleset.skills) : 10;

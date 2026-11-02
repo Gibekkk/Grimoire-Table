@@ -5,19 +5,24 @@
 // tokens (state lives on the token's `stats`).
 import { db } from "../db.js";
 import { h, toast, escapeHtml, showContextMenu } from "../util.js";
-import { ABILITIES, abilityModifier, formatModifier, estimateArmorClass } from "../rules-engine.js";
+import { ABILITIES, abilityModifier, formatModifier, estimateArmorClass, rollDie } from "../rules-engine.js";
 import { computeRoll, formatBreakdown } from "../dice/roll-logic.js";
 import {
-  SIZES, CONDITIONS, CONDITION_TEXT, DAMAGE_TYPES, SPEED_ZERO, impliedConditions, withCondition, isIncapacitated, hasSpeedZero,
-  attackMode, saveRule, defenseNotes, adjustDamage, takeDamage, concentrationDc, footprintGap, distanceFt, snapAdjacent,
+  SIZES, CONDITIONS, CONDITION_TEXT, DAMAGE_TYPES, impliedConditions, withCondition, isIncapacitated,
+  attackMode, saveRule, defenseNotes, adjustDamage, takeDamage, concentrationDc, footprintGap, distanceFt, ringOffset,
+  STATUS_EFFECTS, effectDef, hasEffect, effectPatch, conditionImmunities, effectAc, effectiveSpeed, effectiveSquares, initiativeRule, rollExtraDice, confusionResult, characterSpeed,
   monsterSaveBonus, attackDamageParts, rollFormula, generateLoot, rollHoard, rollMagicItem, rollIndividualCoins, sizeIdForSquares, innateResistances
 } from "./creatures.js";
 
-const CHAR_FIELDS = { resist: "damageResistances", immune: "damageImmunities", vulnerable: "damageVulnerabilities", condImmune: "conditionImmunities" };
+const CHAR_FIELDS = { resist: "damageResistances", immune: "damageImmunities", vulnerable: "damageVulnerabilities", condImmune: "conditionImmunities", effects: "statusEffects" };
+// A grapple with no Grappled condition may just be two writes arriving apart, so it
+// only counts as ended once it has stayed that way this long.
+const GRAPPLE_GRACE_MS = 4000;
+const SOURCE_CONDITIONS = { Frightened: "Who is it afraid of?", Charmed: "Who charmed it?" };
 const ui = { amount: "", dmgType: "", open: {}, privateRolls: false };
 try { ui.privateRolls = sessionStorage.getItem("gt_vtt_private_rolls") === "1"; } catch { /* noop */ }
 
-// ctx: { campaignId, user, isDm, mapId(), tokens(), charOf(token), monsterOf(token), ruleset(), combat(), artOf(token) }
+// ctx: { campaignId, user, isDm, mapId(), tokens(), ready(), charOf(token), monsterOf(token), ruleset(), combat(), artOf(token) }
 export function createCreatureTools(ctx) {
   const isCreature = (t) => t && (t.kind === "pc" || t.kind === "npc" || t.kind === "monster");
 
@@ -26,7 +31,8 @@ export function createCreatureTools(ctx) {
     if (token.kind === "monster") {
       const s = token.stats || {};
       return {
-        kind: "monster", name: token.name, hp: s.hp || { current: 0, max: 0, temp: 0 }, ac: s.ac ?? 10,
+        kind: "monster", name: token.name, hp: s.hp || { current: 0, max: 0, temp: 0 }, ac: effectAc(s.ac ?? 10, s.effects).ac, baseAc: s.ac ?? 10, effects: s.effects || [],
+        baseSpeed: parseInt(String(s.speed || "").match(/\d+/)?.[0], 10) || 0,
         conditions: s.conditions || [], exhaustion: s.exhaustion || 0, concentration: s.concentration || null,
         resist: s.resist || [], immune: s.immune || [], vulnerable: s.vulnerable || [], condImmune: s.condImmune || [],
         speed: s.speed || "", init: s.init ?? 0, cr: s.cr, dead: (s.hp?.current ?? 1) <= 0
@@ -38,7 +44,8 @@ export function createCreatureTools(ctx) {
     const failures = c.deathSaves?.failures || 0;
     const innate = innateResistances(c, ctx.ruleset());
     return {
-      kind: token.kind, name: c.name, hp: c.hp || { current: 0, max: 0, temp: 0 }, ac,
+      kind: token.kind, name: c.name, hp: c.hp || { current: 0, max: 0, temp: 0 }, ac: effectAc(ac, c.statusEffects).ac, effects: c.statusEffects || [],
+      baseSpeed: characterSpeed(c, ctx.ruleset()),
       conditions: c.conditions || [], exhaustion: c.exhaustion || 0, concentration: c.concentration || null,
       resist: [...new Set([...innate, ...(c.damageResistances || [])])], innateResist: innate, immune: c.damageImmunities || [], vulnerable: c.damageVulnerabilities || [], condImmune: c.conditionImmunities || [],
       deathSaves: c.deathSaves || { successes: 0, failures: 0 }, ownerUid: c.ownerUid,
@@ -53,8 +60,10 @@ export function createCreatureTools(ctx) {
 
   async function patchState(token, patch) {
     if (token.kind === "monster") {
-      const stats = { ...(token.stats || {}), ...patch };
-      token.stats = stats; // keep the open panel in step before the snapshot lands
+      // Merge onto the newest copy: a panel or menu can outlive the snapshot it was built from
+      const cur = tokenById(token.id) || token;
+      const stats = { ...(cur.stats || {}), ...patch };
+      cur.stats = stats; token.stats = stats; // keep the open panel in step before the snapshot lands
       await db.tokens.update(ctx.campaignId, ctx.mapId(), token.id, { stats });
       return;
     }
@@ -68,22 +77,68 @@ export function createCreatureTools(ctx) {
   const grappledBy = (target) => target.grappledBy ? tokenById(target.grappledBy) : null;
   const grappling = (grappler) => ctx.tokens().filter(t => t.grappledBy === grappler.id);
 
+  // Footprint on the grid right now (Enlarge / Reduce change it without touching the token doc)
+  function footprint(t) {
+    const effects = stateOf(t)?.effects || [];
+    return { w: (t.w || 1) === (t.h || 1) ? effectiveSquares(t.w || 1, effects) : t.w || 1, h: (t.w || 1) === (t.h || 1) ? effectiveSquares(t.h || 1, effects) : t.h || 1 };
+  }
+
+  // Current offset of a grappled token from its grappler, always within 5 ft.
+  // grappleOffsets on the grappler's token holds a move made by a player, who may only
+  // write their own token; the DM's client folds it into the target (see reconcile).
+  function followOffset(t, g) {
+    const off = g.grappleOffsets?.[t.id] || t.grappleOffset || { dx: t.x - g.x, dy: t.y - g.y };
+    return ringOffset(footprint(g), footprint(t), off.dx, off.dy);
+  }
+
+  // A grapple-start write is one document for monsters. For PCs and NPCs the condition goes
+  // first so nothing ever sees a grappler without the condition from this client.
   async function startGrapple(target, grappler) {
+    target = tokenById(target.id) || target;
+    grappler = tokenById(grappler.id) || grappler;
     const st = stateOf(target);
-    if (st.condImmune.includes("Grappled")) { toast(`${st.name} can't be Grappled (immune)`, "error"); return; }
-    const spot = footprintGap(target, grappler) <= 0 ? { x: target.x, y: target.y } : snapAdjacent(target, grappler);
-    await db.tokens.update(ctx.campaignId, ctx.mapId(), target.id, {
-      x: spot.x, y: spot.y, grappledBy: grappler.id, grappleOffset: { dx: spot.x - grappler.x, dy: spot.y - grappler.y }
-    });
-    if (!st.conditions.includes("Grappled")) await patchState(target, { conditions: withCondition(st.conditions, "Grappled", true) });
-    toast(`${st.name} is Grappled by ${grappler.name} — it moves with ${grappler.name} and can't move on its own`);
+    if (conditionImmunities(st).includes("Grappled")) { toast(`${st.name} can't be Grappled (immune)`, "error"); return; }
+    const off = ringOffset(footprint(grappler), footprint(target), target.x - grappler.x, target.y - grappler.y);
+    const place = { x: grappler.x + off.dx, y: grappler.y + off.dy, grappledBy: grappler.id, grappleOffset: off };
+    const conditions = withCondition(st.conditions, "Grappled", true);
+    toast(`${st.name} is Grappled by ${grappler.name} \u2014 it moves with ${grappler.name}, who can drag it around to any side`);
+    if (target.kind === "monster") {
+      const stats = { ...(target.stats || {}), conditions };
+      target.stats = stats;
+      await db.tokens.update(ctx.campaignId, ctx.mapId(), target.id, { ...place, stats });
+      return;
+    }
+    await Promise.all([patchState(target, { conditions }), db.tokens.update(ctx.campaignId, ctx.mapId(), target.id, place)]);
   }
 
   async function releaseGrapple(target, { quiet = false } = {}) {
-    await db.tokens.update(ctx.campaignId, ctx.mapId(), target.id, { grappledBy: null, grappleOffset: null });
+    target = tokenById(target.id) || target;
     const st = stateOf(target);
-    if (st?.conditions.includes("Grappled")) await patchState(target, { conditions: withCondition(st.conditions, "Grappled", false) });
+    const clear = { grappledBy: null, grappleOffset: null };
+    const hadCondition = st?.conditions.includes("Grappled");
     if (!quiet) toast(`${st?.name || target.name} is no longer Grappled`);
+    if (target.kind === "monster" && hadCondition) {
+      const stats = { ...(target.stats || {}), conditions: withCondition(st.conditions, "Grappled", false) };
+      target.stats = stats;
+      await db.tokens.update(ctx.campaignId, ctx.mapId(), target.id, { ...clear, stats });
+      return;
+    }
+    await Promise.all([db.tokens.update(ctx.campaignId, ctx.mapId(), target.id, clear), hadCondition ? patchState(target, { conditions: withCondition(st.conditions, "Grappled", false) }) : null]);
+  }
+
+  // The grappler repositions what it holds. (dx, dy) comes from the canvas, already on the ring.
+  async function moveGrappled(target, dx, dy) {
+    target = tokenById(target.id) || target;
+    const g = grappledBy(target);
+    if (!g) return;
+    if (ctx.isDm) {
+      const { [target.id]: _, ...others } = g.grappleOffsets || {};
+      const writes = [db.tokens.update(ctx.campaignId, ctx.mapId(), target.id, { x: g.x + dx, y: g.y + dy, grappleOffset: { dx, dy } })];
+      if (g.grappleOffsets?.[target.id]) writes.push(db.tokens.update(ctx.campaignId, ctx.mapId(), g.id, { grappleOffsets: others }));
+      await Promise.all(writes);
+      return;
+    }
+    await db.tokens.update(ctx.campaignId, ctx.mapId(), g.id, { grappleOffsets: { ...(g.grappleOffsets || {}), [target.id]: { dx, dy } } });
   }
 
   // Menu of creatures that could be the grappler, closest first
@@ -92,10 +147,42 @@ export function createCreatureTools(ctx) {
     if (!others.length) { toast("No other creature on this map to grapple with", "error"); return; }
     const items = [{ header: `Who grapples ${target.name}?` }];
     others.slice(0, 14).forEach(({ t, gap }) => items.push({
-      label: `${t.name} • ${distanceFt(target, t)} ft${gap > 0 ? " (pulled adjacent)" : ""}`,
+      label: `${t.name} \u2022 ${distanceFt(target, t)} ft${gap > 0 ? " (pulled adjacent)" : ""}`,
       action: () => startGrapple(target, t)
     }));
     showContextMenu(x, y, items);
+  }
+
+  // Frightened and Charmed name their source, like Grappled names its grappler
+  function chooseSource(token, name, x, y) {
+    const st = stateOf(token);
+    const apply = async (sourceId) => {
+      const cur = tokenById(token.id) || token;
+      await Promise.all([
+        patchState(cur, { conditions: withCondition(st.conditions, name, true) }),
+        db.tokens.update(ctx.campaignId, ctx.mapId(), cur.id, { condSources: { ...(cur.condSources || {}), [name]: sourceId } })
+      ]);
+    };
+    const others = ctx.tokens().filter(t => t.id !== token.id && isCreature(t)).map(t => ({ t, ft: distanceFt(token, t) })).sort((a, b) => a.ft - b.ft);
+    const items = [{ header: SOURCE_CONDITIONS[name] }, { label: "No specific creature", action: () => apply(null) }];
+    others.slice(0, 14).forEach(({ t, ft }) => items.push({ label: `${t.name} \u2022 ${ft} ft`, action: () => apply(t.id) }));
+    showContextMenu(x, y, items);
+  }
+  const sourceOf = (token, name) => token.condSources?.[name] ? tokenById(token.condSources[name]) : null;
+
+  // Why a token may not end a move at (x, y), for the mover to be told: a Frightened
+  // creature can't willingly move closer to the source of its fear. The DM can still
+  // force the move (shoves, falls), with a reminder.
+  function moveBlockedWhy(token, x, y) {
+    const st = stateOf(token);
+    const src = st?.conditions.includes("Frightened") ? sourceOf(token, "Frightened") : null;
+    if (!src) return null;
+    const c = (p, t) => ({ x: p.x + (t.w || 1) / 2, y: p.y + (t.h || 1) / 2 });
+    const s = c(src, src), from = c(token, token), to = c({ x, y }, token);
+    if (Math.hypot(to.x - s.x, to.y - s.y) >= Math.hypot(from.x - s.x, from.y - s.y) - 0.01) return null;
+    const why = `${st.name} is Frightened of ${src.name} and can't willingly move closer`;
+    if (ctx.isDm) { toast(`${why} (allowed: you're the DM)`); return null; }
+    return why;
   }
 
   // DM-side upkeep after any token/character change: grapples end when the grappler
@@ -103,6 +190,7 @@ export function createCreatureTools(ctx) {
   // followers are kept at their offset from the grappler (also covers players moving
   // a PC that drags a monster, which their own client isn't allowed to write).
   const reconciling = new Set();
+  const noCondSince = new Map();
   function reconcile() {
     if (!ctx.isDm) return;
     ctx.tokens().forEach(t => {
@@ -111,30 +199,154 @@ export function createCreatureTools(ctx) {
       const st = stateOf(t);
       if (!st) return;
       const gs = g ? stateOf(g) : null;
-      const broken = !g || !st.conditions.includes("Grappled") || (gs && (gs.dead || isIncapacitated(gs.conditions)));
+      const noCond = !st.conditions.includes("Grappled");
+      if (g && noCond && !(gs && (gs.dead || isIncapacitated(gs.conditions)))) {
+        // Grapple and condition are separate writes for PCs/NPCs: give the other one time to land
+        const since = noCondSince.get(t.id) ?? Date.now();
+        noCondSince.set(t.id, since);
+        if (Date.now() - since < GRAPPLE_GRACE_MS) { setTimeout(reconcile, GRAPPLE_GRACE_MS + 50); return; }
+      }
+      noCondSince.delete(t.id);
+      const broken = !g || noCond || (gs && (gs.dead || isIncapacitated(gs.conditions)));
       reconciling.add(t.id);
       const done = () => setTimeout(() => reconciling.delete(t.id), 400);
       if (broken) {
-        const why = !g ? "the grappler left the map" : !st.conditions.includes("Grappled") ? null : gs?.dead ? `${g.name} is down` : `${g.name} is Incapacitated`;
-        releaseGrapple(t, { quiet: !why }).then(() => { if (why) toast(`Grapple on ${st.name} ends — ${why}`); }).finally(done);
+        const why = !g ? "the grappler left the map" : noCond ? null : gs?.dead ? `${g.name} is down` : `${g.name} is Incapacitated`;
+        releaseGrapple(t, { quiet: true }).then(() => { if (why) toast(`Grapple on ${st.name} ends \u2014 ${why}`); }).finally(done);
         return;
       }
-      const off = t.grappleOffset || { dx: t.x - g.x, dy: t.y - g.y };
+      const off = followOffset(t, g);
       const want = { x: g.x + off.dx, y: g.y + off.dy };
-      if (Math.abs(want.x - t.x) > 0.01 || Math.abs(want.y - t.y) > 0.01) {
-        db.tokens.update(ctx.campaignId, ctx.mapId(), t.id, { x: want.x, y: want.y }).finally(done);
-      } else done();
+      const writes = [];
+      const stored = t.grappleOffset || {};
+      if (Math.abs(want.x - t.x) > 0.01 || Math.abs(want.y - t.y) > 0.01 || Math.abs((stored.dx ?? 1e9) - off.dx) > 0.01 || Math.abs((stored.dy ?? 1e9) - off.dy) > 0.01) {
+        writes.push(db.tokens.update(ctx.campaignId, ctx.mapId(), t.id, { x: want.x, y: want.y, grappleOffset: off }));
+      }
+      if (g.grappleOffsets?.[t.id]) {
+        const { [t.id]: _, ...others } = g.grappleOffsets;
+        writes.push(db.tokens.update(ctx.campaignId, ctx.mapId(), g.id, { grappleOffsets: others }));
+      }
+      Promise.all(writes).finally(done);
     });
+  }
+
+  // ---------------- Status effects ----------------
+  async function toggleEffect(token, id) {
+    const st = stateOf(token);
+    const on = !hasEffect(st.effects, id);
+    const def = effectDef(st.effects.find(e => e.id === id) || id);
+    const extra = {};
+    if (on && def?.askValue) {
+      const v = prompt(def.askValue, "3");
+      if (v == null) return;
+      extra.value = parseInt(v, 10) || 0;
+    }
+    const patch = effectPatch(st, id, on, extra);
+    // Gaining an immunity ends the conditions it covers
+    if (on && def?.condImmune) patch.conditions = (patch.conditions || st.conditions).filter(c => !def.condImmune.includes(c));
+    if (!on && def?.endsInto) toast(`${st.name}: ${def.name} ends \u2014 ${effectDef(def.endsInto).text}`, "error");
+    await patchState(token, patch);
+    if (isIncapacitated(patch.conditions || []) && !isIncapacitated(st.conditions)) {
+      if (st.concentration) await patchState(token, { concentration: null });
+      for (const t of grappling(token)) await releaseGrapple(t, { quiet: true });
+    }
+  }
+
+  // Anything the catalog doesn't cover: a name, a duration, and damage each turn if any
+  async function addCustomEffect(token) {
+    const name = prompt("Effect name (e.g. Bleeding, Cursed):");
+    if (!name?.trim()) return;
+    const rounds = parseInt(prompt("Lasts how many of its turns? (blank = until removed)", "") || "", 10);
+    const tick = (prompt('Damage at the start of each of its turns? e.g. "1d6 poison" (blank = none)', "") || "").trim().match(/^(\d*d\d+(?:[+-]\d+)?)\s*(\w+)?$/i);
+    const fields = { name: name.trim(), abbr: name.trim().slice(0, 2), tone: tick ? "hazard" : "neutral", text: "Custom effect." };
+    if (rounds > 0) fields.rounds = rounds;
+    if (tick) { fields.tick = { dice: tick[1], type: DAMAGE_TYPES.includes(tick[2]?.toLowerCase()) ? tick[2].toLowerCase() : "" }; fields.text = `${tick[0]} at the start of each turn.`; }
+    const st = stateOf(token);
+    await patchState(token, effectPatch(st, `custom:${Date.now()}`, true, fields));
+  }
+
+  // Turn upkeep runs once per turn on the DM's client. effectsTurn on the combat doc records
+  // the last turn handled, so reopening the VTT or a second tab doesn't repeat it.
+  let lastTurnKey = null;
+  const tokenOfCombatant = (id) => ctx.tokens().find(t => t.id === id || (t.kind !== "monster" && t.refId === id));
+  async function processTurn() {
+    const combat = ctx.combat();
+    if (!ctx.isDm || !combat?.active || !ctx.ready()) return;
+    const cur = combat.combatants?.[combat.currentTurnIndex];
+    if (!cur) return;
+    const key = `${combat.round}:${combat.currentTurnIndex}:${cur.id}`;
+    const prev = combat.effectsTurn;
+    if (prev?.key === key || lastTurnKey === key) return;
+    lastTurnKey = key;
+    await db.combat.set(ctx.campaignId, { effectsTurn: { key, id: cur.id } });
+    if (prev?.id) await endOfTurn(tokenOfCombatant(prev.id));
+    await startOfTurn(tokenOfCombatant(cur.id));
+  }
+
+  async function endOfTurn(token) {
+    const st = token && stateOf(token);
+    if (!st || st.dead) return;
+    const work = { ...st }, patch = {};
+    const change = (id) => { const p = effectPatch(work, id, false); Object.assign(work, p); Object.assign(patch, p); };
+    st.effects.filter(e => effectDef(e)?.ends === "turnEnd").forEach(e => change(e.id));
+    if (st.effects.some(e => effectDef(e)?.exhaustionAtTurnEnd)) {
+      patch.exhaustion = Math.min(6, st.exhaustion + 1);
+      toast(`${st.name} is suffocating: Exhaustion ${patch.exhaustion}`, "error");
+    }
+    if (Object.keys(patch).length) await patchState(token, patch);
+  }
+
+  async function startOfTurn(token) {
+    const st = token && stateOf(token);
+    if (!st || st.dead) return;
+    const ended = [];
+    const work = { ...st, effects: st.effects.map(e => e.rounds ? { ...e, rounds: e.rounds - 1 } : e) };
+    const patch = { effects: work.effects };
+    st.effects.forEach(e => {
+      const def = effectDef(e);
+      const live = work.effects.find(x => x.id === e.id);
+      if (def?.ends === "turnStart" || (e.rounds && live && live.rounds <= 0)) {
+        const p = effectPatch(work, e.id, false);
+        Object.assign(work, p); Object.assign(patch, p);
+        ended.push(def?.name || e.name);
+      }
+    });
+    if (st.effects.length) await patchState(token, patch);
+    if (ended.length) toast(`${st.name}: ${ended.join(", ")} ended`);
+    // Everything active as the turn began takes effect, including what lapses this turn
+    for (const e of st.effects) {
+      const def = effectDef(e);
+      if (!def || def.ends === "turnStart") continue;
+      if (def?.tick) {
+        const total = rollFormula(def.tick.dice);
+        toast(`${st.name} \u2014 ${def.name}: ${def.tick.dice} rolled ${total}`);
+        await damage(token, total, def.tick.type);
+      }
+      if (def?.tempFromValue && e.value > 0) await setTemp(token, e.value, { quiet: true });
+      if (def?.table === "confusion") {
+        const d10 = rollDie(10);
+        toast(`${st.name} is Confused (d10 = ${d10}): it ${confusionResult(d10, rollDie(4))}`);
+      }
+    }
   }
 
   // ---------------- HP ----------------
   async function damage(token, raw, type) {
+    token = tokenById(token.id) || token;
     const st = stateOf(token);
     if (!st || !(raw > 0)) return;
-    const { amount, note } = adjustDamage(raw, type, st, st.conditions);
+    const { amount, note } = adjustDamage(raw, type, st, st.conditions, st.effects);
     const res = takeDamage(st.hp, amount);
     const patch = { hp: res.hp };
     let msg = `${st.name} takes ${amount}${type ? ` ${type}` : ""} damage${note ? ` (${note})` : ""}`;
+    // Death Ward: drops to 1 HP instead of 0, once
+    const ward = res.dropped ? st.effects.find(e => effectDef(e)?.deathWard) : null;
+    if (ward) {
+      res.hp.current = 1; res.dropped = false; res.massive = false;
+      Object.assign(patch, effectPatch(st, ward.id, false));
+      patch.hp = res.hp;
+      msg += " \u2014 Death Ward holds: it drops to 1 HP instead.";
+    }
     if (token.kind === "pc") {
       if (st.hp.current === 0 && res.rest > 0) {
         const ds = { ...st.deathSaves };
@@ -183,21 +395,26 @@ export function createCreatureTools(ctx) {
     toast(`${st.name} regains ${hp.current - st.hp.current} HP`);
   }
 
-  async function setTemp(token, amount) {
+  async function setTemp(token, amount, { quiet = false } = {}) {
     const st = stateOf(token);
     if (!st || amount < 0) return;
     // Temporary HP doesn't stack: keep the higher value
-    if (amount <= (st.hp.temp || 0)) { toast(`${st.name} keeps its ${st.hp.temp} temporary HP (they don't stack)`); return; }
+    if (amount <= (st.hp.temp || 0)) { if (!quiet) toast(`${st.name} keeps its ${st.hp.temp} temporary HP (they don't stack)`); return; }
     await patchState(token, { hp: { ...st.hp, temp: amount } });
   }
 
   async function toggleCondition(token, name, anchor) {
     const st = stateOf(token);
     const on = !st.conditions.includes(name);
-    if (on && st.condImmune.includes(name)) { toast(`${st.name} is immune to ${name}`, "error"); return; }
+    if (on && conditionImmunities(st).includes(name)) { toast(`${st.name} is immune to ${name}`, "error"); return; }
     if (name === "Grappled") {
       if (on) { const r = anchor?.getBoundingClientRect(); chooseGrappler(token, r?.left ?? 200, r?.bottom ?? 200); }
       else await releaseGrapple(token);
+      return;
+    }
+    if (on && SOURCE_CONDITIONS[name] && ctx.tokens().some(t => t.id !== token.id && isCreature(t))) {
+      const r = anchor?.getBoundingClientRect();
+      chooseSource(token, name, r?.left ?? 200, r?.bottom ?? 200);
       return;
     }
     const patch = { conditions: withCondition(st.conditions, name, on) };
@@ -207,8 +424,10 @@ export function createCreatureTools(ctx) {
   }
 
   // ---------------- Rolls ----------------
-  function logRoll(token, label, spec) {
-    const result = computeRoll(spec);
+  function logRoll(token, label, spec, dice = []) {
+    const extra = rollExtraDice(dice);
+    if (extra.note) label = `${label} (${extra.note})`;
+    const result = computeRoll({ ...spec, modifier: (spec.modifier || 0) + extra.total });
     const name = stateOf(token)?.name || token.name;
     if (ctx.isDm && (ui.privateRolls || token.hidden)) {
       toast(`\u{1F512} ${name} — ${label}: ${result.total} (${formatBreakdown(result)}${result.mode !== "normal" ? `, ${result.mode}` : ""})`);
@@ -243,14 +462,14 @@ export function createCreatureTools(ctx) {
       const c = { id, type: token.kind, name: st.name, portraitBase64: ctx.artOf(token) || null, ownerUid: st.ownerUid || null, initiative: null, initMod,
         actionUsed: false, bonusActionUsed: false, reactionUsed: false, movementUsed: false };
       if (token.kind === "monster") {
-        const mode = st.conditions.includes("Invisible") ? "advantage" : "normal";
-        c.initiative = computeRoll({ sides: 20, count: 1, modifier: (initMod || 0) - 2 * st.exhaustion, mode }).total;
+        const rule = initiativeRule(st.conditions, st.exhaustion, st.effects);
+        c.initiative = computeRoll({ sides: 20, count: 1, modifier: (initMod || 0) + rule.penalty, mode: rule.mode }).total;
       }
       added.push(c);
     }
     if (!added.length) { toast("Already in the initiative order"); return; }
     if (combat?.active) await db.combat.set(ctx.campaignId, { combatants: [...existing, ...added] });
-    else await db.combat.set(ctx.campaignId, { active: true, round: 1, currentTurnIndex: 0, combatants: added, pendingRollRequest: null });
+    else await db.combat.set(ctx.campaignId, { active: true, round: 1, currentTurnIndex: 0, combatants: added, pendingRollRequest: null, effectsTurn: null });
     toast(`${added.length === 1 ? added[0].name : `${added.length} creatures`} added to initiative${combat?.active ? "" : " — combat started (see the Combat tab)"}`);
   }
 
@@ -344,19 +563,21 @@ export function createCreatureTools(ctx) {
       const look = st.dead ? "Dead" : st.hp.current <= 0 ? "Down" : pct <= 0.5 ? "Bloodied" : pct < 1 ? "Wounded" : "Unhurt";
       el.appendChild(h("p", { class: "cp-look" }, look));
       el.appendChild(conditionChips(token, st, false));
+      if (st.effects.length) el.appendChild(effectChips(token, st, false));
       if (g) el.appendChild(h("p", { class: "meta" }, `Grappled by ${escapeHtml(g.name)}`));
       return;
     }
 
     // Stats row
-    const speedZero = hasSpeedZero([...st.conditions, ...impliedConditions(st.conditions)]);
-    const speedText = speedZero ? `0 ft (${st.conditions.find(c => SPEED_ZERO.includes(c))})` : (st.speed || "") + (st.exhaustion && st.speed ? ` −${st.exhaustion * 5} ft` : "");
+    const speed = effectiveSpeed(st.baseSpeed || 0, st.conditions, st.exhaustion, st.effects);
+    const walk = token.kind === "monster" && st.baseSpeed ? String(token.stats?.speed || "").replace(/\d+/, speed.ft) : `${speed.ft} ft.`;
+    const speedText = speed.why ? `0 ft (${speed.why})` : walk;
     const stats = h("div", { class: "cp-stats" });
-    stats.innerHTML = `<div><span class="lbl">AC</span><b>${st.ac}</b></div>${st.speed || speedZero ? `<div><span class="lbl">Speed</span><b class="${speedZero ? "bad" : ""}">${escapeHtml(speedText)}</b></div>` : ""}${token.kind === "monster" ? `<div><span class="lbl">Init</span><b>${formatModifier(st.init)}</b></div>` : ""}`;
+    stats.innerHTML = `<div><span class="lbl">AC</span><b>${st.ac}</b></div><div><span class="lbl">Speed</span><b class="${speed.why ? "bad" : ""}">${escapeHtml(speedText)}</b></div>${token.kind === "monster" ? `<div><span class="lbl">Init</span><b>${formatModifier(st.init)}</b></div>` : ""}`;
     if (token.kind === "monster" && ctx.isDm) {
       const acB = stats.querySelector("div b");
-      acB.title = "Click to change AC"; acB.style.cursor = "pointer";
-      acB.addEventListener("click", () => { const v = prompt(`AC for ${st.name}:`, st.ac); if (v != null && v !== "" && !isNaN(+v)) patchState(token, { ac: parseInt(v, 10) }); });
+      acB.title = "Click to change its base AC"; acB.style.cursor = "pointer";
+      acB.addEventListener("click", () => { const v = prompt(`Base AC for ${st.name} (before status effects):`, st.baseAc); if (v != null && v !== "" && !isNaN(+v)) patchState(token, { ac: parseInt(v, 10) }); });
     }
     el.appendChild(stats);
 
@@ -406,7 +627,7 @@ export function createCreatureTools(ctx) {
     // Grapple status
     if (g) {
       const row = h("div", { class: "cp-note" });
-      row.innerHTML = `<b>Grappled by ${escapeHtml(g.name)}</b> — Speed 0; moves with ${escapeHtml(g.name)}. Disadvantage on attacks except against ${escapeHtml(g.name)}. Escape: action, Athletics or Acrobatics vs. the escape DC.`;
+      row.innerHTML = `<b>Grappled by ${escapeHtml(g.name)}</b> — Speed 0; moves with ${escapeHtml(g.name)}. Disadvantage on attacks except against ${escapeHtml(g.name)}. Escape: action, Athletics or Acrobatics vs. the escape DC.${canMoveHeld(g) ? ` Drag this token to move it around ${escapeHtml(g.name)}.` : ""}`;
       if (editable) { const b = h("button", { class: "btn sm ghost" }, "Escape / Release"); b.addEventListener("click", () => releaseGrapple(token)); row.appendChild(b); }
       el.appendChild(row);
     }
@@ -420,10 +641,15 @@ export function createCreatureTools(ctx) {
 
     // Conditions
     el.appendChild(section("Conditions", conditionChips(token, st, true), conditionEditor(token, st), "cond"));
-    const notes = defenseNotes([...st.conditions, ...impliedConditions(st.conditions)]);
-    const am = attackMode(st.conditions, st.exhaustion);
+    Object.keys(SOURCE_CONDITIONS).forEach(name => {
+      const src = st.conditions.includes(name) ? sourceOf(token, name) : null;
+      if (src) el.appendChild(h("div", { class: "cp-note" }, name === "Frightened" ? `<b>Frightened of ${escapeHtml(src.name)}</b> \u2014 it can't willingly move closer.` : `<b>Charmed by ${escapeHtml(src.name)}</b> \u2014 it can't attack ${escapeHtml(src.name)}, who has Advantage on social checks against it.`));
+    });
+    el.appendChild(section("Status effects", effectChips(token, st, true), effectEditor(token, st), "fx"));
+    const notes = defenseNotes([...st.conditions, ...impliedConditions(st.conditions)], st.effects);
+    const am = attackMode(st.conditions, st.exhaustion, { effects: st.effects });
     const effects = [];
-    if (am.mode !== "normal" || am.penalty) effects.push(`Its attacks: ${am.mode !== "normal" ? am.mode : "normal"}${am.penalty ? `, ${am.penalty} (Exhaustion)` : ""}${am.reasons.length ? ` (${am.reasons.join(", ")})` : ""}`);
+    if (am.mode !== "normal" || am.penalty || am.dice.length) effects.push(`Its attacks: ${am.mode !== "normal" ? am.mode : "normal"}${am.penalty ? `, ${am.penalty} (Exhaustion)` : ""}${am.dice.map(d => `, ${d.sides < 0 ? "\u2212" : "+"}1d${Math.abs(d.sides)} (${d.name})`).join("")}${am.reasons.length ? ` (${am.reasons.join(", ")})` : ""}`);
     notes.forEach(n => effects.push(n));
     if (isIncapacitated(st.conditions)) effects.push("No actions, Bonus Actions or Reactions");
     if (effects.length) el.appendChild(h("ul", { class: "cp-effects" }, effects.map(e => `<li>${escapeHtml(e)}</li>`).join("")));
@@ -443,6 +669,47 @@ export function createCreatureTools(ctx) {
       el.appendChild(priv);
     }
     el.appendChild(footer(token, st, { onSize, onToggleHidden, onRemove, onOpenSheet }));
+  }
+
+  // The DM, or the player whose PC is the grappler, can reposition what it holds
+  function canMoveHeld(g) {
+    return ctx.isDm || (g.kind === "pc" && ctx.charOf(g)?.ownerUid === ctx.user.uid);
+  }
+
+  function effectChips(token, st, interactive) {
+    const box = h("div", { class: "condition-chips" });
+    const bloodied = st.hp.max && st.hp.current > 0 && st.hp.current <= st.hp.max / 2;
+    if (!st.effects.length && !bloodied) box.appendChild(h("span", { class: "meta" }, "None"));
+    if (bloodied) box.appendChild(h("span", { class: "condition-chip bloodied", title: "Half its Hit Points or fewer" }, "Bloodied"));
+    const edit = interactive && canEdit(token);
+    st.effects.forEach(e => {
+      const def = effectDef(e);
+      if (!def) return;
+      const left = e.rounds ? ` (${e.rounds})` : "";
+      const chip = h("button", { class: `condition-chip fx-${def.tone}`, title: `${def.text}${e.rounds ? `\n${e.rounds} of its turns left` : ""}${edit ? "\n(click to remove)" : ""}` }, `${escapeHtml(def.name)}${left}${edit ? " \u2715" : ""}`);
+      if (edit) chip.addEventListener("click", () => toggleEffect(token, e.id));
+      box.appendChild(chip);
+    });
+    return box;
+  }
+
+  function effectEditor(token, st) {
+    if (!canEdit(token)) return null;
+    const box = h("div", {});
+    ["Spells", "Actions", "Hazards"].forEach(group => {
+      box.appendChild(h("div", { class: "lbl", style: "margin-top:6px;" }, group));
+      const grid = h("div", { class: "cp-toggle-grid" });
+      STATUS_EFFECTS.filter(e => e.group === group && !e.hideInMenu).forEach(e => {
+        const b = h("button", { class: `btn sm ${hasEffect(st.effects, e.id) ? "primary" : ""}`, title: e.text }, e.name);
+        b.addEventListener("click", () => toggleEffect(token, e.id));
+        grid.appendChild(b);
+      });
+      box.appendChild(grid);
+    });
+    const custom = h("button", { class: "btn sm ghost", style: "margin-top:6px;" }, "+ Custom effect\u2026");
+    custom.addEventListener("click", () => addCustomEffect(token));
+    box.appendChild(custom);
+    return box;
   }
 
   // Tiny or two+ sizes smaller can be dragged for free
@@ -494,7 +761,7 @@ export function createCreatureTools(ctx) {
     const grid = h("div", { class: "cp-toggle-grid" });
     CONDITIONS.forEach(c => {
       const on = st.conditions.includes(c);
-      const immune = st.condImmune.includes(c);
+      const immune = conditionImmunities(st).includes(c);
       const b = h("button", { class: `btn sm ${on ? "primary" : ""} ${immune ? "immune" : ""}`, title: immune ? `Immune to ${c}` : CONDITION_TEXT[c] }, c);
       b.addEventListener("click", () => toggleCondition(token, c, b));
       grid.appendChild(b);
@@ -523,7 +790,9 @@ export function createCreatureTools(ctx) {
   function defenseChips(st) {
     const box = h("div", { class: "cp-def" });
     const line = (label, list, cls) => list.length ? `<div><span class="lbl">${label}</span> ${list.map(x => `<span class="def-chip ${cls}">${escapeHtml(x)}</span>`).join("")}</div>` : "";
-    const html = line("Resist", st.resist, "res") + line("Immune", st.immune, "imm") + line("Vulnerable", st.vulnerable, "vul") + line("Condition immune", st.condImmune, "cimm");
+    const fromFx = (key) => [...new Set(st.effects.flatMap(e => effectDef(e)?.[key] || []))];
+    const html = line("Resist", st.resist, "res") + line("Immune", st.immune, "imm") + line("Vulnerable", st.vulnerable, "vul") + line("Condition immune", st.condImmune, "cimm")
+      + line("Resist (effects)", fromFx("resist"), "res") + line("Immune (effects)", [...fromFx("immune"), ...fromFx("condImmune")], "imm");
     box.innerHTML = html || '<span class="meta">None</span>';
     return box;
   }
@@ -573,11 +842,11 @@ export function createCreatureTools(ctx) {
     const saves = h("div", { class: "cp-saves" });
     ABILITIES.forEach(a => {
       const bonus = monsterSaveBonus(monster, a);
-      const rule = saveRule(a, st.conditions, st.exhaustion);
-      const b = h("button", { class: `btn sm ${rule.autoFail ? "danger" : ""}`, title: rule.autoFail ? `Automatically fails (${rule.reason})` : rule.reason ? `Disadvantage (${rule.reason})` : `${a.toUpperCase()} save` }, `${a.toUpperCase()} ${rule.autoFail ? "✖" : formatModifier(bonus)}`);
+      const rule = saveRule(a, st.conditions, st.exhaustion, st.effects);
+      const b = h("button", { class: `btn sm ${rule.autoFail ? "danger" : ""}`, title: rule.autoFail ? `Automatically fails (${rule.reason})` : rule.reason ? `${rule.mode} (${rule.reason})` : `${a.toUpperCase()} save` }, `${a.toUpperCase()} ${rule.autoFail ? "✖" : formatModifier(bonus + rule.penalty)}${rule.mode === "advantage" ? " ▲" : rule.mode === "disadvantage" ? " ▼" : ""}`);
       b.addEventListener("click", () => {
         if (rule.autoFail) { toast(`${st.name} automatically fails the ${a.toUpperCase()} save (${rule.reason})`, "error"); return; }
-        logRoll(token, `${a.toUpperCase()} save`, { sides: 20, count: 1, modifier: bonus + rule.penalty, mode: rule.mode });
+        logRoll(token, `${a.toUpperCase()} save`, { sides: 20, count: 1, modifier: bonus + rule.penalty, mode: rule.mode }, rule.dice);
       });
       saves.appendChild(b);
     });
@@ -588,19 +857,19 @@ export function createCreatureTools(ctx) {
     if (isIncapacitated(st.conditions)) wrap.appendChild(h("div", { class: "cp-note bad" }, "Incapacitated — it can't take actions."));
     attacks.forEach(a => {
       const row = h("div", { class: "cp-attack" });
-      const am = attackMode(st.conditions, st.exhaustion);
+      const am = attackMode(st.conditions, st.exhaustion, { effects: st.effects });
       const parts = attackDamageParts(a);
       row.appendChild(h("div", { class: "cp-attack-name", title: a.description || "" }, `<b>${escapeHtml(a.name)}</b><small>${escapeHtml(parts.map(p => `${p.formula} ${p.type}`).join(" + "))}</small>`));
       const hit = h("button", { class: `btn sm ${am.mode === "disadvantage" ? "dis" : am.mode === "advantage" ? "adv" : "primary"}`, title: `${am.mode !== "normal" ? am.mode : "Normal"}${am.reasons.length ? ` (${am.reasons.join(", ")})` : ""}${g ? `\nGrappled: Disadvantage unless attacking ${g.name} (right-click)` : ""}\nRight-click for Advantage / Disadvantage` }, `${formatModifier(a.attackBonus + am.penalty)}${am.mode === "advantage" ? " ▲" : am.mode === "disadvantage" ? " ▼" : ""}`);
       const doHit = (mode) => {
-        const r = logRoll(token, `${a.name} attack`, { sides: 20, count: 1, modifier: a.attackBonus + am.penalty, mode });
+        const r = logRoll(token, `${a.name} attack`, { sides: 20, count: 1, modifier: a.attackBonus + am.penalty, mode }, am.dice);
         if (r.isCritHigh) toast(`Critical hit! Use Crit damage for ${a.name}.`);
       };
       hit.addEventListener("click", () => doHit(am.mode));
       hit.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         const items = [{ label: "Normal", action: () => doHit("normal") }, { label: "Advantage", action: () => doHit("advantage") }, { label: "Disadvantage", action: () => doHit("disadvantage") }];
-        if (g) items.unshift({ label: `Against ${g.name} (grappler)`, action: () => doHit(attackMode(st.conditions, st.exhaustion, { vsGrappler: true }).mode) });
+        if (g) items.unshift({ label: `Against ${g.name} (grappler)`, action: () => doHit(attackMode(st.conditions, st.exhaustion, { vsGrappler: true, effects: st.effects }).mode) });
         showContextMenu(e.clientX, e.clientY, items);
       });
       const dmg = h("button", { class: "btn sm", title: "Roll damage" }, "Dmg");
@@ -681,7 +950,7 @@ export function createCreatureTools(ctx) {
       ini.addEventListener("click", () => addToInitiative([token]));
       row.appendChild(ini);
       const gr = h("button", { class: "btn sm", title: token.grappledBy ? "End this grapple" : "Pick who grapples this creature" }, token.grappledBy ? "Release" : "Grapple…");
-      gr.addEventListener("click", () => token.grappledBy ? releaseGrapple(token) : (stateOf(token).condImmune.includes("Grappled") ? toast(`${st.name} is immune to Grappled`, "error") : chooseGrappler(token, gr.getBoundingClientRect().left, gr.getBoundingClientRect().bottom)));
+      gr.addEventListener("click", () => token.grappledBy ? releaseGrapple(token) : (conditionImmunities(stateOf(token)).includes("Grappled") ? toast(`${st.name} is immune to Grappled`, "error") : chooseGrappler(token, gr.getBoundingClientRect().left, gr.getBoundingClientRect().bottom)));
       row.appendChild(gr);
     }
     if (ctx.isDm) {
@@ -705,5 +974,5 @@ export function createCreatureTools(ctx) {
     return row;
   }
 
-  return { stateOf, canEdit, render, reconcile, startGrapple, releaseGrapple, chooseGrappler, addToInitiative, toggleCondition, damage, heal, grappledBy };
+  return { stateOf, canEdit, render, reconcile, processTurn, startGrapple, releaseGrapple, moveGrappled, chooseGrappler, addToInitiative, toggleCondition, toggleEffect, damage, heal, grappledBy, followOffset, footprint, canMoveHeld, moveBlockedWhy };
 }

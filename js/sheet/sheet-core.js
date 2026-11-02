@@ -29,7 +29,7 @@ export function renderCoreTab(ctx) {
     `;
     const rollTarget = box.querySelector(".roll-target");
     attachRollMenu(rollTarget, {
-      onRoll: (mode) => onRoll({ sides: 20, count: 1, modifier: mod, label: `${ABILITY_NAMES[a]} Check`, mode }),
+      onRoll: (mode) => onRoll({ kind: "check", ability: a, sides: 20, count: 1, modifier: mod, label: `${ABILITY_NAMES[a]} Check`, mode }),
       extraItems: canEditCore ? [{
         label: override != null ? "Clear Override" : "Set Override\u2026",
         action: () => {
@@ -41,7 +41,7 @@ export function renderCoreTab(ctx) {
       }] : null
     });
     const saveTarget = box.querySelector(".save-target");
-    attachRollMenu(saveTarget, { onRoll: (mode) => onRoll({ sides: 20, count: 1, modifier: saveMod, label: `${ABILITY_NAMES[a]} Save`, mode }) });
+    attachRollMenu(saveTarget, { onRoll: (mode) => onRoll({ kind: "save", ability: a, sides: 20, count: 1, modifier: saveMod, label: `${ABILITY_NAMES[a]} Save`, mode }) });
     abilGrid.appendChild(box);
   });
   abilCard.appendChild(abilGrid);
@@ -86,7 +86,7 @@ export function renderCoreTab(ctx) {
     }
     const modEl = row.querySelector(".mod");
     attachRollMenu(modEl, {
-      onRoll: (mode) => onRoll({ sides: 20, count: 1, modifier: mod, label: skill.name, mode }),
+      onRoll: (mode) => onRoll({ kind: "check", ability: skill.ability, sides: 20, count: 1, modifier: mod, label: skill.name, mode }),
       extraItems: canEditCore ? [{
         label: override != null ? "Clear Override" : "Set Override\u2026",
         action: () => {

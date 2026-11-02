@@ -36,6 +36,8 @@
 // creature). A follower is drawn at its grappler's position plus an offset, so
 // it moves with the grappler on every client before any write lands.
 
+import { ringOffset } from "./creatures.js";
+
 const FEET_PER_GRID = 5;
 const FOG_MASK_PX_PER_GRID = 16; // mask resolution — fog edges are smoothed when scaled up
 const FOG_MASK_MAX_DIM = 2048;
@@ -240,6 +242,8 @@ export class VttCanvas {
       }
       if (dragging && dragging.id === t.id) {
         out = { ...out, _previewX: dragging._previewX, _previewY: dragging._previewY };
+        // A grappled token being repositioned keeps the angle it's being dragged to
+        if (out._st?.follow && dragging._st?.follow) out._st = { ...out._st, follow: dragging._st.follow };
         this.drag.token = out;
       }
       return out;
@@ -513,7 +517,8 @@ export class VttCanvas {
         this.selectedShape = null;
         if (this.opts.canMoveToken(token)) {
           // Remember where inside the token it was grabbed so it doesn't snap its corner to the pointer
-          const tw = this.gridToWorld(token.x, token.y);
+          const at = this._posOf(token);
+          const tw = this.gridToWorld(at.x, at.y);
           this.drag = {
             type: "token", token, startScreen: { x: sx, y: sy }, moved: false,
             grabOffset: { x: world.x - tw.x, y: world.y - tw.y }
@@ -599,6 +604,16 @@ export class VttCanvas {
       if (!this.drag.moved) return;
       const { grabOffset } = this.drag;
       const grid = this.worldToGrid(world.x - grabOffset.x, world.y - grabOffset.y);
+      const t = this.drag.token;
+      const leader = t._st?.follow ? this._byId?.get(t._st.follow.id) : null;
+      if (leader) {
+        // Grappled: it swings around its grappler, always touching, to whichever side the pointer is on
+        const l = this._posOf(leader);
+        const off = ringOffset(leader, t, grid.x - l.x, grid.y - l.y);
+        t._st = { ...t._st, follow: { ...t._st.follow, dx: off.dx, dy: off.dy } };
+        this._markDirty();
+        return;
+      }
       this.drag.token._previewX = grid.x;
       this.drag.token._previewY = grid.y;
       this._markDirty();
@@ -662,10 +677,18 @@ export class VttCanvas {
       const t = drag.token;
       if (!drag.moved) {
         this.opts.onTokenClicked?.(t);
+      } else if (t._st?.follow) {
+        this.opts.onGrappledMoved?.(t, t._st.follow.dx, t._st.follow.dy);
       } else {
         const finalX = Math.round((t._previewX ?? t.x) * 4) / 4;
         const finalY = Math.round((t._previewY ?? t.y) * 4) / 4;
         delete t._previewX; delete t._previewY;
+        const why = this.opts.moveBlockedWhy?.(t, finalX, finalY);
+        if (why) {
+          this.opts.onMoveRefused?.(why);
+          this._updateCursor(); this._markDirty();
+          return;
+        }
         const dx = finalX - t.x, dy = finalY - t.y;
         t.x = finalX; t.y = finalY;
         this._pendingMoves.set(t.id, { x: finalX, y: finalY, until: Date.now() + PENDING_MOVE_TTL_MS });
@@ -990,6 +1013,10 @@ export class VttCanvas {
           const k = r * 0.5;
           ctx.beginPath(); ctx.moveTo(cx - k, cy - k); ctx.lineTo(cx + k, cy + k); ctx.moveTo(cx + k, cy - k); ctx.lineTo(cx - k, cy + k); ctx.stroke();
         }
+        if (st.outline) {
+          ctx.strokeStyle = "#c58bff"; ctx.lineWidth = 2.5 / this.zoom;
+          ctx.beginPath(); ctx.arc(cx, cy, r + 2 / this.zoom, 0, Math.PI * 2); ctx.stroke();
+        }
         if (t.hidden) {
           ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 1.5 / this.zoom; ctx.setLineDash([4 / this.zoom, 3 / this.zoom]);
           ctx.beginPath(); ctx.arc(cx, cy, r + 1.5 / this.zoom, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -1005,14 +1032,14 @@ export class VttCanvas {
           // Condition badges along the top edge, right to left
           const br = Math.max(6 / this.zoom, Math.min(r * 0.3, this.gridPx * 0.17));
           const max = Math.max(1, Math.floor(d / (br * 2.1)));
-          const shown = st.conds.length > max ? [...st.conds.slice(0, max - 1), `+${st.conds.length - max + 1}`] : st.conds;
+          const shown = st.conds.length > max ? [...st.conds.slice(0, max - 1), { label: `+${st.conds.length - max + 1}`, color: "#3a3b4d" }] : st.conds;
           ctx.font = `bold ${br * 0.95}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
           shown.forEach((c, i) => {
             const bxc = pos.x + size.x / 2 + r - br - i * br * 2.1, byc = pos.y + size.y / 2 - r + br * 0.4;
-            ctx.fillStyle = c === "Gr" ? "#b8742a" : c === "Pr" ? "#5a5f80" : c === "Iv" ? "#3f6fb8" : c === "Ex" ? "#8a6d1f" : "#9a3838";
+            ctx.fillStyle = c.color;
             ctx.beginPath(); ctx.arc(bxc, byc, br, 0, Math.PI * 2); ctx.fill();
             ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.lineWidth = 1 / this.zoom; ctx.stroke();
-            ctx.fillStyle = "#fff"; ctx.fillText(c, bxc, byc + br * 0.05);
+            ctx.fillStyle = "#fff"; ctx.fillText(c.label, bxc, byc + br * 0.05);
           });
           ctx.textBaseline = "alphabetic";
         }

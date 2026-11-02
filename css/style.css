@@ -189,7 +189,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible, .nav-link:focus
 .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--gold); animation: spin 0.8s linear infinite; margin: 40px auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 999; max-width: min(420px, calc(100vw - 40px)); }
+.toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 999; max-width: min(420px, calc(100vw - 40px)); pointer-events: none; }
 .toast { background: var(--ink-raised); border: 1px solid var(--gold); border-radius: 8px; padding: 10px 16px; font-size: 0.88rem; box-shadow: var(--shadow); animation: toastIn .2s ease; }
 .toast.error { border-color: var(--blood-bright); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -783,3 +783,11 @@ details.upcoming > summary { cursor: pointer; font-family: var(--font-display); 
 .npc-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
 .tab-btn.is-hidden { opacity: 0.6; font-style: italic; }
 @media (max-width: 700px) { .vtt-token-popup { width: auto; left: 8px; right: 8px; top: 8px; max-height: 60%; } }
+/* ---------------- Status effects and turn bar ---------------- */
+.condition-chip.fx-buff { border-color: var(--rune); background: rgba(63,143,128,0.18); }
+.condition-chip.fx-debuff { border-color: #7f4fb8; background: rgba(127,79,184,0.18); }
+.condition-chip.fx-hazard { border-color: #c2571a; background: rgba(194,87,26,0.2); }
+.condition-chip.fx-neutral { border-color: var(--line); background: var(--ink-soft); }
+.condition-chip.bloodied { border-color: var(--blood-bright); color: var(--blood-bright); background: none; cursor: default; }
+.vtt-turn-bar { display: inline-flex; align-items: center; gap: 6px; padding: 2px 2px 2px 10px; border: 1px solid var(--gold); border-radius: 8px; background: rgba(198,154,62,0.1); font-size: 0.78rem; white-space: nowrap; }
+.vtt-turn-text b { color: var(--gold-bright); }
