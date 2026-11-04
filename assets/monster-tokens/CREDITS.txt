@@ -1,0 +1,5 @@
+Monster token art: Dungeon Crawl Stone Soup tiles (RLTiles and the Crawl Stone Soup artists).
+Released under CC0 1.0 (public domain dedication); no attribution required, credit given anyway.
+Source: https://opengameart.org/content/dungeon-crawl-32x32-tiles
+Licence: https://creativecommons.org/publicdomain/zero/1.0/
+These are closest-match fantasy creatures, not official art of the monsters they stand in for.

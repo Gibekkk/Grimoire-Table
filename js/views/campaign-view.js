@@ -73,34 +73,44 @@ export async function renderCampaign(container, params) {
     });
   }
 
+  let mountToken = 0;
+  const tabKey = `gt_campaign_tab_${campaign.id}`;
   function activateTab(tabId) {
     [...tabs.children].forEach(t => t.classList.toggle("active", t.dataset.id === tabId));
+    const token = ++mountToken;
     activeUnmount?.();
+    activeUnmount = null;
     panelHost.innerHTML = "";
+    try { sessionStorage.setItem(tabKey, tabId); } catch { /* noop */ }
     const ctx = { campaignId: campaign.id, user, isDm, getAdvMode: () => advMode, onRoll: sharedOnRoll };
+    // Async panels may resolve after the user already switched tabs — dispose those at once
+    const adopt = (p) => Promise.resolve(p).then(u => {
+      if (token === mountToken) activeUnmount = u;
+      else if (typeof u === "function") u();
+    });
     if (tabId === "table") {
-      activeUnmount = mountTablePanel(panelHost, { campaignId: campaign.id, user, activeCharacterName: () => null, getActiveModifiers: () => ({}) });
+      adopt(mountTablePanel(panelHost, { campaignId: campaign.id, user, activeCharacterName: () => null, getActiveModifiers: () => ({}) }));
     } else if (tabId === "party") {
-      activeUnmount = mountPartyPanel(panelHost, ctx);
+      adopt(mountPartyPanel(panelHost, ctx));
     } else if (tabId === "combat") {
-      activeUnmount = mountCombatPanel(panelHost, { ...ctx, campaignLog: (entry) => db.log.add(campaign.id, entry) });
+      adopt(mountCombatPanel(panelHost, { ...ctx, campaignLog: (entry) => db.log.add(campaign.id, entry) }));
     } else if (tabId === "vtt") {
-      mountVttPanel(panelHost, ctx).then(u => { activeUnmount = u; });
+      adopt(mountVttPanel(panelHost, ctx));
     } else if (tabId === "loot") {
-      activeUnmount = mountPartyInventoryPanel(panelHost, { campaignId: campaign.id, user });
+      adopt(mountPartyInventoryPanel(panelHost, { campaignId: campaign.id, user }));
     } else if (tabId === "npcs") {
-      mountNpcPanel(panelHost, ctx).then(u => { activeUnmount = u; });
+      adopt(mountNpcPanel(panelHost, ctx));
     } else if (tabId === "social") {
-      activeUnmount = mountSocialPanel(panelHost, ctx);
+      adopt(mountSocialPanel(panelHost, ctx));
     } else if (tabId === "workshop") {
-      activeUnmount = mountMapWorkshopPanel(panelHost, ctx);
+      adopt(mountMapWorkshopPanel(panelHost, ctx));
     } else if (tabId === "notes") {
-      activeUnmount = mountDmNotesPanel(panelHost, { campaignId: campaign.id });
+      adopt(mountDmNotesPanel(panelHost, { campaignId: campaign.id }));
     }
   }
 
   tabDefs.forEach((t, i) => {
-    const btn = h("button", { class: `tab-btn ${i === 0 ? "active" : ""}` }, t.label);
+    const btn = h("button", { class: "tab-btn" }, t.label);
     btn.dataset.id = t.id;
     btn.addEventListener("click", () => activateTab(t.id));
     tabs.appendChild(btn);
@@ -110,7 +120,9 @@ export async function renderCampaign(container, params) {
   wrap.appendChild(panelHost);
   container.appendChild(wrap);
 
-  activateTab("table");
+  let startTab = "table";
+  try { startTab = sessionStorage.getItem(tabKey) || "table"; } catch { /* noop */ }
+  activateTab(tabDefs.some(t => t.id === startTab) ? startTab : "table");
 
   // Live for the whole campaign view, independent of the active tab: a DM's
   // initiative request reaches a player anywhere in the app, and every roll
@@ -118,5 +130,5 @@ export async function renderCampaign(container, params) {
   const unsubModal = mountInitiativeModal(campaign.id, user, (entry) => db.log.add(campaign.id, entry));
   const unsubRollOverlay = mountRollOverlay(campaign.id);
 
-  return () => { activeUnmount?.(); unsubModal(); unsubRollOverlay(); };
+  return () => { mountToken++; activeUnmount?.(); unsubModal(); unsubRollOverlay(); };
 }

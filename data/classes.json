@@ -1,1015 +1,3025 @@
 [
-  {
-    "id": "barbarian",
-    "name": "Barbarian",
-    "primaryAbility": [
-      "str"
-    ],
-    "hitDie": 12,
-    "savingThrows": [
-      "str",
-      "con"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "animalHandling",
-        "athletics",
-        "intimidation",
-        "nature",
-        "perception",
-        "survival"
-      ]
-    },
-    "armorTraining": [
-      "light",
-      "medium",
-      "shield"
-    ],
-    "weaponTraining": [
-      "simple",
-      "martial"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Barbarian Path",
-    "subclasses": [
-      "Path of the Berserker",
-      "Path of the Wild Heart",
-      "Path of the World Tree",
-      "Path of the Zealot"
-    ],
-    "spellcasting": null,
-    "startingEquipment": [
-      "Greataxe, 4 Handaxes, Explorer's Pack, and 9 GP",
-      "75 GP"
-    ],
-    "weaponMasteryCount": 2,
-    "multiclassPrereq": [
-      "str"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light",
-        "medium",
-        "shield"
-      ],
-      "weapons": [
-        "simple",
-        "martial"
-      ]
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "greataxe",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "handaxe",
-          "category": "weapon",
-          "quantity": 4
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      9,
-      75
-    ]
+ {
+  "name": "Barbarian",
+  "hitDie": 12,
+  "primaryAbility": [
+   "str"
+  ],
+  "savingThrows": [
+   "str",
+   "con"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "animalHandling",
+    "athletics",
+    "intimidation",
+    "nature",
+    "perception",
+    "survival"
+   ]
   },
-  {
-    "id": "bard",
-    "name": "Bard",
-    "primaryAbility": [
-      "cha"
-    ],
-    "hitDie": 8,
-    "savingThrows": [
-      "dex",
-      "cha"
-    ],
-    "skillChoices": {
-      "count": 3,
-      "options": [
-        "acrobatics",
-        "animalHandling",
-        "arcana",
-        "athletics",
-        "deception",
-        "history",
-        "insight",
-        "intimidation",
-        "investigation",
-        "medicine",
-        "nature",
-        "perception",
-        "performance",
-        "persuasion",
-        "religion",
-        "sleightOfHand",
-        "stealth",
-        "survival"
+  "armorTraining": [
+   "light",
+   "medium",
+   "shield"
+  ],
+  "weaponTraining": [
+   "simple",
+   "martial"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Barbarian Subclass",
+  "weaponMastery": [
+   2,
+   2,
+   2,
+   3,
+   3,
+   3,
+   3,
+   3,
+   3,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4
+  ],
+  "spellcasting": null,
+  "multiclassPrereq": [
+   "str"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "shield"
+   ],
+   "weapons": [
+    "martial"
+   ]
+  },
+  "id": "barbarian",
+  "subclasses": [
+   {
+    "id": "path-of-the-berserker",
+    "name": "Path of the Berserker",
+    "description": "Channel Rage into Violent Fury Barbarians who walk the Path of the Berserker direct their Rage primarily toward violence. Their path is one of untra mmel ed fury, and they thrill in the chaos of battle as they allow their Rage to seize and empower them."
+   },
+   {
+    "id": "path-of-the-wild-heart",
+    "name": "Path of the Wild Heart",
+    "description": "Walk in Comm unity with the Animal World Barbarians who follow the Path of the Wild Heart view themselves as kin to animals. These Barbarians learn magical means to communicate with animals, and their Rage heightens their connection to animals as it fills them with supernatural might."
+   },
+   {
+    "id": "path-of-the-world-tree",
+    "name": "Path of the World Tree",
+    "description": "Trace the Roots and Branches of theM ult iverse Barbarians who follow the Path oft heW o rl d Tree connect with the cosmic tree Yggdrasil through their Rage. This tree grows among the Outer Planes connecting them to each other and theM a teri al"
+   },
+   {
+    "id": "path-of-the-zealot",
+    "name": "Path of the Zealot",
+    "description": ""
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   6,
+   10,
+   14
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Greataxe, 4 Handaxes, Explorer's Pack, and 15 GP",
+    "gold": 15,
+    "items": [
+     {
+      "category": "weapon",
+      "catalogId": "greataxe",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "handaxe",
+      "quantity": 4
+     },
+     {
+      "category": "gear",
+      "catalogId": "explorers-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "75 GP",
+    "gold": 75,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Rages",
+    "values": [
+     2,
+     2,
+     3,
+     3,
+     3,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     5,
+     5,
+     5,
+     5,
+     5,
+     6,
+     6,
+     6,
+     6
+    ]
+   },
+   {
+    "label": "Rage Damage",
+    "values": [
+     "+2",
+     "+2",
+     "+2",
+     "+2",
+     "+2",
+     "+2",
+     "+2",
+     "+2",
+     "+3",
+     "+3",
+     "+3",
+     "+3",
+     "+3",
+     "+3",
+     "+3",
+     "+4",
+     "+4",
+     "+4",
+     "+4",
+     "+4"
+    ]
+   },
+   {
+    "label": "Weapon Mastery",
+    "values": [
+     2,
+     2,
+     2,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ]
+   }
+  ],
+  "weaponMasteryCount": 2,
+  "multiclassPrereqText": "STR",
+  "startingEquipment": [
+   "Greataxe, 4 Handaxes, Explorer's Pack, and 15 GP",
+   "75 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Bard",
+  "hitDie": 8,
+  "primaryAbility": [
+   "cha"
+  ],
+  "savingThrows": [
+   "dex",
+   "cha"
+  ],
+  "skillChoices": {
+   "count": 3,
+   "options": "any"
+  },
+  "armorTraining": [
+   "light"
+  ],
+  "weaponTraining": [
+   "simple"
+  ],
+  "toolChoices": {
+   "count": 3,
+   "category": "instrument"
+  },
+  "subclassLevel": 3,
+  "subclassLabel": "Bard Subclass",
+  "weaponMastery": null,
+  "spellcasting": {
+   "ability": "cha",
+   "type": "full",
+   "cantrips": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4
+   ],
+   "prepared": [
+    4,
+    5,
+    6,
+    7,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    16,
+    16,
+    17,
+    17,
+    18,
+    18,
+    19,
+    20,
+    21,
+    22
+   ],
+   "list": "bard",
+   "focus": "Musical Instrument"
+  },
+  "multiclassPrereq": [
+   "cha"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "light"
+   ],
+   "skills": 1,
+   "tools": [
+    "instrument"
+   ]
+  },
+  "id": "bard",
+  "subclasses": [
+   {
+    "id": "college-of-dance",
+    "name": "College of Dance",
+    "description": "Move in Harmony with the Cosmos Bards of the College of Dance know that the Words of Creat ion can't be contained within speech o r song; the words are uttered by the movements of celestial bodies and flow through the motions o f the small est creatures. These Bards practice a way of being in harmony with the whirling cosmos that emphasizes agility, speed, and grace."
+   },
+   {
+    "id": "college-of-glamour",
+    "name": "College of Glamour",
+    "description": "Weave Beguiling Fey Magic The College of Glamour traces its origins to the beguiling magic of the Feywild. Bards who study this magic weave threads of beauty and terror into their songs and stories, and the mightiest among them can cloak themselves in otherworldly majesty. Their performances stir up wistful longing for forgotten innocence, evoke unconscious memories of longheld fears, and tug at t"
+   },
+   {
+    "id": "college-of-lore",
+    "name": "College of Lore",
+    "description": "Plumb the Depths of Magical Know ledge Bards of the College of Lore collect spells and secrets from diverse sources, such as scholarly tomes, mystical rites, and peasant tales. The colleg e's members gather in libraries and universities to share their lore with one another. They also meet at festivals or affairs of state, where they can expose corruption, unravel lies, and poke fun at self-im port"
+   },
+   {
+    "id": "college-of-valor",
+    "name": "College of Valor",
+    "description": "Sing the Deeds of Ancient Heroes Bards of the College of Valor are daring storytellers whose tales preserve the memory of the great heroes of the past. These Bards sing the deeds of the mighty in vaulted halls or to crowds gathered around great bonfires. They travel to witness great events firsthand and to ensure that the memory of these events doesn't pass away. With their songs, they inspire new"
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   6,
+   14
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Leather Armor, 2 Daggers, Musical Instrument of your choice, Entertainer's Pack, and 19 GP",
+    "gold": 19,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "leather-armor",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "dagger",
+      "quantity": 2
+     },
+     {
+      "category": "gear",
+      "catalogId": "musical-instrument",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "entertainers-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "90 GP",
+    "gold": 90,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Bardic Die",
+    "values": [
+     "d6",
+     "d6",
+     "d6",
+     "d6",
+     "d8",
+     "d8",
+     "d8",
+     "d8",
+     "d8",
+     "d10",
+     "d10",
+     "d10",
+     "d10",
+     "d10",
+     "d12",
+     "d12",
+     "d12",
+     "d12",
+     "d12",
+     "d12"
+    ]
+   }
+  ],
+  "weaponMasteryCount": 0,
+  "multiclassPrereqText": "CHA",
+  "startingEquipment": [
+   "Leather Armor, 2 Daggers, Musical Instrument of your choice, Entertainer's Pack, and 19 GP",
+   "90 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Cleric",
+  "hitDie": 8,
+  "primaryAbility": [
+   "wis"
+  ],
+  "savingThrows": [
+   "wis",
+   "cha"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "history",
+    "insight",
+    "medicine",
+    "persuasion",
+    "religion"
+   ]
+  },
+  "armorTraining": [
+   "light",
+   "medium",
+   "shield"
+  ],
+  "weaponTraining": [
+   "simple"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Cleric Subclass",
+  "weaponMastery": null,
+  "spellcasting": {
+   "ability": "wis",
+   "type": "full",
+   "cantrips": [
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5
+   ],
+   "prepared": [
+    4,
+    5,
+    6,
+    7,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    16,
+    16,
+    17,
+    17,
+    18,
+    18,
+    19,
+    20,
+    21,
+    22
+   ],
+   "list": "cleric",
+   "focus": "Holy Symbol"
+  },
+  "multiclassPrereq": [
+   "wis"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "light",
+    "medium",
+    "shield"
+   ]
+  },
+  "id": "cleric",
+  "subclasses": [
+   {
+    "id": "life-domain",
+    "name": "Life Domain",
+    "description": "Soothe the Hurts of the World The Life Domain focuses on the positive energy that helps sustain all life in the multiverse. Clerics who tap into this domain are masters of healing, using that life force to cure many hurts.",
+    "spells": {
+     "3": [
+      "aid",
+      "bless",
+      "cure-wounds",
+      "lesser-restoration"
+     ],
+     "5": [
+      "mass-healing-word",
+      "revivify"
+     ],
+     "7": [
+      "aura-of-life",
+      "death-ward"
+     ],
+     "9": [
+      "greater-restoration",
+      "mass-cure-wounds"
+     ]
+    }
+   },
+   {
+    "id": "light-domain",
+    "name": "Light Domain",
+    "description": "Bring Light to Banish Darkness The Light Domain emphasizes the divine p uw er to bring about blazing fire and revelation. Clel'ics who wield this power are enlightened souls infused with radiance and the power of their deiti es' discerning vision, charged with chasing away lies and burning away darkness.",
+    "spells": {
+     "3": [
+      "burning-hands",
+      "faerie-fire",
+      "scorching-ray",
+      "see-invisibility"
+     ],
+     "5": [
+      "daylight",
+      "fireball"
+     ],
+     "7": [
+      "arcane-eye",
+      "wall-of-fire"
+     ],
+     "9": [
+      "flame-strike",
+      "scrying"
+     ]
+    }
+   },
+   {
+    "id": "trickery-domain",
+    "name": "Trickery Domain",
+    "description": "Make Mischief and Challenge Authority The Trickery Domain offers magic of deception, illusion, and stealth. Clerics who wield this magic are a disruptive force in the world, puncturing pride, mocking tyrants, freeing captives, and flouting hollow traditions. They prefer subterfuge and pranks to direct confrontation.",
+    "spells": {
+     "3": [
+      "charm-person",
+      "disguise-self",
+      "invisibility",
+      "pass-without-trace"
+     ],
+     "5": [
+      "hypnotic-pattern",
+      "nondetection"
+     ],
+     "7": [
+      "confusion",
+      "dimension-door"
+     ],
+     "9": [
+      "dominate-person",
+      "modify-memory"
+     ]
+    }
+   },
+   {
+    "id": "war-domain",
+    "name": "War Domain",
+    "description": "Inspire Valor and Smite Foes",
+    "spells": {
+     "3": [
+      "guiding-bolt",
+      "magic-weapon",
+      "shield-of-faith",
+      "spiritual-weapon"
+     ],
+     "5": [
+      "crusaders-mantle",
+      "spirit-guardians"
+     ],
+     "7": [
+      "fire-shield",
+      "freedom-of-movement"
+     ],
+     "9": [
+      "hold-monster",
+      "steel-wind-strike"
+     ]
+    }
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   6,
+   17
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Chain Shirt, Shield, Mace, Holy Symbol, Priest's Pack, and 7 GP",
+    "gold": 7,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "chain-shirt",
+      "quantity": 1
+     },
+     {
+      "category": "armor",
+      "catalogId": "shield",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "mace",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "holy-symbol",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "priests-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "110 GP",
+    "gold": 110,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Channel Divinity",
+    "values": [
+     0,
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     4,
+     4,
+     4
+    ]
+   }
+  ],
+  "weaponMasteryCount": 0,
+  "multiclassPrereqText": "WIS",
+  "startingEquipment": [
+   "Chain Shirt, Shield, Mace, Holy Symbol, Priest's Pack, and 7 GP",
+   "110 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Druid",
+  "hitDie": 8,
+  "primaryAbility": [
+   "wis"
+  ],
+  "savingThrows": [
+   "int",
+   "wis"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "arcana",
+    "animalHandling",
+    "insight",
+    "medicine",
+    "nature",
+    "perception",
+    "religion",
+    "survival"
+   ]
+  },
+  "armorTraining": [
+   "light",
+   "shield"
+  ],
+  "weaponTraining": [
+   "simple"
+  ],
+  "tools": [
+   "Herbalism Kit"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Druid Subclass",
+  "weaponMastery": null,
+  "spellcasting": {
+   "ability": "wis",
+   "type": "full",
+   "cantrips": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4
+   ],
+   "prepared": [
+    4,
+    5,
+    6,
+    7,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    16,
+    16,
+    17,
+    17,
+    18,
+    18,
+    19,
+    20,
+    21,
+    22
+   ],
+   "list": "druid",
+   "focus": "Druidic Focus"
+  },
+  "multiclassPrereq": [
+   "wis"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "light",
+    "shield"
+   ]
+  },
+  "id": "druid",
+  "subclasses": [
+   {
+    "id": "circle-of-the-land",
+    "name": "Circle of the Land",
+    "description": "Celebrate Connection to the Natural World",
+    "landSpells": {
+     "arid": {
+      "3": [
+       "blur",
+       "burning-hands",
+       "fire-bolt"
+      ],
+      "5": [
+       "fireball"
+      ],
+      "7": [
+       "blight"
+      ],
+      "9": [
+       "wall-of-stone"
       ]
-    },
-    "armorTraining": [
-      "light"
-    ],
-    "weaponTraining": [
-      "simple"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Bard College",
-    "subclasses": [
-      "College of Dance",
-      "College of Glamour",
-      "College of Lore",
-      "College of Valor"
-    ],
+     },
+     "polar": {
+      "3": [
+       "fog-cloud",
+       "hold-person",
+       "ray-of-frost"
+      ],
+      "5": [
+       "sleet-storm"
+      ],
+      "7": [
+       "ice-storm"
+      ],
+      "9": [
+       "cone-of-cold"
+      ]
+     },
+     "temperate": {
+      "3": [
+       "misty-step",
+       "shocking-grasp",
+       "sleep"
+      ],
+      "5": [
+       "lightning-bolt"
+      ],
+      "7": [
+       "freedom-of-movement"
+      ],
+      "9": [
+       "tree-stride"
+      ]
+     },
+     "tropical": {
+      "3": [
+       "acid-splash",
+       "ray-of-sickness",
+       "web"
+      ],
+      "5": [
+       "stinking-cloud"
+      ],
+      "7": [
+       "polymorph"
+      ],
+      "9": [
+       "insect-plague"
+      ]
+     }
+    }
+   },
+   {
+    "id": "circle-of-the-moon",
+    "name": "Circle of the Moon",
+    "description": "Adopt Animal Forms to Guard the Wilds Druids of the Circle of the Moon draw on lunar magic to transform themselves. Their order gathers under the moon to share news and perform rituals.",
+    "spells": {
+     "3": [
+      "cure-wounds",
+      "moonbeam",
+      "starry-wisp"
+     ],
+     "5": [
+      "conjure-animals"
+     ],
+     "7": [
+      "fount-of-moonlight"
+     ],
+     "9": [
+      "mass-cure-wounds"
+     ]
+    }
+   },
+   {
+    "id": "circle-of-the-sea",
+    "name": "Circle of the Sea",
+    "description": "Become One with Tides and Storms Druids of the Circle of the Sea draw on the tempestuous forces of oceans and storms. Some view themselves as embodiments of nature's wrath, seeking vengeance against those who despoil nature.",
+    "spells": {
+     "3": [
+      "fog-cloud",
+      "gust-of-wind",
+      "ray-of-frost",
+      "shatter",
+      "thunderwave"
+     ],
+     "5": [
+      "lightning-bolt",
+      "water-breathing"
+     ],
+     "7": [
+      "control-water",
+      "ice-storm"
+     ],
+     "9": [
+      "conjure-elemental",
+      "hold-monster"
+     ]
+    }
+   },
+   {
+    "id": "circle-of-the-stars",
+    "name": "Circle of the Stars",
+    "description": "Harness Secrets Hidden in Constellations The Circle of the Stars has tracked heavenly patterns since time immemorial, discovering secrets hidden amid the constellations. By understanding these secrets, the Druids of this circle seek to harness the powers of the cosmos."
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   6,
+   10,
+   14
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Leather Armor, Shield, Sickle, Druidic Focus (Quarterstaff), Explorer's Pack, Herbalism Kit, and 9 GP",
+    "gold": 9,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "leather-armor",
+      "quantity": 1
+     },
+     {
+      "category": "armor",
+      "catalogId": "shield",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "sickle",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "quarterstaff",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "explorers-pack",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "herbalism-kit",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "50 GP",
+    "gold": 50,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Wild Shape",
+    "values": [
+     0,
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     4,
+     4,
+     4,
+     4
+    ]
+   }
+  ],
+  "weaponMasteryCount": 0,
+  "multiclassPrereqText": "WIS",
+  "startingEquipment": [
+   "Leather Armor, Shield, Sickle, Druidic Focus (Quarterstaff), Explorer's Pack, Herbalism Kit, and 9 GP",
+   "50 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Fighter",
+  "hitDie": 10,
+  "primaryAbility": [
+   "str",
+   "dex"
+  ],
+  "savingThrows": [
+   "str",
+   "con"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "acrobatics",
+    "animalHandling",
+    "athletics",
+    "history",
+    "insight",
+    "intimidation",
+    "persuasion",
+    "perception",
+    "survival"
+   ]
+  },
+  "armorTraining": [
+   "light",
+   "medium",
+   "heavy",
+   "shield"
+  ],
+  "weaponTraining": [
+   "simple",
+   "martial"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Fighter Subclass",
+  "weaponMastery": [
+   3,
+   3,
+   3,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   5,
+   5,
+   5,
+   5,
+   5,
+   5,
+   6,
+   6,
+   6,
+   6,
+   6
+  ],
+  "spellcasting": null,
+  "multiclassPrereq": [
+   "str",
+   "dex"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "light",
+    "medium",
+    "shield"
+   ],
+   "weapons": [
+    "martial"
+   ]
+  },
+  "asiLevels": [
+   4,
+   6,
+   8,
+   12,
+   14,
+   16
+  ],
+  "id": "fighter",
+  "subclasses": [
+   {
+    "id": "battle-master",
+    "name": "Battle Master",
+    "description": "Master Sophisticated Battle Maneuvers"
+   },
+   {
+    "id": "champion",
+    "name": "Champion",
+    "description": "-Pursue Physical Excellence in Combat A Champion focuses on the d evelopm ent of martial prowess in a relentless pursuit of victory. Champions combine rigorous training with physical excellence to deal devastating blows, withstand peril, and garner glory. Whether in athletic contests or bloody battle, Champions strive for the crown of the victor."
+   },
+   {
+    "id": "eldritch-knight",
+    "name": "Eldritch Knight",
+    "description": "Support Combat Skills with Arcane Magic",
     "spellcasting": {
-      "ability": "cha",
-      "type": "known"
-    },
-    "startingEquipment": [
-      "Leather Armor, 2 Daggers, Musical Instrument, Entertainer's Pack, and 19 GP",
-      "90 GP"
-    ],
-    "weaponMasteryCount": 0,
-    "multiclassPrereq": [
-      "cha"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light"
-      ],
-      "weapons": []
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "leather-armor",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "dagger",
-          "category": "weapon",
-          "quantity": 2
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      19,
-      90
-    ]
-  },
-  {
-    "id": "cleric",
-    "name": "Cleric",
-    "primaryAbility": [
-      "wis"
-    ],
-    "hitDie": 8,
-    "savingThrows": [
-      "wis",
-      "cha"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "history",
-        "insight",
-        "medicine",
-        "persuasion",
-        "religion"
-      ]
-    },
-    "armorTraining": [
-      "light",
-      "medium",
-      "shield"
-    ],
-    "weaponTraining": [
-      "simple"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Divine Domain",
-    "subclasses": [
-      "Life Domain",
-      "Light Domain",
-      "Trickery Domain",
-      "War Domain"
-    ],
-    "spellcasting": {
-      "ability": "wis",
-      "type": "prepared"
-    },
-    "startingEquipment": [
-      "Chain Shirt, Shield, Mace, Holy Symbol, Priest's Pack, and 7 GP",
-      "110 GP"
-    ],
-    "weaponMasteryCount": 0,
-    "multiclassPrereq": [
-      "wis"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light",
-        "medium",
-        "shield"
-      ],
-      "weapons": []
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "chain-shirt",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "shield",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "mace",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "holy-symbol",
-          "category": "gear",
-          "quantity": 1
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      7,
-      110
-    ]
-  },
-  {
-    "id": "druid",
-    "name": "Druid",
-    "primaryAbility": [
-      "wis"
-    ],
-    "hitDie": 8,
-    "savingThrows": [
-      "int",
-      "wis"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "arcana",
-        "animalHandling",
-        "insight",
-        "medicine",
-        "nature",
-        "perception",
-        "religion",
-        "survival"
-      ]
-    },
-    "armorTraining": [
-      "light",
-      "medium",
-      "shield"
-    ],
-    "weaponTraining": [
-      "simple"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Druid Circle",
-    "subclasses": [
-      "Circle of the Land",
-      "Circle of the Moon",
-      "Circle of the Sea",
-      "Circle of the Stars"
-    ],
-    "spellcasting": {
-      "ability": "wis",
-      "type": "prepared"
-    },
-    "startingEquipment": [
-      "Leather Armor, Sickle, Druidic Focus, Explorer's Pack, and 9 GP",
-      "50 GP"
-    ],
-    "weaponMasteryCount": 0,
-    "multiclassPrereq": [
-      "wis"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light",
-        "medium",
-        "shield"
-      ],
-      "weapons": []
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "leather-armor",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "sickle",
-          "category": "weapon",
-          "quantity": 1
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      9,
-      50
-    ]
-  },
-  {
-    "id": "fighter",
-    "name": "Fighter",
-    "primaryAbility": [
-      "str",
-      "dex"
-    ],
-    "hitDie": 10,
-    "savingThrows": [
-      "str",
-      "con"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "acrobatics",
-        "animalHandling",
-        "athletics",
-        "history",
-        "insight",
-        "intimidation",
-        "persuasion",
-        "perception",
-        "survival"
-      ]
-    },
-    "armorTraining": [
-      "light",
-      "medium",
-      "heavy",
-      "shield"
-    ],
-    "weaponTraining": [
-      "simple",
-      "martial"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Fighter Archetype",
-    "subclasses": [
-      "Battle Master",
-      "Champion",
-      "Eldritch Knight",
-      "Psi Warrior"
-    ],
-    "spellcasting": null,
-    "startingEquipment": [
-      "Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer's Pack, and 4 GP",
-      "155 GP"
-    ],
-    "weaponMasteryCount": 3,
-    "multiclassPrereq": [
-      "str",
-      "dex"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light",
-        "medium",
-        "shield"
-      ],
-      "weapons": [
-        "simple",
-        "martial"
-      ]
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "chain-mail",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "greatsword",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "flail",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "javelin",
-          "category": "weapon",
-          "quantity": 8
-        }
-      ],
-      []
-    ],
-    "startingGold": [
+     "ability": "int",
+     "type": "third",
+     "list": "wizard",
+     "cantrips": [
+      0,
+      0,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3
+     ],
+     "prepared": [
+      0,
+      0,
+      3,
       4,
-      155
-    ]
-  },
-  {
-    "id": "monk",
-    "name": "Monk",
-    "primaryAbility": [
-      "dex",
-      "wis"
-    ],
-    "hitDie": 8,
-    "savingThrows": [
-      "str",
-      "dex"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "acrobatics",
-        "athletics",
-        "history",
-        "insight",
-        "religion",
-        "stealth"
-      ]
-    },
-    "armorTraining": [],
-    "weaponTraining": [
-      "simple",
-      "martialLight"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Monastic Tradition",
-    "subclasses": [
-      "Warrior of Mercy",
-      "Warrior of Shadow",
-      "Warrior of the Elements",
-      "Warrior of the Open Hand"
-    ],
-    "spellcasting": null,
-    "startingEquipment": [
-      "Spear, 5 Daggers, Artisan's Tools or Musical Instrument, and 11 GP",
-      "50 GP"
-    ],
-    "weaponMasteryCount": 2,
-    "multiclassPrereq": [
-      "dex",
-      "wis"
-    ],
-    "multiclassProficiencies": {
-      "armor": [],
-      "weapons": []
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "spear",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "dagger",
-          "category": "weapon",
-          "quantity": 5
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      11,
-      50
-    ]
-  },
-  {
-    "id": "paladin",
-    "name": "Paladin",
-    "primaryAbility": [
-      "str",
-      "cha"
-    ],
-    "hitDie": 10,
-    "savingThrows": [
-      "wis",
-      "cha"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "athletics",
-        "insight",
-        "intimidation",
-        "medicine",
-        "persuasion",
-        "religion"
-      ]
-    },
-    "armorTraining": [
-      "light",
-      "medium",
-      "heavy",
-      "shield"
-    ],
-    "weaponTraining": [
-      "simple",
-      "martial"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Sacred Oath",
-    "subclasses": [
-      "Oath of Devotion",
-      "Oath of Glory",
-      "Oath of the Ancients",
-      "Oath of Vengeance"
-    ],
-    "spellcasting": {
-      "ability": "cha",
-      "type": "prepared"
-    },
-    "startingEquipment": [
-      "Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest's Pack, and 9 GP",
-      "150 GP"
-    ],
-    "weaponMasteryCount": 2,
-    "multiclassPrereq": [
-      "str",
-      "cha"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light",
-        "medium",
-        "shield"
-      ],
-      "weapons": [
-        "simple",
-        "martial"
-      ]
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "chain-mail",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "shield",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "longsword",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "javelin",
-          "category": "weapon",
-          "quantity": 6
-        },
-        {
-          "catalogId": "holy-symbol",
-          "category": "gear",
-          "quantity": 1
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      9,
-      150
-    ]
-  },
-  {
-    "id": "ranger",
-    "name": "Ranger",
-    "primaryAbility": [
-      "dex",
-      "wis"
-    ],
-    "hitDie": 10,
-    "savingThrows": [
-      "str",
-      "dex"
-    ],
-    "skillChoices": {
-      "count": 3,
-      "options": [
-        "animalHandling",
-        "athletics",
-        "insight",
-        "investigation",
-        "nature",
-        "perception",
-        "stealth",
-        "survival"
-      ]
-    },
-    "armorTraining": [
-      "light",
-      "medium",
-      "shield"
-    ],
-    "weaponTraining": [
-      "simple",
-      "martial"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Ranger Archetype",
-    "subclasses": [
-      "Beast Master",
-      "Fey Wanderer",
-      "Gloom Stalker",
-      "Hunter"
-    ],
-    "spellcasting": {
-      "ability": "wis",
-      "type": "prepared"
-    },
-    "startingEquipment": [
-      "Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Druidic Focus, Explorer's Pack, and 7 GP",
-      "150 GP"
-    ],
-    "weaponMasteryCount": 2,
-    "multiclassPrereq": [
-      "dex",
-      "wis"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light",
-        "medium",
-        "shield"
-      ],
-      "weapons": [
-        "simple",
-        "martial"
-      ]
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "studded-leather-armor",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "scimitar",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "shortsword",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "longbow",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "arrows-20",
-          "category": "ammo",
-          "quantity": 1
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      7,
-      150
-    ]
-  },
-  {
-    "id": "rogue",
-    "name": "Rogue",
-    "primaryAbility": [
-      "dex"
-    ],
-    "hitDie": 8,
-    "savingThrows": [
-      "dex",
-      "int"
-    ],
-    "skillChoices": {
-      "count": 4,
-      "options": [
-        "acrobatics",
-        "athletics",
-        "deception",
-        "insight",
-        "intimidation",
-        "investigation",
-        "perception",
-        "persuasion",
-        "sleightOfHand",
-        "stealth"
-      ]
-    },
-    "armorTraining": [
-      "light"
-    ],
-    "weaponTraining": [
-      "simple",
-      "martialFinesse"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Roguish Archetype",
-    "subclasses": [
-      "Arcane Trickster",
-      "Assassin",
-      "Soulknife",
-      "Thief"
-    ],
-    "spellcasting": null,
-    "startingEquipment": [
-      "Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Thieves' Tools, Burglar's Pack, and 8 GP",
-      "100 GP"
-    ],
-    "weaponMasteryCount": 2,
-    "multiclassPrereq": [
-      "dex"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light"
-      ],
-      "weapons": [
-        "simple",
-        "martialFinesse"
-      ]
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "leather-armor",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "dagger",
-          "category": "weapon",
-          "quantity": 2
-        },
-        {
-          "catalogId": "shortsword",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "shortbow",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "arrows-20",
-          "category": "ammo",
-          "quantity": 1
-        },
-        {
-          "catalogId": "thieves-tools",
-          "category": "gear",
-          "quantity": 1
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      8,
-      100
-    ]
-  },
-  {
-    "id": "sorcerer",
-    "name": "Sorcerer",
-    "primaryAbility": [
-      "cha"
-    ],
-    "hitDie": 6,
-    "savingThrows": [
-      "con",
-      "cha"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "arcana",
-        "deception",
-        "insight",
-        "intimidation",
-        "persuasion",
-        "religion"
-      ]
-    },
-    "armorTraining": [],
-    "weaponTraining": [
-      "simple"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Sorcerous Origin",
-    "subclasses": [
-      "Aberrant Sorcery",
-      "Clockwork Sorcery",
-      "Draconic Sorcery",
-      "Wild Magic Sorcery"
-    ],
-    "spellcasting": {
-      "ability": "cha",
-      "type": "known"
-    },
-    "startingEquipment": [
-      "Spear, 2 Daggers, Arcane Focus, Dungeoneer's Pack, and 28 GP",
-      "50 GP"
-    ],
-    "weaponMasteryCount": 0,
-    "multiclassPrereq": [
-      "cha"
-    ],
-    "multiclassProficiencies": {
-      "armor": [],
-      "weapons": []
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "spear",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "dagger",
-          "category": "weapon",
-          "quantity": 2
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      28,
-      50
-    ]
-  },
-  {
-    "id": "warlock",
-    "name": "Warlock",
-    "primaryAbility": [
-      "cha"
-    ],
-    "hitDie": 8,
-    "savingThrows": [
-      "wis",
-      "cha"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "arcana",
-        "deception",
-        "history",
-        "intimidation",
-        "investigation",
-        "nature",
-        "religion"
-      ]
-    },
-    "armorTraining": [
-      "light"
-    ],
-    "weaponTraining": [
-      "simple"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Otherworldly Patron",
-    "subclasses": [
-      "Archfey Patron",
-      "Celestial Patron",
-      "Fiend Patron",
-      "Great Old One Patron"
-    ],
-    "spellcasting": {
-      "ability": "cha",
-      "type": "known"
-    },
-    "startingEquipment": [
-      "Leather Armor, Sickle, 2 Daggers, Arcane Focus, Book, Scholar's Pack, and 15 GP",
-      "100 GP"
-    ],
-    "weaponMasteryCount": 0,
-    "multiclassPrereq": [
-      "cha"
-    ],
-    "multiclassProficiencies": {
-      "armor": [
-        "light"
-      ],
-      "weapons": []
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "leather-armor",
-          "category": "armor",
-          "quantity": 1
-        },
-        {
-          "catalogId": "sickle",
-          "category": "weapon",
-          "quantity": 1
-        },
-        {
-          "catalogId": "dagger",
-          "category": "weapon",
-          "quantity": 2
-        }
-      ],
-      []
-    ],
-    "startingGold": [
-      15,
-      100
-    ]
-  },
-  {
-    "id": "wizard",
-    "name": "Wizard",
-    "primaryAbility": [
-      "int"
-    ],
-    "hitDie": 6,
-    "savingThrows": [
-      "int",
-      "wis"
-    ],
-    "skillChoices": {
-      "count": 2,
-      "options": [
-        "arcana",
-        "history",
-        "insight",
-        "investigation",
-        "medicine",
-        "nature",
-        "religion"
-      ]
-    },
-    "armorTraining": [],
-    "weaponTraining": [
-      "simple"
-    ],
-    "subclassLevel": 3,
-    "subclassLabel": "Arcane Tradition",
-    "subclasses": [
-      "Abjurer",
-      "Diviner",
-      "Evoker",
-      "Illusionist"
-    ],
-    "spellcasting": {
-      "ability": "int",
-      "type": "prepared"
-    },
-    "startingEquipment": [
-      "2 Daggers, Arcane Focus, Robe, Spellbook, Scholar's Pack, and 5 GP",
-      "55 GP"
-    ],
-    "weaponMasteryCount": 0,
-    "multiclassPrereq": [
-      "int"
-    ],
-    "multiclassProficiencies": {
-      "armor": [],
-      "weapons": []
-    },
-    "startingEquipmentItems": [
-      [
-        {
-          "catalogId": "dagger",
-          "category": "weapon",
-          "quantity": 2
-        }
-      ],
-      []
-    ],
-    "startingGold": [
+      4,
+      4,
       5,
-      55
+      6,
+      6,
+      7,
+      8,
+      8,
+      9,
+      10,
+      10,
+      11,
+      11,
+      11,
+      12,
+      13
+     ],
+     "focus": "Arcane Focus"
+    }
+   },
+   {
+    "id": "psi-warrior",
+    "name": "Psi Warrior",
+    "description": "Augment Physical Might with Psionic Power Psi Warriors awaken the power of their minds to augment their physical might. They harness this psionic power to infuse their weapon strikes, lash out with telekinetic energy, and create barriers of mental force."
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   7,
+   10,
+   15,
+   18
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer's Pack, and 4 GP",
+    "gold": 4,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "chain-mail",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "greatsword",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "flail",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "javelin",
+      "quantity": 8
+     },
+     {
+      "category": "gear",
+      "catalogId": "dungeoneers-pack",
+      "quantity": 1
+     }
     ]
-  }
+   },
+   {
+    "id": "B",
+    "text": "Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Dungeoneer's Pack, and 11 GP",
+    "gold": 11,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "studded-leather-armor",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "scimitar",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "shortsword",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "longbow",
+      "quantity": 1
+     },
+     {
+      "category": "ammo",
+      "catalogId": "arrows",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "quiver",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "dungeoneers-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "C",
+    "text": "155 GP",
+    "gold": 155,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Second Wind",
+    "values": [
+     2,
+     2,
+     2,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ]
+   },
+   {
+    "label": "Weapon Mastery",
+    "values": [
+     3,
+     3,
+     3,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     5,
+     5,
+     5,
+     5,
+     5,
+     5,
+     6,
+     6,
+     6,
+     6,
+     6
+    ]
+   }
+  ],
+  "weaponMasteryCount": 3,
+  "multiclassPrereqText": "STR or DEX",
+  "startingEquipment": [
+   "Chain Mail, Greatsword, Flail, 8 Javelins, Dungeoneer's Pack, and 4 GP",
+   "Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Dungeoneer's Pack, and 11 GP",
+   "155 GP"
+  ],
+  "multiclassPrereqMode": "any"
+ },
+ {
+  "name": "Monk",
+  "hitDie": 8,
+  "primaryAbility": [
+   "dex",
+   "wis"
+  ],
+  "savingThrows": [
+   "str",
+   "dex"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "acrobatics",
+    "athletics",
+    "history",
+    "insight",
+    "religion",
+    "stealth"
+   ]
+  },
+  "armorTraining": [],
+  "weaponTraining": [
+   "simple",
+   "martial-light"
+  ],
+  "toolChoices": {
+   "count": 1,
+   "category": "artisan-or-instrument"
+  },
+  "subclassLevel": 3,
+  "subclassLabel": "Monk Subclass",
+  "weaponMastery": null,
+  "spellcasting": null,
+  "multiclassPrereq": [
+   "dex",
+   "wis"
+  ],
+  "multiclassProficiencies": {},
+  "id": "monk",
+  "subclasses": [
+   {
+    "id": "warrior-of-mercy",
+    "name": "Warrior of Mercy",
+    "description": "Manipulate Forces of Life and Death Warriors of Mercy manipulate the life force of others. These Monks are wandering physicians, but they bring a swift end to their enemies. They often wear masks, presenting themselves as faceless bringers of life and death."
+   },
+   {
+    "id": "warrior-of-shadow",
+    "name": "Warrior of Shadow",
+    "description": "Harness Shadow Power for Stealth and Subterfuge Warriors of Shadow practice stealth and subterfuge, harnessing the power of the Shadowfell. They are at home in darkness, able to draw gloom around themselves to hide, leap from shadow to shadow, and take on a wraithlike form."
+   },
+   {
+    "id": "warrior-of-the-elements",
+    "name": "Warrior of the Elements",
+    "description": "Wield Strikes and Bursts of Elemental Power"
+   },
+   {
+    "id": "warrior-of-the-open-hand",
+    "name": "Warrior of the Open Hand",
+    "description": "Mast-er Unarmed Combat Techniques"
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   6,
+   11,
+   17
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Spear, 5 Daggers, Artisan's Tools or Musical Instrument chosen for the tool proficiency above, Explorer's Pack, and 11 GP",
+    "gold": 11,
+    "items": [
+     {
+      "category": "weapon",
+      "catalogId": "spear",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "dagger",
+      "quantity": 5
+     },
+     {
+      "category": "gear",
+      "catalogId": "explorers-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "50 GP",
+    "gold": 50,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Martial Arts",
+    "values": [
+     "1d6",
+     "1d6",
+     "1d6",
+     "1d6",
+     "1d8",
+     "1d8",
+     "1d8",
+     "1d8",
+     "1d8",
+     "1d8",
+     "1d10",
+     "1d10",
+     "1d10",
+     "1d10",
+     "1d10",
+     "1d10",
+     "1d12",
+     "1d12",
+     "1d12",
+     "1d12"
+    ]
+   },
+   {
+    "label": "Focus Points",
+    "values": [
+     0,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20
+    ]
+   },
+   {
+    "label": "Unarmored Movement",
+    "values": [
+     "—",
+     "+10 ft.",
+     "+10 ft.",
+     "+10 ft.",
+     "+10 ft.",
+     "+15 ft.",
+     "+15 ft.",
+     "+15 ft.",
+     "+15 ft.",
+     "+20 ft.",
+     "+20 ft.",
+     "+20 ft.",
+     "+20 ft.",
+     "+25 ft.",
+     "+25 ft.",
+     "+25 ft.",
+     "+25 ft.",
+     "+30 ft.",
+     "+30 ft.",
+     "+30 ft."
+    ]
+   }
+  ],
+  "weaponMasteryCount": 0,
+  "multiclassPrereqText": "DEX and WIS",
+  "startingEquipment": [
+   "Spear, 5 Daggers, Artisan's Tools or Musical Instrument chosen for the tool proficiency above, Explorer's Pack, and 11 GP",
+   "50 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Paladin",
+  "hitDie": 10,
+  "primaryAbility": [
+   "str",
+   "cha"
+  ],
+  "savingThrows": [
+   "wis",
+   "cha"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "athletics",
+    "insight",
+    "intimidation",
+    "medicine",
+    "persuasion",
+    "religion"
+   ]
+  },
+  "armorTraining": [
+   "light",
+   "medium",
+   "heavy",
+   "shield"
+  ],
+  "weaponTraining": [
+   "simple",
+   "martial"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Paladin Subclass",
+  "weaponMastery": [
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2
+  ],
+  "spellcasting": {
+   "ability": "cha",
+   "type": "half",
+   "cantrips": null,
+   "prepared": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    6,
+    7,
+    7,
+    9,
+    9,
+    10,
+    10,
+    11,
+    11,
+    12,
+    12,
+    14,
+    14,
+    15,
+    15
+   ],
+   "list": "paladin",
+   "focus": "Holy Symbol"
+  },
+  "multiclassPrereq": [
+   "str",
+   "cha"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "light",
+    "medium",
+    "shield"
+   ],
+   "weapons": [
+    "martial"
+   ]
+  },
+  "id": "paladin",
+  "subclasses": [
+   {
+    "id": "oath-of-devotion",
+    "name": "Oath of Devotion",
+    "description": "Uphold the Ideals ofJu stice and Order",
+    "spells": {
+     "3": [
+      "protection-from-evil-and-good",
+      "shield-of-faith"
+     ],
+     "5": [
+      "aid",
+      "zone-of-truth"
+     ],
+     "9": [
+      "beacon-of-hope",
+      "dispel-magic"
+     ],
+     "13": [
+      "freedom-of-movement",
+      "guardian-of-faith"
+     ],
+     "17": [
+      "commune",
+      "flame-strike"
+     ]
+    }
+   },
+   {
+    "id": "oath-of-glory",
+    "name": "Oath of Glory",
+    "description": "Strive for the Heights of Heroism Paladins who take the Oath of Glory believe they and their companions are destined to achieve glory through deeds of heroism. They train diligently and encourage their companions, so they're all ready when destiny calls.",
+    "spells": {
+     "3": [
+      "guiding-bolt",
+      "heroism"
+     ],
+     "5": [
+      "enhance-ability",
+      "magic-weapon"
+     ],
+     "9": [
+      "haste",
+      "protection-from-energy"
+     ],
+     "13": [
+      "compulsion",
+      "freedom-of-movement"
+     ],
+     "17": [
+      "legend-lore",
+      "yolandes-regal-presence"
+     ]
+    }
+   },
+   {
+    "id": "oath-of-the-ancients",
+    "name": "Oath of the Ancients",
+    "description": "Preserve Life and Light in the World",
+    "spells": {
+     "3": [
+      "ensnaring-strike",
+      "speak-with-animals"
+     ],
+     "5": [
+      "misty-step",
+      "moonbeam"
+     ],
+     "9": [
+      "plant-growth",
+      "protection-from-energy"
+     ],
+     "13": [
+      "ice-storm",
+      "stoneskin"
+     ],
+     "17": [
+      "commune-with-nature",
+      "tree-stride"
+     ]
+    }
+   },
+   {
+    "id": "oath-of-vengeance",
+    "name": "Oath of Vengeance",
+    "description": "Punish Evildoers at Any Cost",
+    "spells": {
+     "3": [
+      "bane",
+      "hunters-mark"
+     ],
+     "5": [
+      "hold-person",
+      "misty-step"
+     ],
+     "9": [
+      "haste",
+      "protection-from-energy"
+     ],
+     "13": [
+      "banishment",
+      "dimension-door"
+     ],
+     "17": [
+      "hold-monster",
+      "scrying"
+     ]
+    }
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   7,
+   15,
+   20
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest's Pack, and 9 GP",
+    "gold": 9,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "chain-mail",
+      "quantity": 1
+     },
+     {
+      "category": "armor",
+      "catalogId": "shield",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "longsword",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "javelin",
+      "quantity": 6
+     },
+     {
+      "category": "gear",
+      "catalogId": "holy-symbol",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "priests-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "150 GP",
+    "gold": 150,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Channel Divinity",
+    "values": [
+     0,
+     0,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ]
+   }
+  ],
+  "weaponMasteryCount": 2,
+  "multiclassPrereqText": "STR and CHA",
+  "startingEquipment": [
+   "Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest's Pack, and 9 GP",
+   "150 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Ranger",
+  "hitDie": 10,
+  "primaryAbility": [
+   "dex",
+   "wis"
+  ],
+  "savingThrows": [
+   "str",
+   "dex"
+  ],
+  "skillChoices": {
+   "count": 3,
+   "options": [
+    "animalHandling",
+    "athletics",
+    "insight",
+    "investigation",
+    "nature",
+    "perception",
+    "stealth",
+    "survival"
+   ]
+  },
+  "armorTraining": [
+   "light",
+   "medium",
+   "shield"
+  ],
+  "weaponTraining": [
+   "simple",
+   "martial"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Ranger Subclass",
+  "weaponMastery": [
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2
+  ],
+  "spellcasting": {
+   "ability": "wis",
+   "type": "half",
+   "cantrips": null,
+   "prepared": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    6,
+    7,
+    7,
+    9,
+    9,
+    10,
+    10,
+    11,
+    11,
+    12,
+    12,
+    14,
+    14,
+    15,
+    15
+   ],
+   "list": "ranger",
+   "focus": "Druidic Focus"
+  },
+  "multiclassPrereq": [
+   "dex",
+   "wis"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "light",
+    "medium",
+    "shield"
+   ],
+   "weapons": [
+    "martial"
+   ],
+   "skills": 1
+  },
+  "id": "ranger",
+  "subclasses": [
+   {
+    "id": "beast-master",
+    "name": "Beast Master",
+    "description": "Bond with a Primal Beast"
+   },
+   {
+    "id": "fey-wanderer",
+    "name": "Fey Wanderer",
+    "description": "Wield Fey Mirth and Fury -- A fey mystique surrounds you, thanks tot h e boo n of an arch fey or a location in the Feywild that transformed you. However you gained fey magic, you are now a Fey Wanderer. Your joyful !aught brightens the hearts of the downtrodden, and yo:r",
+    "spells": {
+     "3": [
+      "charm-person"
+     ],
+     "5": [
+      "misty-step"
+     ],
+     "9": [
+      "summon-fey"
+     ],
+     "13": [
+      "dimension-door"
+     ],
+     "17": [
+      "mislead"
+     ]
+    }
+   },
+   {
+    "id": "gloom-stalker",
+    "name": "Gloom Stalker",
+    "description": "Draw on Shadow Magic to Fight Your Foes Gloom Stalkers are at home in the darkest places, wielding magic drawn from the Shadowfell to combat enemies that lurk in darkness.",
+    "spells": {
+     "3": [
+      "disguise-self"
+     ],
+     "5": [
+      "rope-trick"
+     ],
+     "9": [
+      "fear"
+     ],
+     "13": [
+      "greater-invisibility"
+     ],
+     "17": [
+      "seeming"
+     ]
+    }
+   },
+   {
+    "id": "hunter",
+    "name": "Hunter",
+    "description": ""
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   7,
+   11,
+   15
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Druidic Focus (sprig of mistletoe), Explorer's Pack, and 7 GP",
+    "gold": 7,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "studded-leather-armor",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "scimitar",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "shortsword",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "longbow",
+      "quantity": 1
+     },
+     {
+      "category": "ammo",
+      "catalogId": "arrows",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "quiver",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "druidic-focus",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "explorers-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "150 GP",
+    "gold": 150,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Favored Enemy",
+    "values": [
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3,
+     3,
+     4,
+     4,
+     4,
+     4,
+     5,
+     5,
+     5,
+     5,
+     6,
+     6,
+     6,
+     6
+    ]
+   }
+  ],
+  "weaponMasteryCount": 2,
+  "multiclassPrereqText": "DEX and WIS",
+  "startingEquipment": [
+   "Studded Leather Armor, Scimitar, Shortsword, Longbow, 20 Arrows, Quiver, Druidic Focus (sprig of mistletoe), Explorer's Pack, and 7 GP",
+   "150 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Rogue",
+  "hitDie": 8,
+  "primaryAbility": [
+   "dex"
+  ],
+  "savingThrows": [
+   "dex",
+   "int"
+  ],
+  "skillChoices": {
+   "count": 4,
+   "options": [
+    "acrobatics",
+    "athletics",
+    "deception",
+    "insight",
+    "intimidation",
+    "investigation",
+    "perception",
+    "persuasion",
+    "sleightOfHand",
+    "stealth"
+   ]
+  },
+  "armorTraining": [
+   "light"
+  ],
+  "weaponTraining": [
+   "simple",
+   "martial-finesse-light"
+  ],
+  "tools": [
+   "Thieves' Tools"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Rogue Subclass",
+  "weaponMastery": [
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2,
+   2
+  ],
+  "spellcasting": null,
+  "multiclassPrereq": [
+   "dex"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "light"
+   ],
+   "skills": 1,
+   "tools": [
+    "Thieves' Tools"
+   ]
+  },
+  "asiLevels": [
+   4,
+   8,
+   10,
+   12,
+   16
+  ],
+  "id": "rogue",
+  "subclasses": [
+   {
+    "id": "arcane-trickster",
+    "name": "Arcane Trickster",
+    "description": "Enhance Stealth with Arcane Spells Some Rogues enhance their fine-honed skills of stealth and agility with spells, learning magical tricks to aid them in their trade. Some Arcane",
+    "spellcasting": {
+     "ability": "int",
+     "type": "third",
+     "list": "wizard",
+     "cantrips": [
+      0,
+      0,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4
+     ],
+     "prepared": [
+      0,
+      0,
+      3,
+      4,
+      4,
+      4,
+      5,
+      6,
+      6,
+      7,
+      8,
+      8,
+      9,
+      10,
+      10,
+      11,
+      11,
+      11,
+      12,
+      13
+     ],
+     "focus": "Arcane Focus",
+     "fixedCantrips": [
+      "mage-hand"
+     ]
+    }
+   },
+   {
+    "id": "assassin",
+    "name": "Assassin",
+    "description": "Practice the Grim Art of Death An Assassin's training focuses on using stealth, poison, and disguise to eliminate foes with deadly efficiency. While some Rogues who follow this path are hired killers, spies, or bounty hunters, the capabilities of this subclass are equally useful for adventurers facing a variety of monstrous enemies."
+   },
+   {
+    "id": "soulknife",
+    "name": "Soulknife",
+    "description": ""
+   },
+   {
+    "id": "thief",
+    "name": "Thief",
+    "description": "Hunt fo r Treasure as a Classic Adventurer A mix of burglar, treasure hunter, and explorer, you are the epitome of an adventurer. In addition to improving your agility and stealth, you gain abilities useful for delving into ruins and getting maximum benefit from the magic items you find there."
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   9,
+   13,
+   17
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Quiver, Thieves' Tools, Burglar's Pack, and 8 GP",
+    "gold": 8,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "leather-armor",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "dagger",
+      "quantity": 2
+     },
+     {
+      "category": "weapon",
+      "catalogId": "shortsword",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "shortbow",
+      "quantity": 1
+     },
+     {
+      "category": "ammo",
+      "catalogId": "arrows",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "quiver",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "thieves-tools",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "burglars-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "100 GP",
+    "gold": 100,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Sneak Attack",
+    "values": [
+     "1d6",
+     "1d6",
+     "2d6",
+     "2d6",
+     "3d6",
+     "3d6",
+     "4d6",
+     "4d6",
+     "5d6",
+     "5d6",
+     "6d6",
+     "6d6",
+     "7d6",
+     "7d6",
+     "8d6",
+     "8d6",
+     "9d6",
+     "9d6",
+     "10d6",
+     "10d6"
+    ]
+   }
+  ],
+  "weaponMasteryCount": 2,
+  "multiclassPrereqText": "DEX",
+  "startingEquipment": [
+   "Leather Armor, 2 Daggers, Shortsword, Shortbow, 20 Arrows, Quiver, Thieves' Tools, Burglar's Pack, and 8 GP",
+   "100 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Sorcerer",
+  "hitDie": 6,
+  "primaryAbility": [
+   "cha"
+  ],
+  "savingThrows": [
+   "con",
+   "cha"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "arcana",
+    "deception",
+    "insight",
+    "intimidation",
+    "persuasion",
+    "religion"
+   ]
+  },
+  "armorTraining": [],
+  "weaponTraining": [
+   "simple"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Sorcerer Subclass",
+  "weaponMastery": null,
+  "spellcasting": {
+   "ability": "cha",
+   "type": "full",
+   "cantrips": [
+    4,
+    4,
+    4,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6
+   ],
+   "prepared": [
+    2,
+    4,
+    6,
+    7,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    16,
+    16,
+    17,
+    17,
+    18,
+    18,
+    19,
+    20,
+    21,
+    22
+   ],
+   "list": "sorcerer",
+   "focus": "Arcane Focus"
+  },
+  "multiclassPrereq": [
+   "cha"
+  ],
+  "multiclassProficiencies": {},
+  "id": "sorcerer",
+  "subclasses": [
+   {
+    "id": "aberrant-sorcery",
+    "name": "Aberrant Sorcery",
+    "description": "Wield Unnatural Psionic Power An alien influence has wrapped its tendrils around your mind, giving you psionic power. You can now touch other minds with that power and alter the world around you. Will this power shine from you as a hopeful beacon to others? Or will you be a terror to those who feel the stab of your mind?",
+    "spells": {
+     "3": [
+      "arms-of-hadar",
+      "calm-emotions",
+      "detect-thoughts",
+      "dissonant-whispers",
+      "mind-sliver"
+     ],
+     "5": [
+      "hunger-of-hadar",
+      "sending"
+     ],
+     "7": [
+      "evards-black-tentacles",
+      "summon-aberration"
+     ],
+     "9": [
+      "rarys-telepathic-bond",
+      "telekinesis"
+     ]
+    }
+   },
+   {
+    "id": "clockwork-sorcery",
+    "name": "Clockwork Sorcery",
+    "description": "Channel Cosmic Forces of Orde, The cosmic force of order has suffused you with magic. That power arises from Mechanus or a realm like it-a plane of existence shaped entirely by clockwork efficiency. You or someone from your lineage might have become entangled in them achinations of modrons, the orderly beings who inhabit Mechanus. Perhaps your ancestor even took part in the",
+    "spells": {
+     "3": [
+      "aid",
+      "alarm",
+      "lesser-restoration",
+      "protection-from-evil-and-good"
+     ],
+     "5": [
+      "dispel-magic",
+      "protection-from-energy"
+     ],
+     "7": [
+      "freedom-of-movement",
+      "summon-construct"
+     ],
+     "9": [
+      "greater-restoration",
+      "wall-of-force"
+     ]
+    }
+   },
+   {
+    "id": "draconic-sorcery",
+    "name": "Draconic Sorcery",
+    "description": "Breathe the Magic of Dragons",
+    "spells": {
+     "3": [
+      "alter-self",
+      "chromatic-orb",
+      "command",
+      "dragons-breath"
+     ],
+     "5": [
+      "fear",
+      "fly"
+     ],
+     "7": [
+      "arcane-eye",
+      "charm-monster"
+     ],
+     "9": [
+      "legend-lore",
+      "summon-dragon"
+     ]
+    }
+   },
+   {
+    "id": "wild-magic-sorcery",
+    "name": "Wild Magic Sorcery",
+    "description": "Unleash Chaotic Magic Your innate magic stems from the forces of chaos that underlie the order of creation. You or an ancestor might have endured exposure to raw magic, perhaps through a planar portal leading to Limbo or the Elemental Planes. Perhaps you were blessed by a fey being or marked by a demon. Or your magic could be a fluke with no apparent cause. Whatever its source, this magic churns w"
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   6,
+   14,
+   18
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Spear, 2 Daggers, Arcane Focus (crystal), Dungeoneer's Pack, and 28 GP",
+    "gold": 28,
+    "items": [
+     {
+      "category": "weapon",
+      "catalogId": "spear",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "dagger",
+      "quantity": 2
+     },
+     {
+      "category": "gear",
+      "catalogId": "arcane-focus",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "dungeoneers-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "50 GP",
+    "gold": 50,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Sorcery Points",
+    "values": [
+     0,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20
+    ]
+   }
+  ],
+  "weaponMasteryCount": 0,
+  "multiclassPrereqText": "CHA",
+  "startingEquipment": [
+   "Spear, 2 Daggers, Arcane Focus (crystal), Dungeoneer's Pack, and 28 GP",
+   "50 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Warlock",
+  "hitDie": 8,
+  "primaryAbility": [
+   "cha"
+  ],
+  "savingThrows": [
+   "wis",
+   "cha"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "arcana",
+    "deception",
+    "history",
+    "intimidation",
+    "investigation",
+    "nature",
+    "religion"
+   ]
+  },
+  "armorTraining": [
+   "light"
+  ],
+  "weaponTraining": [
+   "simple"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Warlock Subclass",
+  "weaponMastery": null,
+  "spellcasting": {
+   "ability": "cha",
+   "type": "pact",
+   "cantrips": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4
+   ],
+   "prepared": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    10,
+    11,
+    11,
+    12,
+    12,
+    13,
+    13,
+    14,
+    14,
+    15,
+    15
+   ],
+   "list": "warlock",
+   "focus": "Arcane Focus"
+  },
+  "multiclassPrereq": [
+   "cha"
+  ],
+  "multiclassProficiencies": {
+   "armor": [
+    "light"
+   ]
+  },
+  "id": "warlock",
+  "subclasses": [
+   {
+    "id": "archfey-patron",
+    "name": "Archfey Patron",
+    "description": "Bargain with Whimsical Fey Your pact draws on the power of the Feywild. When you choose this subclass, you might make a deal with an arch fey, such as the Prince of Frost; the",
+    "spells": {
+     "3": [
+      "calm-emotions",
+      "faerie-fire",
+      "misty-step",
+      "phantasmal-force",
+      "sleep"
+     ],
+     "5": [
+      "blink",
+      "plant-growth"
+     ],
+     "7": [
+      "dominate-beast",
+      "greater-invisibility"
+     ],
+     "9": [
+      "dominate-person",
+      "seeming"
+     ]
+    }
+   },
+   {
+    "id": "celestial-patron",
+    "name": "Celestial Patron",
+    "description": "Call on the Powe, of the Heavens Your pact draws on the Upper Planes, the realms of everlasting bliss. You might enter an agreement with an empyrean, a couatl, a sphinx, a unicorn, or another heavenly entity. Or you might call on numerous such beings as you pursue goals aligned with theirs. Your pact allows you to experience a hint of the holy light that illuminates the multiverse.",
+    "spells": {
+     "3": [
+      "aid",
+      "cure-wounds",
+      "guiding-bolt",
+      "lesser-restoration",
+      "light",
+      "sacred-flame"
+     ],
+     "5": [
+      "daylight",
+      "revivify"
+     ],
+     "7": [
+      "guardian-of-faith",
+      "wall-of-fire"
+     ],
+     "9": [
+      "greater-restoration",
+      "summon-celestial"
+     ]
+    }
+   },
+   {
+    "id": "fiend-patron",
+    "name": "Fiend Patron",
+    "description": "Make a Deal with the Lower Planes Your pact draws on the Lower Planes, the realms of perdition. You might forge a bargain with a demon lord such as Demogorgon or Orcus; an archdevil such as Asmodeus; or a pit fiend, balor, yugoloth, or night hag that is especially mighty. That patron's aims are evil-the corruption or destruction of all things, ultimately including you-and your path is defined by t",
+    "spells": {
+     "3": [
+      "burning-hands",
+      "command",
+      "scorching-ray",
+      "suggestion"
+     ],
+     "5": [
+      "fireball",
+      "stinking-cloud"
+     ],
+     "7": [
+      "fire-shield",
+      "wall-of-fire"
+     ],
+     "9": [
+      "geas",
+      "insect-plague"
+     ]
+    }
+   },
+   {
+    "id": "great-old-one-patron",
+    "name": "Great Old One Patron",
+    "description": "Unearth Forbidden Lore of Ineffable Beings",
+    "spells": {
+     "3": [
+      "detect-thoughts",
+      "dissonant-whispers",
+      "phantasmal-force",
+      "tashas-hideous-laughter"
+     ],
+     "5": [
+      "clairvoyance",
+      "hunger-of-hadar"
+     ],
+     "7": [
+      "confusion",
+      "summon-aberration"
+     ],
+     "9": [
+      "modify-memory",
+      "telekinesis"
+     ]
+    }
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   6,
+   10,
+   14
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "Leather Armor, Sickle, 2 Daggers, Arcane Focus (orb), Book (occult lore), Scholar's Pack, and 15 GP",
+    "gold": 15,
+    "items": [
+     {
+      "category": "armor",
+      "catalogId": "leather-armor",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "sickle",
+      "quantity": 1
+     },
+     {
+      "category": "weapon",
+      "catalogId": "dagger",
+      "quantity": 2
+     },
+     {
+      "category": "gear",
+      "catalogId": "arcane-focus",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "book",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "scholars-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "100 GP",
+    "gold": 100,
+    "items": []
+   }
+  ],
+  "progression": [
+   {
+    "label": "Invocations",
+    "values": [
+     1,
+     3,
+     3,
+     3,
+     5,
+     5,
+     6,
+     6,
+     7,
+     7,
+     7,
+     8,
+     8,
+     8,
+     9,
+     9,
+     9,
+     10,
+     10,
+     10
+    ]
+   }
+  ],
+  "weaponMasteryCount": 0,
+  "multiclassPrereqText": "CHA",
+  "startingEquipment": [
+   "Leather Armor, Sickle, 2 Daggers, Arcane Focus (orb), Book (occult lore), Scholar's Pack, and 15 GP",
+   "100 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ },
+ {
+  "name": "Wizard",
+  "hitDie": 6,
+  "primaryAbility": [
+   "int"
+  ],
+  "savingThrows": [
+   "int",
+   "wis"
+  ],
+  "skillChoices": {
+   "count": 2,
+   "options": [
+    "arcana",
+    "history",
+    "insight",
+    "investigation",
+    "medicine",
+    "nature",
+    "religion"
+   ]
+  },
+  "armorTraining": [],
+  "weaponTraining": [
+   "simple"
+  ],
+  "toolChoices": null,
+  "subclassLevel": 3,
+  "subclassLabel": "Wizard Subclass",
+  "weaponMastery": null,
+  "spellcasting": {
+   "ability": "int",
+   "type": "full",
+   "cantrips": [
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5
+   ],
+   "prepared": [
+    4,
+    5,
+    6,
+    7,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    16,
+    16,
+    17,
+    18,
+    19,
+    21,
+    22,
+    23,
+    24,
+    25
+   ],
+   "list": "wizard",
+   "focus": "Arcane Focus",
+   "spellbook": true
+  },
+  "multiclassPrereq": [
+   "int"
+  ],
+  "multiclassProficiencies": {},
+  "id": "wizard",
+  "subclasses": [
+   {
+    "id": "abjurer",
+    "name": "Abjurer",
+    "description": "Shield Companions and Banish Foes Your study of magic is focused on spells that block, banish, or protect- ending harmful effects, banishing evil influences, and protecting the weak."
+   },
+   {
+    "id": "diviner",
+    "name": "Diviner",
+    "description": "Learn the Secrets of the Multi verse"
+   },
+   {
+    "id": "evoker",
+    "name": "Evoker",
+    "description": "Create Explosive Elemental Effects Your studies focus on magic that creates powerful elemental effects such as bitter cold, sea ring flame, rolling thunder, crackling lightning, and burning acid. Some Evokers find employment in military forces, serving as artillery to blast armies from a far."
+   },
+   {
+    "id": "illusionist",
+    "name": "Illusionist",
+    "description": ""
+   }
+  ],
+  "subclassFeatureLevels": [
+   3,
+   6,
+   10,
+   14
+  ],
+  "asiLevels": [
+   4,
+   8,
+   12,
+   16
+  ],
+  "equipmentOptions": [
+   {
+    "id": "A",
+    "text": "2 Daggers, Arcane Focus (Quarterstaff), Robe, Spellbook, Scholar's Pack, and 5 GP",
+    "gold": 5,
+    "items": [
+     {
+      "category": "weapon",
+      "catalogId": "dagger",
+      "quantity": 2
+     },
+     {
+      "category": "weapon",
+      "catalogId": "quarterstaff",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "robe",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "spellbook",
+      "quantity": 1
+     },
+     {
+      "category": "gear",
+      "catalogId": "scholars-pack",
+      "quantity": 1
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "text": "55 GP",
+    "gold": 55,
+    "items": []
+   }
+  ],
+  "progression": [],
+  "weaponMasteryCount": 0,
+  "multiclassPrereqText": "INT",
+  "startingEquipment": [
+   "2 Daggers, Arcane Focus (Quarterstaff), Robe, Spellbook, Scholar's Pack, and 5 GP",
+   "55 GP"
+  ],
+  "multiclassPrereqMode": "all"
+ }
 ]

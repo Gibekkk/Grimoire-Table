@@ -1,6 +1,6 @@
-import { h, toast } from "../util.js";
+import { h, toast, escapeHtml } from "../util.js";
 import { findById } from "../data-loader.js";
-import { currencyTotalGp, parseWeightLb, parseCostToGp } from "../rules-engine.js";
+import { currencyTotalGp, parseWeightLb, parseCostToGp, spendCoins } from "../rules-engine.js";
 
 export function renderInventoryTab(ctx) {
   const { character, ruleset, inventory, canEditCore, patch, sendToParty, addItem, toggleEquip, changeQty, removeItem, setContainer, doAttack } = ctx;
@@ -67,14 +67,21 @@ export function renderInventoryTab(ctx) {
     else if (item.type === "armor" && item.armorData) metaLine = `${item.armorData.armorType} armor \u2022 AC ${item.armorData.baseAC}`;
     else if (item.type === "ammo") metaLine = `ammo \u2022 ${item.ammoType}`;
     const weight = item.weightLb ?? 0;
+    const mg = item.magic;
     row.innerHTML = `
       <div class="row1">
         <div>
-          <div class="item-name">${item.name} ${item.type === "ammo" ? `<span class="ammo-pill ${item.quantity <= 0 ? "empty" : ""}">${item.quantity} left</span>` : ""} ${item.isContainer ? '<span class="badge rune">Container</span>' : ""}</div>
+          <div class="item-name">${escapeHtml(item.name)} ${item.type === "ammo" ? `<span class="ammo-pill ${item.quantity <= 0 ? "empty" : ""}">${item.quantity} left</span>` : ""} ${item.isContainer ? '<span class="badge rune">Container</span>' : ""}${mg ? ` <span class="badge rarity-${(mg.rarity || "").toLowerCase().replace(/\s+/g, "-")}">${escapeHtml(mg.rarity || "Magic")}</span>` : ""}${mg?.attunement ? ` <span class="badge ${item.attuned ? "gold" : ""}">${item.attuned ? "Attuned" : "Requires Attunement"}</span>` : ""}</div>
           <div class="item-meta">${metaLine}${weight ? ` \u2022 ${weight} lb.` : ""}</div>
         </div>
       </div>
     `;
+    if (mg?.description) {
+      const d = h("details", { class: "creator-detail" });
+      d.appendChild(h("summary", {}, "Item details"));
+      d.appendChild(h("div", { class: "creator-detail-body" }, escapeHtml(mg.description).replace(/\n/g, "<br>")));
+      row.appendChild(d);
+    }
     const actions = h("div", { class: "row-actions" });
 
     const stepper = h("div", { class: "qty-stepper" });
@@ -86,7 +93,38 @@ export function renderInventoryTab(ctx) {
     stepper.appendChild(minus); stepper.appendChild(qtyLabel); stepper.appendChild(plus);
     actions.appendChild(stepper);
 
-    if ((item.type === "weapon" || item.type === "armor" || item.isContainer) && canEditCore) {
+    if (mg?.attunement && canEditCore) {
+      const attB = h("button", { class: `btn sm ${item.attuned ? "primary" : "ghost"}`, title: "You can be attuned to at most 3 magic items" }, item.attuned ? "Attuned" : "Attune");
+      attB.addEventListener("click", () => {
+        if (!item.attuned && inventory.filter(i => i.attuned).length >= 3) { toast("You're already attuned to 3 items \u2014 end one attunement first", "error"); return; }
+        ctx.updateItem(item, { attuned: !item.attuned });
+      });
+      actions.appendChild(attB);
+    }
+    if (mg?.maxCharges && canEditCore) {
+      const ch = h("div", { class: "qty-stepper", title: "Charges" });
+      const left = item.charges ?? mg.maxCharges;
+      const m2 = h("button", {}, "\u2212"), v = h("span", {}, `${left}/${mg.maxCharges} ch`), p2 = h("button", {}, "+");
+      m2.addEventListener("click", () => ctx.updateItem(item, { charges: Math.max(0, left - 1) }));
+      p2.addEventListener("click", () => ctx.updateItem(item, { charges: Math.min(mg.maxCharges, left + 1) }));
+      ch.appendChild(m2); ch.appendChild(v); ch.appendChild(p2);
+      actions.appendChild(ch);
+    }
+    if (mg?.healDice && canEditCore) {
+      const drink = h("button", { class: "btn sm hp-heal" }, "Drink");
+      drink.addEventListener("click", () => {
+        import("../dice/roll-logic.js").then(({ computeRoll, parseNotation, formatBreakdown }) => {
+          const n = parseNotation(mg.healDice);
+          const r = computeRoll({ sides: n.sides, count: n.count, modifier: n.modifier, mode: "normal", label: item.name });
+          const hp = ctx.character.hp;
+          ctx.patch({ hp: { ...hp, current: Math.min(hp.max, (hp.current || 0) + r.total) }, deathSaves: { successes: 0, failures: 0 } });
+          changeQty(item, -1);
+          toast(`${item.name}: healed ${r.total} ${formatBreakdown(r)}`);
+        });
+      });
+      actions.appendChild(drink);
+    }
+    if ((item.type === "weapon" || item.type === "armor" || item.isContainer || (mg && item.type === "gear")) && canEditCore) {
       const equipBtn = h("button", { class: `btn sm ${item.equipped ? "primary" : ""}` }, item.equipped ? "Equipped" : "Equip");
       equipBtn.addEventListener("click", () => toggleEquip(item));
       actions.appendChild(equipBtn);
@@ -135,128 +173,227 @@ export function renderInventoryTab(ctx) {
   return wrap;
 }
 
+// ---------------- Add / buy items ----------------
+// Mirrors D&D Beyond's equipment shop: pick a category, search, add for free or
+// buy it (coins are deducted with change), packs arrive as a backpack with their
+// contents, magic weapons/armor are built on a base item you choose.
+const CATS = [["gear", "Gear & Tools"], ["weapon", "Weapons"], ["armor", "Armor"], ["ammo", "Ammunition"], ["magic", "Magic Items"], ["custom", "Custom Item"]];
+const formMemory = { cat: "gear", q: "" };
+
+function weaponProficient(character, w) {
+  const wt = character.weaponTraining || ["simple"];
+  return wt.includes(w.category) || (wt.includes("martial-light") && w.properties.some(p => /^Light/.test(p))) || (wt.includes("martial-finesse-light") && w.properties.some(p => /^(Finesse|Light)/.test(p)));
+}
+function weaponItem(character, e, extra = {}) {
+  return {
+    type: "weapon", name: e.name, quantity: 1, equipped: false, isCustom: false, catalogId: e.id,
+    weightLb: parseWeightLb(e.weight), valueGp: parseCostToGp(e.cost),
+    weaponData: { damageDice: e.damageDice, damageType: e.damageType, ability: e.ability, ranged: e.ranged, ammoType: e.ammoType, properties: e.properties, mastery: e.mastery, proficient: weaponProficient(character, e), attackBonus: 0, damageBonus: 0 },
+    ...extra
+  };
+}
+function armorItem(e, extra = {}) {
+  return {
+    type: "armor", name: e.name, quantity: 1, equipped: false, isCustom: false, catalogId: e.id,
+    weightLb: parseWeightLb(e.weight), valueGp: parseCostToGp(e.cost),
+    armorData: { armorType: e.armorType, baseAC: e.baseAC, dexBonus: e.dexBonus, strengthRequirement: e.strengthRequirement, stealthDisadvantage: e.stealthDisadvantage },
+    ...extra
+  };
+}
+// Base items a magic weapon/armor entry allows ("Any Melee Weapon", "Longsword", "Any Medium or Heavy, Except Hide Armor", ...)
+function baseOptions(ruleset, magic) {
+  const sub = (magic.subtype || "").toLowerCase();
+  if (magic.type === "Weapon") {
+    const all = ruleset.equipment.weapons;
+    if (!sub || /any (simple or martial|weapon)/.test(sub)) return all;
+    if (/any melee/.test(sub)) return all.filter(w => !w.ranged);
+    if (/any ranged/.test(sub)) return all.filter(w => w.ranged);
+    if (/any sword/.test(sub)) return all.filter(w => /sword|scimitar|rapier/i.test(w.name));
+    if (/ammunition/.test(sub)) return [];
+    const named = all.filter(w => sub.includes(w.name.toLowerCase()));
+    return named.length ? named : all;
+  }
+  if (magic.type === "Armor") {
+    const all = ruleset.equipment.armor;
+    let list = all;
+    if (/shield/.test(sub)) return all.filter(a => a.armorType === "shield");
+    const types = ["light", "medium", "heavy"].filter(t => sub.includes(t));
+    if (types.length) list = all.filter(a => types.includes(a.armorType));
+    else if (sub && !/^any/.test(sub)) { const named = all.filter(a => sub.includes(a.name.toLowerCase().replace(" armor", ""))); if (named.length) list = named; }
+    if (/except hide/.test(sub)) list = list.filter(a => a.id !== "hide-armor");
+    if (!/shield/.test(sub)) list = list.filter(a => a.armorType !== "shield");
+    return list;
+  }
+  return [];
+}
+
 function buildAddItemForm(ctx) {
-  const { ruleset, addItem, toast: toastFn } = ctx;
-  const form = h("div", {});
-  form.appendChild(h("label", {}, "Add item"));
-  const catSelect = h("select", {});
-  ["weapon", "armor", "ammo", "gear"].forEach(c => catSelect.appendChild(h("option", { value: c }, c[0].toUpperCase() + c.slice(1))));
-  form.appendChild(catSelect);
-
-  const sourceSelect = h("select", {});
-  form.appendChild(sourceSelect);
-  const customFields = h("div", {});
-  form.appendChild(customFields);
-
-  function catalogFor(cat) {
-    return ruleset.equipment?.[cat === "weapon" ? "weapons" : cat === "armor" ? "armor" : cat] || [];
+  const { ruleset, character, addItem } = ctx;
+  const form = h("div", { class: "add-item-form" });
+  form.appendChild(h("label", {}, "Add or buy items"));
+  const catRow = h("div", { class: "action-filters" });
+  const body = h("div", {});
+  form.appendChild(catRow); form.appendChild(body);
+  function renderCats() {
+    catRow.innerHTML = "";
+    CATS.forEach(([id, label]) => {
+      const b = h("button", { class: `chip-btn ${formMemory.cat === id ? "active" : ""}`, type: "button" }, label);
+      b.addEventListener("click", () => { formMemory.cat = id; formMemory.q = ""; renderCats(); renderBody(); });
+      catRow.appendChild(b);
+    });
   }
-  function renderSourceOptions() {
-    sourceSelect.innerHTML = "";
-    catalogFor(catSelect.value).forEach(entry => sourceSelect.appendChild(h("option", { value: entry.id }, entry.name)));
-    sourceSelect.appendChild(h("option", { value: "__custom__" }, "\u2014 Custom item \u2014"));
-    renderCustomFields();
-  }
-  function renderCustomFields() {
-    customFields.innerHTML = "";
-    if (sourceSelect.value !== "__custom__") return;
-    const cat = catSelect.value;
-    customFields.appendChild(h("input", { type: "text", placeholder: "Item name", id: "custom-name" }));
-    if (cat === "weapon") {
-      customFields.appendChild(h("input", { type: "text", placeholder: "Damage dice, e.g. 1d8", id: "custom-dice" }));
-      const typeSelect = h("select", { id: "custom-dmgtype" });
-      ["slashing", "piercing", "bludgeoning", "fire", "cold", "acid", "poison", "necrotic", "radiant", "force", "lightning", "thunder", "psychic"].forEach(t => typeSelect.appendChild(h("option", { value: t }, t)));
-      customFields.appendChild(typeSelect);
-      const abilSelect = h("select", { id: "custom-ability" });
-      [["str", "Strength"], ["dex", "Dexterity"], ["finesse", "Finesse"]].forEach(([v, l]) => abilSelect.appendChild(h("option", { value: v }, l)));
-      customFields.appendChild(abilSelect);
-      const rangedRow = h("label", { style: "display:flex; align-items:center; gap:6px; text-transform:none;" });
-      rangedRow.appendChild(h("input", { type: "checkbox", id: "custom-ranged", style: "width:auto; margin:0;" }));
-      rangedRow.appendChild(document.createTextNode(" Ranged weapon"));
-      customFields.appendChild(rangedRow);
-    } else if (cat === "armor") {
-      customFields.appendChild(h("input", { type: "number", placeholder: "Base AC", id: "custom-ac", value: "11" }));
-      const dexSelect = h("select", { id: "custom-dexbonus" });
-      [["full", "Full Dex"], ["max2", "Dex (max 2)"], ["none", "No Dex"]].forEach(([v, l]) => dexSelect.appendChild(h("option", { value: v }, l)));
-      customFields.appendChild(dexSelect);
-    } else if (cat === "ammo") {
-      customFields.appendChild(h("input", { type: "text", placeholder: "Ammo type, e.g. arrow", id: "custom-ammotype" }));
-    } else if (cat === "gear") {
-      const containerRow = h("label", { style: "display:flex; align-items:center; gap:6px; text-transform:none;" });
-      containerRow.appendChild(h("input", { type: "checkbox", id: "custom-iscontainer", style: "width:auto; margin:0;" }));
-      containerRow.appendChild(document.createTextNode(" This is a container (backpack, pouch, etc.)"));
-      customFields.appendChild(containerRow);
+  function catalog() {
+    const eq = ruleset.equipment;
+    switch (formMemory.cat) {
+      case "weapon": return eq.weapons.map(e => ({ e, label: e.name, meta: `${e.damageDice} ${e.damageType} • ${e.cost}` }));
+      case "armor": return eq.armor.map(e => ({ e, label: e.name, meta: `AC ${e.armorType === "shield" ? "+2" : e.baseAC} • ${e.cost}` }));
+      case "ammo": return eq.ammo.map(e => ({ e, label: e.name, meta: e.cost }));
+      case "gear": return eq.gear.filter(g => !g.alias).map(e => ({ e, label: e.name, meta: `${e.kind === "pack" ? "Pack • " : e.kind === "tool" ? "Tool • " : ""}${e.cost}` }));
+      case "magic": return (ruleset.magicItems || []).map(e => ({ e, label: e.name, meta: `${e.type}${e.subtype ? ` (${e.subtype})` : ""} • ${e.rarity}${e.attunement ? " • Attunement" : ""}` }));
+      default: return [];
     }
-    customFields.appendChild(h("input", { type: "number", placeholder: "Weight (lb.)", id: "custom-weight", value: "0", step: "0.1" }));
-    customFields.appendChild(h("input", { type: "number", placeholder: "Value (GP)", id: "custom-value", value: "0", step: "0.1" }));
   }
-  catSelect.addEventListener("change", renderSourceOptions);
-  sourceSelect.addEventListener("change", renderCustomFields);
-  renderSourceOptions();
-
-  const qtyRow = h("div", { class: "field-row" });
-  const qtyInput = h("input", { type: "number", value: "1", min: "1" });
-  const addBtn = h("button", { class: "btn primary" }, "Add to Inventory");
-  qtyRow.appendChild(qtyInput); qtyRow.appendChild(addBtn);
-  form.appendChild(qtyRow);
-
-  addBtn.addEventListener("click", async () => {
-    const cat = catSelect.value;
-    const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
-    const isCustom = sourceSelect.value === "__custom__";
-    const customWeight = parseFloat(customFields.querySelector("#custom-weight")?.value) || 0;
-    const customValue = parseFloat(customFields.querySelector("#custom-value")?.value) || 0;
-
-    if (cat === "weapon") {
-      if (isCustom) {
-        const name = customFields.querySelector("#custom-name")?.value.trim();
-        if (!name) { toast("Name your custom weapon", "error"); return; }
-        await addItem({
-          type: "weapon", name, quantity: qty, equipped: false, isCustom: true, weightLb: customWeight, valueGp: customValue,
-          weaponData: { damageDice: customFields.querySelector("#custom-dice")?.value.trim() || "1d4", damageType: customFields.querySelector("#custom-dmgtype")?.value || "bludgeoning", ability: customFields.querySelector("#custom-ability")?.value || "str", ranged: customFields.querySelector("#custom-ranged")?.checked || false, ammoType: null, proficient: true, attackBonus: 0, damageBonus: 0 }
-        });
-      } else {
-        const entry = findById(ruleset.equipment.weapons, sourceSelect.value);
-        if (!entry) return;
-        await addItem({
-          type: "weapon", name: entry.name, quantity: qty, equipped: false, isCustom: false, catalogId: entry.id,
-          weightLb: parseWeightLb(entry.weight), valueGp: parseCostToGp(entry.cost),
-          weaponData: { damageDice: entry.damageDice, damageType: entry.damageType, ability: entry.ability, ranged: entry.ranged, ammoType: entry.ammoType, range: entry.ranged ? undefined : null, properties: entry.properties, proficient: true, attackBonus: 0, damageBonus: 0 }
-        });
-      }
-    } else if (cat === "armor") {
-      if (isCustom) {
-        const name = customFields.querySelector("#custom-name")?.value.trim();
-        if (!name) { toast("Name your custom armor", "error"); return; }
-        await addItem({ type: "armor", name, quantity: 1, equipped: false, isCustom: true, weightLb: customWeight, valueGp: customValue, armorData: { armorType: "light", baseAC: parseInt(customFields.querySelector("#custom-ac")?.value, 10) || 11, dexBonus: customFields.querySelector("#custom-dexbonus")?.value || "full", strengthRequirement: null, stealthDisadvantage: false } });
-      } else {
-        const entry = findById(ruleset.equipment.armor, sourceSelect.value);
-        if (!entry) return;
-        await addItem({ type: "armor", name: entry.name, quantity: 1, equipped: false, isCustom: false, catalogId: entry.id, weightLb: parseWeightLb(entry.weight), valueGp: parseCostToGp(entry.cost), armorData: { armorType: entry.armorType, baseAC: entry.baseAC, dexBonus: entry.dexBonus, strengthRequirement: entry.strengthRequirement, stealthDisadvantage: entry.stealthDisadvantage } });
-      }
-    } else if (cat === "ammo") {
-      if (isCustom) {
-        const name = customFields.querySelector("#custom-name")?.value.trim();
-        const ammoType = customFields.querySelector("#custom-ammotype")?.value.trim();
-        if (!name || !ammoType) { toast("Name the ammo and its type", "error"); return; }
-        await addItem({ type: "ammo", name, quantity: qty, ammoType, isCustom: true, weightLb: customWeight, valueGp: customValue });
-      } else {
-        const entry = findById(ruleset.equipment.ammo, sourceSelect.value);
-        if (!entry) return;
-        await addItem({ type: "ammo", name: entry.name, quantity: qty, ammoType: entry.ammoType, isCustom: false, weightLb: parseWeightLb(entry.weight), valueGp: parseCostToGp(entry.cost) });
-      }
-    } else if (cat === "gear") {
-      if (isCustom) {
-        const name = customFields.querySelector("#custom-name")?.value.trim();
-        if (!name) { toast("Name your custom gear", "error"); return; }
-        await addItem({ type: "gear", name, quantity: qty, isCustom: true, weightLb: customWeight, valueGp: customValue, isContainer: customFields.querySelector("#custom-iscontainer")?.checked || false });
-      } else {
-        const entry = findById(ruleset.equipment.gear, sourceSelect.value);
-        if (!entry) return;
-        await addItem({ type: "gear", name: entry.name, quantity: qty, isCustom: false, weightLb: parseWeightLb(entry.weight), valueGp: parseCostToGp(entry.cost), isContainer: !!entry.isContainer });
-      }
+  async function grant(entry, qty, buy) {
+    const cat = formMemory.cat;
+    const cost = cat === "magic" ? 0 : parseCostToGp(entry.cost) * qty;
+    if (buy && cost > 0) {
+      const purse = spendCoins(character.currency, cost);
+      if (!purse) { toast(`Not enough coin — costs ${entry.cost}${qty > 1 ? ` × ${qty}` : ""}`, "error"); return false; }
+      ctx.patch({ currency: purse });
     }
-  });
+    if (cat === "weapon") await addItem({ ...weaponItem(character, entry), quantity: qty });
+    else if (cat === "armor") await addItem({ ...armorItem(entry), quantity: qty });
+    else if (cat === "ammo") await addItem({ type: "ammo", name: entry.name.replace(/\s*\(\d+\)/, ""), quantity: entry.quantity * qty, ammoType: entry.ammoType, isCustom: false, catalogId: entry.id, weightLb: parseWeightLb(entry.weight) / entry.quantity, valueGp: parseCostToGp(entry.cost) / entry.quantity });
+    else if (cat === "gear" && entry.kind === "pack") {
+      const contents = (entry.contents || []).map(c => ({ c, ce: findById(ruleset.equipment.gear, c.catalogId) })).filter(x => x.ce);
+      const holder = contents.find(x => x.ce.isContainer);
+      for (let n = 0; n < qty; n++) {
+        const containerId = await addItem({ type: "gear", name: holder ? `${holder.ce.name} (${entry.name})` : entry.name, quantity: 1, isCustom: false, catalogId: holder?.ce.id || entry.id, isContainer: true, weightLb: holder ? parseWeightLb(holder.ce.weight) : 0, valueGp: parseCostToGp(entry.cost) }, { quiet: true });
+        await Promise.all(contents.filter(x => x !== holder).map(({ c, ce }) => addItem({ type: "gear", name: ce.name, quantity: c.quantity, isCustom: false, catalogId: ce.id, isContainer: !!ce.isContainer, weightLb: parseWeightLb(ce.weight), valueGp: parseCostToGp(ce.cost), containerId }, { quiet: true })));
+      }
+      toast(`${entry.name} added`);
+    } else if (cat === "gear") await addItem({ type: "gear", name: entry.name, quantity: qty, isCustom: false, catalogId: entry.id, weightLb: parseWeightLb(entry.weight), valueGp: parseCostToGp(entry.cost), isContainer: !!entry.isContainer });
+    if (buy && cost > 0) toast(`Paid ${Math.round(cost * 100) / 100} GP`);
+    return true;
+  }
+  async function grantMagic(m, baseId, bonus) {
+    const magic = { id: m.id, rarity: m.rarity, attunement: !!m.attunement, attunementBy: m.attunementBy || null, description: m.description,
+      maxCharges: /^\d+$/.test(m.charges || "") ? parseInt(m.charges, 10) : null, acBonus: m.acBonus || null, saveBonus: m.saveBonus || null, healDice: m.healDice || null };
+    const plus = bonus || m.attackBonus || (m.type === "Armor" ? null : null);
+    if (m.type === "Weapon" && baseId) {
+      const base = findById(ruleset.equipment.weapons, baseId);
+      const b = bonus || m.attackBonus || 0;
+      const it = weaponItem(character, base, { name: m.variable ? `${base.name} +${b}` : `${m.name} (${base.name})`, magic });
+      it.weaponData.attackBonus = b; it.weaponData.damageBonus = b;
+      return addItem(it);
+    }
+    if (m.type === "Armor" && baseId) {
+      const base = findById(ruleset.equipment.armor, baseId);
+      const b = bonus || m.bonus || 0;
+      const it = armorItem(base, { name: m.variable ? `${base.name} +${b}` : `${m.name} (${base.name})`, magic });
+      it.armorData.baseAC += b;
+      if (/mithral/i.test(m.name)) { it.armorData.stealthDisadvantage = false; it.armorData.strengthRequirement = null; }
+      return addItem(it);
+    }
+    return addItem({ type: "gear", name: m.variable && bonus ? `${m.name.replace(/,? \+1, \+2, or \+3/, "")} +${bonus}` : m.name, quantity: 1, isCustom: false, isContainer: /bag of holding|haversack|portable hole/i.test(m.name), weightLb: 0, valueGp: 0, magic });
+  }
 
+  function renderBody() {
+    body.innerHTML = "";
+    if (formMemory.cat === "custom") { body.appendChild(customForm(ctx)); return; }
+    const search = h("input", { type: "search", placeholder: "Search…", value: formMemory.q });
+    body.appendChild(search);
+    const list = h("div", { class: "shop-list" });
+    body.appendChild(list);
+    const draw = () => {
+      list.innerHTML = "";
+      const q = search.value.trim().toLowerCase();
+      formMemory.q = search.value;
+      const rows = catalog().filter(r => !q || r.label.toLowerCase().includes(q) || r.meta.toLowerCase().includes(q)).slice(0, 80);
+      rows.forEach(({ e, label, meta }) => {
+        const row = h("div", { class: "shop-row" });
+        row.appendChild(h("div", { class: "shop-name" }, `<strong>${escapeHtml(label)}</strong><small>${escapeHtml(meta)}</small>`));
+        const ctl = h("div", { class: "shop-ctl" });
+        if (formMemory.cat === "magic") {
+          let baseSel = null, bonusSel = null;
+          const bases = baseOptions(ruleset, e);
+          if (bases.length) {
+            baseSel = h("select", {});
+            bases.forEach(b => baseSel.appendChild(h("option", { value: b.id }, b.name)));
+            ctl.appendChild(baseSel);
+          }
+          if (e.variable) {
+            bonusSel = h("select", {});
+            [1, 2, 3].forEach(n => bonusSel.appendChild(h("option", { value: String(n) }, `+${n}`)));
+            ctl.appendChild(bonusSel);
+          }
+          const add = h("button", { class: "btn sm primary", type: "button" }, "Add");
+          add.addEventListener("click", () => grantMagic(e, baseSel?.value || null, bonusSel ? parseInt(bonusSel.value, 10) : null));
+          ctl.appendChild(add);
+          const info = h("details", { class: "creator-detail shop-info" });
+          info.appendChild(h("summary", {}, "Details"));
+          info.appendChild(h("div", { class: "creator-detail-body" }, escapeHtml(e.description).replace(/\n/g, "<br>")));
+          row.appendChild(ctl); row.appendChild(info);
+        } else {
+          const qty = h("input", { type: "number", min: "1", value: "1", class: "shop-qty" });
+          const add = h("button", { class: "btn sm", type: "button" }, "Add");
+          const buy = h("button", { class: "btn sm primary", type: "button", title: `Deduct ${e.cost} from your coin purse` }, `Buy ${e.cost}`);
+          const n = () => Math.max(1, parseInt(qty.value, 10) || 1);
+          add.addEventListener("click", () => grant(e, n(), false));
+          buy.addEventListener("click", () => grant(e, n(), true));
+          ctl.appendChild(qty); ctl.appendChild(add); ctl.appendChild(buy);
+          row.appendChild(ctl);
+        }
+        list.appendChild(row);
+      });
+      if (!rows.length) list.appendChild(h("p", { class: "meta" }, "Nothing matches."));
+    };
+    search.addEventListener("input", draw);
+    draw();
+  }
+  renderCats();
+  renderBody();
   return form;
+}
+
+function customForm(ctx) {
+  const { addItem } = ctx;
+  const f = h("div", {});
+  const typeSel = h("select", {});
+  [["gear", "Gear"], ["weapon", "Weapon"], ["armor", "Armor"], ["ammo", "Ammunition"]].forEach(([v, l]) => typeSel.appendChild(h("option", { value: v }, l)));
+  const name = h("input", { type: "text", placeholder: "Item name" });
+  const fields = h("div", {});
+  const weight = h("input", { type: "number", placeholder: "Weight (lb.)", step: "0.1" });
+  const value = h("input", { type: "number", placeholder: "Value (GP)", step: "0.1" });
+  const desc = h("textarea", { placeholder: "Description / properties (optional)", style: "min-height:60px;" });
+  const drawFields = () => {
+    fields.innerHTML = "";
+    if (typeSel.value === "weapon") fields.innerHTML = `<div class="field-row"><input type="text" id="cw-dice" placeholder="Damage dice, e.g. 1d8"><select id="cw-type">${["slashing", "piercing", "bludgeoning", "fire", "cold", "acid", "poison", "necrotic", "radiant", "force", "lightning", "thunder", "psychic"].map(t => `<option>${t}</option>`).join("")}</select><select id="cw-abil"><option value="str">Strength</option><option value="dex">Dexterity</option><option value="finesse">Finesse</option></select></div><div class="field-row"><input type="number" id="cw-bonus" placeholder="Magic bonus (+N)"><label style="display:flex;gap:6px;align-items:center;text-transform:none;"><input type="checkbox" id="cw-ranged" style="width:auto;margin:0;"> Ranged</label></div>`;
+    if (typeSel.value === "armor") fields.innerHTML = `<div class="field-row"><input type="number" id="ca-ac" placeholder="Base AC" value="11"><select id="ca-type"><option value="light">Light</option><option value="medium">Medium</option><option value="heavy">Heavy</option><option value="shield">Shield</option></select><select id="ca-dex"><option value="full">Full Dex</option><option value="max2">Dex (max 2)</option><option value="none">No Dex</option></select></div>`;
+    if (typeSel.value === "ammo") fields.innerHTML = `<input type="text" id="cm-type" placeholder="Ammo type, e.g. arrow"><input type="number" id="cm-qty" placeholder="Quantity" value="20">`;
+    if (typeSel.value === "gear") fields.innerHTML = `<label style="display:flex;gap:6px;align-items:center;text-transform:none;"><input type="checkbox" id="cg-cont" style="width:auto;margin:0;"> Container (backpack, pouch...)</label><label style="display:flex;gap:6px;align-items:center;text-transform:none;"><input type="checkbox" id="cg-att" style="width:auto;margin:0;"> Requires attunement</label>`;
+  };
+  typeSel.addEventListener("change", drawFields);
+  drawFields();
+  const btn = h("button", { class: "btn primary", type: "button" }, "Add custom item");
+  btn.addEventListener("click", async () => {
+    const nm = name.value.trim();
+    if (!nm) { toast("Name the item", "error"); return; }
+    const q = (id) => fields.querySelector(id);
+    const base = { name: nm, quantity: 1, isCustom: true, weightLb: parseFloat(weight.value) || 0, valueGp: parseFloat(value.value) || 0 };
+    if (desc.value.trim()) base.magic = { description: desc.value.trim(), rarity: "Custom", attunement: !!q("#cg-att")?.checked };
+    if (typeSel.value === "weapon") {
+      const b = parseInt(q("#cw-bonus").value, 10) || 0;
+      await addItem({ ...base, type: "weapon", equipped: false, weaponData: { damageDice: q("#cw-dice").value.trim() || "1d4", damageType: q("#cw-type").value, ability: q("#cw-abil").value, ranged: q("#cw-ranged").checked, ammoType: null, properties: [], proficient: true, attackBonus: b, damageBonus: b } });
+    } else if (typeSel.value === "armor") {
+      await addItem({ ...base, type: "armor", equipped: false, armorData: { armorType: q("#ca-type").value, baseAC: parseInt(q("#ca-ac").value, 10) || 11, dexBonus: q("#ca-dex").value, strengthRequirement: null, stealthDisadvantage: false } });
+    } else if (typeSel.value === "ammo") {
+      const t = q("#cm-type").value.trim();
+      if (!t) { toast("Give the ammo a type", "error"); return; }
+      await addItem({ ...base, type: "ammo", ammoType: t, quantity: parseInt(q("#cm-qty").value, 10) || 1 });
+    } else await addItem({ ...base, type: "gear", isContainer: !!q("#cg-cont")?.checked });
+    name.value = ""; desc.value = "";
+  });
+  [typeSel, name, fields, h("div", { class: "field-row" }, [weight, value]), desc, btn].forEach(el => f.appendChild(el));
+  return f;
 }
