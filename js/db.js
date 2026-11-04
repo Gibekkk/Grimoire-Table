@@ -341,6 +341,23 @@ const localDb = {
       const masks = readTable("fogMasks");
       if (masks[`${campaignId}:${mapId}`]) { delete masks[`${campaignId}:${mapId}`]; writeTable("fogMasks", masks); }
     },
+    // Grid or size change plus the tokens and shapes that move with it
+    async updateLayout(campaignId, mapId, { patch, tokens: tokenMoves = [], shapes: shapeMoves = [] }) {
+      const key = `${campaignId}:${mapId}`;
+      const maps = readTable("maps");
+      if (maps[campaignId]?.[mapId]) Object.assign(maps[campaignId][mapId], patch);
+      writeTable("maps", maps);
+      if (tokenMoves.length) {
+        const tokens = readTable("tokens");
+        tokenMoves.forEach(({ id, ...pos }) => { const t = (tokens[key] || []).find(x => x.id === id); if (t) Object.assign(t, pos); });
+        writeTable("tokens", tokens);
+      }
+      if (shapeMoves.length) {
+        const all = readTable("aoeShapes");
+        shapeMoves.forEach(({ id, ...pos }) => { if (all[key]?.[id]) Object.assign(all[key][id], pos); });
+        writeTable("aoeShapes", all);
+      }
+    },
     async get(campaignId, mapId) {
       const maps = readTable("maps");
       return maps[campaignId]?.[mapId] || null;
@@ -875,6 +892,24 @@ const firestoreDb = {
     async update(campaignId, mapId, patch) {
       const { db, fx } = await initFirebase();
       await fx.updateDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId), patch);
+    },
+    // One atomic write, so nobody sees the new grid with tokens still in their old spots.
+    // A Firestore batch holds 500 writes; a map with more spills into further batches.
+    async updateLayout(campaignId, mapId, { patch, tokens: tokenMoves = [], shapes: shapeMoves = [] }) {
+      const { db, fx } = await initFirebase();
+      const mapPath = ["campaigns", campaignId, "maps", mapId];
+      const writes = [
+        [fx.doc(db, ...mapPath), patch],
+        ...tokenMoves.map(({ id, ...pos }) => [fx.doc(db, ...mapPath, "tokens", id), pos]),
+        ...shapeMoves.map(({ id, ...pos }) => [fx.doc(db, ...mapPath, "aoeShapes", id), pos])
+      ];
+      const commits = [];
+      for (let i = 0; i < writes.length; i += 500) {
+        const batch = fx.writeBatch(db);
+        writes.slice(i, i + 500).forEach(([ref, data]) => batch.update(ref, data));
+        commits.push(batch.commit());
+      }
+      await Promise.all(commits);
     },
     async addShape(campaignId, mapId, shape) {
       const { db, fx } = await initFirebase();

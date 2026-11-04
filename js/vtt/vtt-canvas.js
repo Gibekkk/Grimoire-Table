@@ -290,8 +290,7 @@ export class VttCanvas {
 
   // World size the fog mask covers: the background image, else the map's stored size.
   _worldSize() {
-    if (this.bgImage) return { w: this.bgImage.width, h: this.bgImage.height };
-    return this.mapSize || DEFAULT_MAP_SIZE;
+    return this.mapSize || (this.bgImage ? { w: this.bgImage.width, h: this.bgImage.height } : DEFAULT_MAP_SIZE);
   }
 
   // (Re)creates the mask canvas to match the current world size. Existing fog is
@@ -458,10 +457,10 @@ export class VttCanvas {
   }
 
   _fitToView() {
-    if (!this.bgImage) return;
+    const world = this._worldSize();
     const { clientWidth: w, clientHeight: h } = this.container;
-    this.zoom = Math.min(w / this.bgImage.width, h / this.bgImage.height, 1) || 1;
-    this.pan = { x: (w - this.bgImage.width * this.zoom) / 2, y: (h - this.bgImage.height * this.zoom) / 2 };
+    this.zoom = Math.min(w / world.w, h / world.h, 1) || 1;
+    this.pan = { x: (w - world.w * this.zoom) / 2, y: (h - world.h * this.zoom) / 2 };
     this._markDirty();
   }
 
@@ -941,14 +940,14 @@ export class VttCanvas {
 
     // Background
     if (this.bgImage) {
-      ctx.drawImage(this.bgImage, 0, 0);
+      ctx.drawImage(this.bgImage, 0, 0, world.w, world.h);
     }
 
     // Grid — one batched path, only the visible lines
     if (this.gridPx && !fogPending) {
       const gp = this.gridPx;
-      const gw = this.bgImage?.width ?? Math.max(world.w, view.x1);
-      const gh = this.bgImage?.height ?? Math.max(world.h, view.y1);
+      const gw = this.bgImage ? world.w : Math.max(world.w, view.x1);
+      const gh = this.bgImage ? world.h : Math.max(world.h, view.y1);
       const xs = Math.max(0, Math.floor(view.x0 / gp) * gp), xe = Math.min(gw, view.x1);
       const ys = Math.max(0, Math.floor(view.y0 / gp) * gp), ye = Math.min(gh, view.y1);
       const y0 = Math.max(0, view.y0), y1 = Math.min(gh, view.y1);

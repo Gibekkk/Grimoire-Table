@@ -1,6 +1,7 @@
 import { db } from "../../db.js";
 import { h, toast, escapeHtml } from "../../util.js";
 import { compressImageToBase64, IMAGE_PRESETS } from "../../image-utils.js";
+import { openMapEditorDialog } from "../../vtt/map-editor.js";
 
 export function mountMapWorkshopPanel(container, { campaignId, isDm }) {
   if (!isDm) {
@@ -71,13 +72,18 @@ function renderMapsTab(container, campaignId) {
   listCard.appendChild(list);
   container.appendChild(listCard);
 
+  let closeEditor = null;
   const unsub = db.maps.subscribeList(campaignId, (mapsList) => {
     list.innerHTML = "";
     if (mapsList.length === 0) { list.appendChild(h("p", {}, "No maps yet.")); return; }
     mapsList.forEach(map => {
       const row = h("div", { class: "inventory-item" });
-      row.innerHTML = `<div class="row1"><div><div class="item-name">${escapeHtml(map.name)}</div><div class="item-meta">Grid: ${map.gridPx}px = 5ft</div></div></div>`;
+      const squares = map.gridPx ? `${+((map.widthPx || 0) / map.gridPx).toFixed(1)} \u00d7 ${+((map.heightPx || 0) / map.gridPx).toFixed(1)} squares` : "";
+      row.innerHTML = `<div class="row1"><div class="map-row"><div class="map-row-thumb">${map.backgroundBase64 ? `<img src="${escapeHtml(map.backgroundBase64)}" alt="">` : ""}</div><div><div class="item-name">${escapeHtml(map.name)}</div><div class="item-meta">Grid: ${map.gridPx}px = 5ft \u2022 ${squares}</div></div></div></div>`;
       const actions = h("div", { class: "row-actions" });
+      const editBtn = h("button", { class: "btn sm" }, "Edit");
+      editBtn.addEventListener("click", () => { closeEditor?.(); closeEditor = openMapEditorDialog(campaignId, map); });
+      actions.appendChild(editBtn);
       const delBtn = h("button", { class: "btn sm ghost" }, "Delete");
       delBtn.addEventListener("click", async () => {
         if (!confirm(`Delete map "${map.name}" and all its tokens?`)) return;
@@ -88,7 +94,7 @@ function renderMapsTab(container, campaignId) {
       list.appendChild(row);
     });
   });
-  return unsub;
+  return () => { unsub(); closeEditor?.(); };
 }
 
 function renderComponentsTab(container, campaignId) {

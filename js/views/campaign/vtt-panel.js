@@ -9,6 +9,7 @@ import { pickMonster, tokenSquaresForSize, monsterImageFor, monsterDefaultArt, o
 import { createCreatureTools } from "../../vtt/creature-panel.js";
 import { SIZES, CONDITION_ABBR, SPEED_ZERO, isImmobile, effectDef, hasEffect, monsterTokenStats } from "../../vtt/creatures.js";
 import { nextTurnPatch } from "./combat-panel.js";
+import { createMapLayoutSession, renderMapForm } from "../../vtt/map-editor.js";
 
 // Decoded map backgrounds and token images live in vtt-canvas.js's shared
 // session cache (loadImageCached), so switching maps never re-decodes them.
@@ -69,6 +70,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   let currentMap = null;
   let tokens = [];
   let tokensLoaded = false;
+  let mapEdit = null; // { session, panel, form } while the map editor is open
   let sidebarOpen = true;
   let unsubTokens = null, unsubMap = null;
   let combat = null;
@@ -133,6 +135,11 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       turn: !!cur && cur.id === (t.kind === "monster" ? t.id : t.refId)
     } };
   }
+  // While the map editor is open its unsaved grid and size show at once
+  function withLayoutPreview(t) {
+    const p = mapEdit?.session.previewToken(t);
+    return p ? { ...t, ...p } : t;
+  }
   let refreshQueued = false;
   function refreshTokens() {
     if (refreshQueued) return;
@@ -141,7 +148,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     // client has to keep grapples and turn effects running while it isn't in front.
     setTimeout(() => {
       refreshQueued = false;
-      canvas.setTokens(tokens.filter(t => isDm || !t.hidden).map(decorate));
+      canvas.setTokens(tokens.filter(t => isDm || !t.hidden).map(decorate).map(withLayoutPreview));
       renderPopup();
       renderTurnBar();
       tools.reconcile();
@@ -219,10 +226,12 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       fogSlider.value = canvas.getFogBrushSize();
       fogSliderLabel.textContent = `Brush: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
     }
+    mapEditBtn.classList.toggle("active", !!mapEdit);
     fsBtn.classList.toggle("active", vttFullscreen);
     fsBtn.querySelector(".lbl").textContent = vttFullscreen ? "Exit" : "Full";
   }
 
+  const mapEditBtn = toolButton({ icon: "\u270E", label: "Edit Map", title: "Name, picture, size and a live grid for this map" }, () => toggleMapEditor());
   const fsBtn = toolButton({ icon: "⛶", label: "Full", title: "Fullscreen (F) — Esc to leave" }, () => toggleVttFullscreen());
 
   // Whose turn it is, with End Turn, so combat can be run from the map (and in fullscreen)
@@ -274,6 +283,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
         if (!list.length) { toast("No visible creatures on this map", "error"); return; }
         tools.addToInitiative(list);
       })]);
+      group([mapEditBtn]);
       const mapSel = h("select", { class: "vtt-map-select", title: "Switch map" });
       allMaps.forEach(m => mapSel.appendChild(h("option", { value: m.id, selected: currentMap?.id === m.id ? "selected" : null }, m.name)));
       mapSel.addEventListener("change", () => loadMap(mapSel.value));
@@ -515,6 +525,30 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     showContextMenu(sx, sy, items);
   }
 
+  // ---------------- Map editor ----------------
+  function toggleMapEditor() {
+    if (mapEdit) { closeMapEditor(); return; }
+    if (!currentMap) { toast("Create a map first", "error"); return; }
+    const panel = h("div", { class: "vtt-map-panel" });
+    canvasHost.appendChild(panel);
+    const session = createMapLayoutSession({
+      campaignId, map: currentMap, tokens: () => tokens, shapes: () => docShapes,
+      onChange: (l) => { canvas.setMapSize(l.widthPx, l.heightPx); canvas.setGridPx(l.gridPx); refreshTokens(); refreshShapes(); }
+    });
+    mapEdit = { session, panel, form: renderMapForm(panel, { campaignId, map: currentMap, session, onDone: closeMapEditor }) };
+    syncToolbar();
+  }
+  function closeMapEditor() {
+    if (!mapEdit) return;
+    const { session, panel, form } = mapEdit;
+    form.saveName();
+    session.flush();
+    panel.remove();
+    mapEdit = null;
+    syncToolbar();
+    refreshTokens(); refreshShapes();
+  }
+
   // ---------------- Fog of war handlers ----------------
   // Fog is one bitmap mask per map (maps/{mapId}/fogs/mask). Older maps stored
   // fog as an array of circles/strokes on the map doc (`fogs`); those are drawn
@@ -555,7 +589,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   function refreshShapes() {
     const ids = new Set(docShapes.map(sh => sh.id));
     currentShapes = [...docShapes, ...legacyShapes.filter(sh => !ids.has(sh.id))];
-    canvas.setPersistentShapes(currentShapes);
+    canvas.setPersistentShapes(mapEdit ? currentShapes.map(sh => ids.has(sh.id) ? { ...sh, ...mapEdit.session.previewShape(sh) } : sh) : currentShapes);
   }
   async function migrateLegacyShapes(mapId) {
     if (!isDm || !legacyShapes.length) return;
@@ -617,6 +651,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (e.key === "Escape") {
       if (modalOpen) return; // the dialog/menu closes itself first
       if (openTokenId) { closePopup(); return; }
+      if (mapEdit) { closeMapEditor(); return; }
       if (vttFullscreen) toggleVttFullscreen(false);
       return;
     }
@@ -684,8 +719,11 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   function applyMapDoc(map) {
     if (!map) return;
     currentMap = map;
-    canvas.setMapSize(map.widthPx, map.heightPx);
-    canvas.setGridPx(map.gridPx);
+    // The open editor owns grid and size: a snapshot of an earlier save mustn't pull them back
+    if (!mapEdit) {
+      canvas.setMapSize(map.widthPx, map.heightPx);
+      canvas.setGridPx(map.gridPx);
+    }
     const bg = map.backgroundBase64 || null;
     if (bg === shownBg) return;
     shownBg = bg;
@@ -700,6 +738,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   function loadMap(mapId) {
     if (!mapId) return;
     if (mapId === loadedMapId && currentMap) return; // already showing it
+    closeMapEditor();
     unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.();
     const map = allMaps.find(m => m.id === mapId) || (currentMap?.id === mapId ? currentMap : null);
     loadedMapId = mapId;
@@ -734,9 +773,12 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   }
 
   // ---------------- Boot ----------------
+  let mapNames = "";
   const unsubMaps = db.maps.subscribeList(campaignId, async (list) => {
     allMaps = list;
     if (isDm) {
+      const names = list.map(m => `${m.id}:${m.name}`).join("|");
+      if (names !== mapNames) { mapNames = names; if (loadedMapId) buildSidebar(); }
       if (!loadedMapId && list.length) loadMap(list[0].id);
       else if (loadedMapId && !list.some(m => m.id === loadedMapId)) { loadedMapId = null; currentMap = null; if (list.length) loadMap(list[0].id); }
       else buildToolbar();
@@ -771,6 +813,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   buildToolbar();
   buildSidebar();
   return () => {
+    closeMapEditor();
     unsubMaps(); unsubParty(); unsubNpcs(); unsubCombat(); unsubSync();
     unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); sheetUnsub?.();
     document.removeEventListener("keydown", onKey);
