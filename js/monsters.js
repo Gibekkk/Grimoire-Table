@@ -231,9 +231,9 @@ export function pickMonster(monsters, { title = "Add a Monster", campaignId = nu
     if (placement) {
       const opts = h("div", { class: "monster-place-opts" });
       countInput = h("input", { type: "number", min: "1", max: "20", value: "1", title: "How many copies to place" });
-      hiddenInput = h("input", { type: "checkbox", title: "Players won't see them until you show them" });
+      hiddenInput = h("input", { type: "checkbox", checked: "checked", title: "Players won't see them until you show them" });
       const c = h("label", {}, "Place "); c.appendChild(countInput);
-      const hd = h("label", {}); hd.appendChild(hiddenInput); hd.appendChild(document.createTextNode(" Hidden from players (ambush)"));
+      const hd = h("label", {}); hd.appendChild(hiddenInput); hd.appendChild(document.createTextNode(" Hidden from players until you show them"));
       opts.appendChild(c); opts.appendChild(hd);
       body.appendChild(opts);
     }

@@ -835,3 +835,8 @@ details.upcoming > summary { cursor: pointer; font-family: var(--font-display); 
 .dialog-field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
 .dialog-field input, .dialog-field select { margin: 0; }
 .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.dialog-checks { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; padding: 4px 0; }
+.dialog-check { display: flex; align-items: center; gap: 8px; margin: 0; text-transform: none; font-size: 0.9rem; cursor: pointer; }
+.dialog-check input { width: auto; margin: 0; }
+.dialog-buttons.wrap { flex-wrap: wrap; }
+.cp-control-note { width: 100%; font-size: 0.72rem; color: var(--rune-bright); }

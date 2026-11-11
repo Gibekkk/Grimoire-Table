@@ -440,6 +440,20 @@ export class VttCanvas {
     this._markDirty();
   }
 
+  // Covers the whole map (the DM then reveals what the players should see)
+  fillFog() {
+    this._ensureFogMask();
+    this._fogLoadToken++;
+    this._pendingFog = null;
+    this.fogMaskCtx.save();
+    this.fogMaskCtx.globalCompositeOperation = "source-over";
+    this.fogMaskCtx.fillStyle = "#000";
+    this.fogMaskCtx.fillRect(0, 0, this.fogMask.width, this.fogMask.height);
+    this.fogMaskCtx.restore();
+    this._fogReady = true;
+    this._markDirty();
+  }
+
   exportFogMask() {
     if (!this.fogMask) return null;
     const dataUrl = this.fogMask.toDataURL("image/png");

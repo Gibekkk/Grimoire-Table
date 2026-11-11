@@ -52,7 +52,11 @@ service cloud.firestore {
           allow update: if isDm(campaignId) || (
             isMember(campaignId) && (
               (resource.data.kind == "pc" && tokenOwnerUid() == request.auth.uid) ||
-              resource.data.kind == "loot"
+              resource.data.kind == "loot" ||
+              // Creatures the DM handed to this player (summons, companions): they may move
+              // and run them, but not change who controls them, their visibility or what they are
+              (request.auth.uid in resource.data.get('controllers', []) &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x', 'y', 'z', 'stats', 'grappledBy', 'grappleOffset', 'grappleOffsets', 'condSources']))
             )
           );
         }

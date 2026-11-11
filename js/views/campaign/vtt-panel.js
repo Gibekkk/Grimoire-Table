@@ -10,7 +10,7 @@ import { createCreatureTools } from "../../vtt/creature-panel.js";
 import { SIZES, CONDITION_ABBR, SPEED_ZERO, isImmobile, effectDef, hasEffect, monsterTokenStats } from "../../vtt/creatures.js";
 import { nextTurnPatch } from "./combat-panel.js";
 import { createMapLayoutSession, renderMapForm } from "../../vtt/map-editor.js";
-import { openDialog, confirmDialog } from "../../dialogs.js";
+import { openDialog, confirmDialog, chooseDialog } from "../../dialogs.js";
 
 // Decoded map backgrounds and token images live in vtt-canvas.js's shared
 // session cache (loadImageCached), so switching maps never re-decodes them.
@@ -76,6 +76,13 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   let unsubTokens = null, unsubMap = null;
   let combat = null;
   const charById = new Map();
+  // Campaign members, to name the players who control a creature
+  let campaignDoc = null;
+  // (demo mode answers at once, before the panel below exists; the refresh waits a tick)
+  const unsubCampaign = db.campaigns.subscribe(campaignId, (c) => { campaignDoc = c; setTimeout(() => { if (openTokenId) renderPopup(); }, 0); });
+  const memberName = (uid) => campaignDoc?.memberNames?.[uid] || null;
+  // Creature tokens the DM shared with this player
+  const controls = (t) => (t.controllers || []).includes(user.uid);
   let party = [], npcs = [];
 
   // Tokens saved before bundled art existed have no image: show the default for their monster
@@ -94,6 +101,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     ruleset: () => ruleset,
     combat: () => combat,
     artOf,
+    memberName,
     ready: () => tokensLoaded
   });
 
@@ -128,7 +136,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     const follow = g && st.conditions.includes("Grappled") ? { id: g.id, ...tools.followOffset(t, g) } : null;
     const { w, h: tall } = tools.footprint(t);
     const cur = combat?.active ? combat.combatants?.[combat.currentTurnIndex] : null;
-    const showHp = isDm || t.kind === "pc";
+    const showHp = isDm || t.kind === "pc" || controls(t);
     return { ...t, w, h: tall, imageBase64: artOf(t), _st: {
       conds, follow, dead: st.dead, invisible: st.conditions.includes("Invisible") && !hasEffect(st.effects, "faerie-fire"),
       outline: hasEffect(st.effects, "faerie-fire"),
@@ -149,7 +157,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     // client has to keep grapples and turn effects running while it isn't in front.
     setTimeout(() => {
       refreshQueued = false;
-      canvas.setTokens(tokens.filter(t => isDm || !t.hidden).map(decorate).map(withLayoutPreview));
+      // A player still sees a hidden creature they control (faded, as the DM does)
+      canvas.setTokens(tokens.filter(t => isDm || !t.hidden || controls(t)).map(decorate).map(withLayoutPreview));
       renderPopup();
       renderTurnBar();
       tools.reconcile();
@@ -173,7 +182,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       const g = tokens.find(t => t.id === token._st.follow.id);
       return !!g && tools.canMoveHeld(g);
     }
-    if (!(isDm || (token.kind === "pc" && token.refId === myCharacter?.id))) return false;
+    if (!(isDm || (token.kind === "pc" && token.refId === myCharacter?.id) || controls(token))) return false;
     if (!isDm && st && (st.dead || isImmobile(st.conditions, st.effects))) return false;
     return true;
   }
@@ -189,7 +198,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     } else if (st?.dead) {
       toast(`${st.name} is dead`, "error");
     } else if (!isDm) {
-      toast("You can only move your own character", "error");
+      toast("You can only move your own character and creatures the DM gave you", "error");
     }
   }
 
@@ -253,7 +262,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (!cur) return;
     turnBar.innerHTML = "";
     turnBar.appendChild(h("span", { class: "vtt-turn-text", title: "Current turn" }, `Round ${combat.round}: <b>${escapeHtml(cur.name)}</b>`));
-    if (isDm || cur.ownerUid === user.uid) {
+    // Whoever runs the creature can end its turn
+    if (isDm || cur.ownerUid === user.uid || tokens.some(t => (t.id === cur.id || (t.kind !== "monster" && t.refId === cur.id)) && controls(t))) {
       const end = h("button", { class: "vtt-tool", type: "button", title: "End this turn" }, '<span class="lbl">End Turn</span>');
       end.addEventListener("click", () => db.combat.set(campaignId, nextTurnPatch(combat)));
       turnBar.appendChild(end);
@@ -272,6 +282,14 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (isDm) {
       const fogGroup = group(FOG_TOOLS.map(t => { const b = toolButton(t, () => setTool(t.id)); toolButtons.set(t.id, b); return b; }));
       fogGroup.appendChild(fogSliderWrap);
+      fogGroup.appendChild(toolButton({ icon: "■", label: "Fog all", title: "Cover the whole map in fog, then reveal what the players should see" }, async () => {
+        if (!currentMap) return;
+        if (!await confirmDialog("Anything already revealed gets covered too. Use Reveal to uncover areas afterwards.", { title: "Cover the whole map in fog?", okLabel: "Fog all" })) return;
+        canvas.fillFog();
+        handleFogChanged(canvas.exportFogMask());
+        setTool("erase-fog");
+        toast("Map covered in fog — the Reveal brush is ready");
+      }));
       fogGroup.appendChild(toolButton({ icon: "✕", label: "Clear", title: "Remove all fog from this map" }, async () => {
         if (!currentMap) return;
         if (!await confirmDialog("Players will see the whole map.", { title: "Clear all fog on this map?", okLabel: "Clear fog", danger: true })) return;
@@ -287,11 +305,26 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       fsBtn
     ]);
     if (isDm) {
-      group([toolButton({ icon: "⚔", label: "Encounter", title: "Put every visible creature on this map into the initiative order (monsters roll automatically)" }, () => {
+      group([toolButton({ icon: "\u2694", label: "Encounter", title: "Put the creatures on this map into the initiative order (monsters roll automatically)" }, async () => {
         const creatures = tokens.filter(t => t.kind !== "component");
-        const list = creatures.filter(t => !t.hidden);
-        const hiddenCount = creatures.length - list.length;
-        if (hiddenCount) toast(`${hiddenCount} hidden creature${hiddenCount === 1 ? "" : "s"} left out \u2014 show them, or use Initiative in their panel, to add them`);
+        const hidden = creatures.filter(t => t.hidden);
+        let list = creatures.filter(t => !t.hidden);
+        if (hidden.length) {
+          // Spawned creatures start hidden, so starting a fight usually means revealing them
+          const pick = await chooseDialog({
+            title: `${hidden.length} hidden creature${hidden.length === 1 ? "" : "s"}`,
+            message: `${hidden.map(t => t.name).slice(0, 8).join(", ")}${hidden.length > 8 ? "\u2026" : ""}\nPlayers will see the names of everyone in the initiative order.`,
+            choices: [
+              { value: "visible", label: list.length ? "Visible ones only" : "Nobody yet" },
+              { value: "reveal", label: "Reveal and add them", primary: true }
+            ]
+          });
+          if (!pick) return;
+          if (pick === "reveal") {
+            hidden.forEach(t => db.tokens.update(campaignId, currentMap.id, t.id, { hidden: false }));
+            list = creatures;
+          }
+        }
         if (!list.length) { toast("No visible creatures on this map", "error"); return; }
         tools.addToInitiative(list);
       })]);
@@ -375,7 +408,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (shownNpcs.length === 0) items.push({ label: npcList.length ? "All NPCs are hidden — unhide them in the NPCs tab" : "No NPCs yet — create one in the NPCs tab", action: () => {} });
     shownNpcs.forEach(c => items.push({ label: c.name, action: () => {
       const sq = npcTokenSquares(c);
-      addToken({ kind: "npc", refId: c.id, name: c.name, imageBase64: c.portraitBase64 || null, ...viewCenterSpot(sq, sq), w: sq, h: sq });
+      addToken({ kind: "npc", refId: c.id, name: c.name, imageBase64: c.portraitBase64 || null, ...viewCenterSpot(sq, sq), w: sq, h: sq, hidden: true });
+      toast(`${c.name} placed, hidden from players \u2014 right-click to show`);
     } }));
     const rect = fabCharacters.getBoundingClientRect();
     showContextMenu(rect.left, rect.top - 10, items);
@@ -453,7 +487,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   function renderPopup(force = false) {
     if (!openTokenId) return;
     const t = tokens.find(x => x.id === openTokenId);
-    if (!t || (!isDm && t.hidden)) { closePopup(); return; }
+    if (!t || (!isDm && t.hidden && !controls(t))) { closePopup(); return; }
     // Don't rebuild under the cursor while someone is typing in the panel
     const active = document.activeElement;
     if (!force && popup.contains(active) && active.matches("input, select, textarea")) { popupStale = true; return; }
@@ -464,6 +498,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       onClose: closePopup,
       onSize: (tok, anchor) => { const r = anchor.getBoundingClientRect(); sizeMenu(tok, r.left, r.bottom); },
       onToggleHidden: toggleHidden,
+      onControl: (tok) => giveControl([tok]),
       onRemove: removeToken,
       onOpenSheet: (tok) => navigate(`/character/${tok.refId}`)
     });
@@ -521,6 +556,24 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (list.length > 1) toast(`Removed ${list.length} tokens`);
   }
 
+  // Hands creatures to players: they can then move them and, for monsters, run their HP,
+  // conditions and rolls from the creature panel. Hidden ones stay hidden from everyone else.
+  async function giveControl(list) {
+    const camp = campaignDoc || await db.campaigns.get(campaignId);
+    const players = (camp?.memberUids || []).filter(uid => uid !== camp?.dmUid).map(uid => [uid, camp.memberNames?.[uid] || "Player"]);
+    const current = [...new Set(list.flatMap(t => t.controllers || []))];
+    const r = await openDialog({
+      title: list.length === 1 ? `Who controls ${list[0].name}?` : `Who controls these ${list.length} creatures?`,
+      message: list.some(t => t.kind === "npc") ? "Players can move NPCs they control; their sheets stay yours." : "They can move it and run it from its panel: HP, conditions, effects and rolls.",
+      okLabel: "Save",
+      fields: [{ name: "uids", type: "checks", value: current, options: players, empty: "No players have joined this campaign yet." }]
+    });
+    if (!r) return;
+    await Promise.all(list.map(t => db.tokens.update(campaignId, currentMap.id, t.id, { controllers: r.uids })));
+    const names = r.uids.map(uid => camp.memberNames?.[uid] || "a player");
+    toast(names.length ? `${list.length === 1 ? list[0].name : `${list.length} creatures`}: controlled by ${names.join(", ")}` : "Back under your control only");
+  }
+
   // Stacking: front/back put a token above or below everything else of its kind
   function restack(list, layer) {
     const z = Date.now();
@@ -543,6 +596,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       items.push({ label: "Creature panel…", action: () => showTokenPopup(raw) });
       if (raw.kind !== "monster") items.push({ label: "Open Character Sheet", action: () => navigate(`/character/${raw.refId}`) });
       items.push({ label: "Add to initiative", action: () => tools.addToInitiative([raw]) });
+      if (raw.kind !== "pc") items.push({ label: `Give control\u2026${raw.controllers?.length ? ` (${raw.controllers.length})` : ""}`, action: () => giveControl([raw]) });
       items.push(raw.grappledBy
         ? { label: "Release grapple", action: () => tools.releaseGrapple(raw) }
         : { label: "Grapple…", action: () => tools.chooseGrappler(raw, sx, sy) });
@@ -597,6 +651,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     const allHidden = list.every(t => t.hidden);
     const items = [{ header: `${list.length} selected` }];
     if (creatures.length) items.push({ label: "Add to initiative", action: () => tools.addToInitiative(creatures) });
+    const shareable = creatures.filter(t => t.kind !== "pc");
+    if (shareable.length) items.push({ label: "Give control\u2026", action: () => giveControl(shareable) });
     items.push({ label: allHidden ? "\u{1F441} Show to players" : "\u{1F576} Hide from players", action: () => {
       list.forEach(t => db.tokens.update(campaignId, currentMap.id, t.id, { hidden: !allHidden }));
       toast(allHidden ? `${list.length} tokens shown to players` : `${list.length} tokens hidden from players`);
@@ -885,6 +941,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   buildSidebar();
   return () => {
     closeMapEditor();
+    unsubCampaign();
     unsubMaps(); unsubParty(); unsubNpcs(); unsubCombat(); unsubSync();
     unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); sheetUnsub?.();
     document.removeEventListener("keydown", onKey);

@@ -54,9 +54,15 @@ export function createCreatureTools(ctx) {
     };
   }
 
+  // Players the DM handed this creature to (summons, companions, a borrowed mount)
+  const controls = (token) => (token.controllers || []).includes(ctx.user.uid);
+
+  // NPC state lives on the NPC's character doc, which only the DM may write, so a
+  // player controlling an NPC moves it but can't edit it
   function canEdit(token) {
     if (ctx.isDm) return true;
-    return token.kind === "pc" && ctx.charOf(token)?.ownerUid === ctx.user.uid;
+    if (token.kind === "pc") return ctx.charOf(token)?.ownerUid === ctx.user.uid;
+    return token.kind === "monster" && controls(token);
   }
 
   async function patchState(token, patch) {
@@ -525,7 +531,7 @@ export function createCreatureTools(ctx) {
   }
 
   // ---------------- Panel ----------------
-  function render(el, token, { onClose, onSize, onToggleHidden, onRemove, onOpenSheet }) {
+  function render(el, token, { onClose, onSize, onToggleHidden, onRemove, onOpenSheet, onControl }) {
     const st = stateOf(token);
     el.innerHTML = "";
     if (!st) {
@@ -664,7 +670,7 @@ export function createCreatureTools(ctx) {
     el.appendChild(section("Defenses", defenseChips(st), defenseEditor(token, st), "def"));
 
     // Monster rolls
-    if (monster && ctx.isDm) el.appendChild(monsterRolls(token, st, monster));
+    if (monster && (ctx.isDm || controls(token))) el.appendChild(monsterRolls(token, st, monster));
 
     if (ctx.isDm) {
       const priv = h("label", { class: "cp-private" });
@@ -674,12 +680,12 @@ export function createCreatureTools(ctx) {
       priv.appendChild(document.createTextNode(" Private rolls (only you see them; always on for hidden tokens)"));
       el.appendChild(priv);
     }
-    el.appendChild(footer(token, st, { onSize, onToggleHidden, onRemove, onOpenSheet }));
+    el.appendChild(footer(token, st, { onSize, onToggleHidden, onRemove, onOpenSheet, onControl }));
   }
 
   // The DM, or the player whose PC is the grappler, can reposition what it holds
   function canMoveHeld(g) {
-    return ctx.isDm || (g.kind === "pc" && ctx.charOf(g)?.ownerUid === ctx.user.uid);
+    return ctx.isDm || (g.kind === "pc" && ctx.charOf(g)?.ownerUid === ctx.user.uid) || controls(g);
   }
 
   function effectChips(token, st, interactive) {
@@ -949,8 +955,15 @@ export function createCreatureTools(ctx) {
     return box;
   }
 
-  function footer(token, st, { onSize, onToggleHidden, onRemove, onOpenSheet }) {
+  function footer(token, st, { onSize, onToggleHidden, onRemove, onOpenSheet, onControl }) {
     const row = h("div", { class: "cp-footer" });
+    const who = (token.controllers || []).map(uid => ctx.memberName?.(uid) || "a player");
+    if (st && who.length) row.appendChild(h("div", { class: "cp-control-note" }, ctx.isDm ? `Controlled by ${escapeHtml(who.join(", "))}` : controls(token) ? "You control this creature" : `Controlled by ${escapeHtml(who.join(", "))}`));
+    if (st && ctx.isDm && onControl && token.kind !== "pc") {
+      const ctl = h("button", { class: "btn sm", title: "Let players move and run this creature (summons, companions)" }, "\u{1F91D} Control\u2026");
+      ctl.addEventListener("click", () => onControl(token));
+      row.appendChild(ctl);
+    }
     if (st && ctx.isDm) {
       const ini = h("button", { class: "btn sm", title: "Add to the initiative order (rolls for monsters)" }, "⚔ Initiative");
       ini.addEventListener("click", () => addToInitiative([token]));
@@ -980,5 +993,5 @@ export function createCreatureTools(ctx) {
     return row;
   }
 
-  return { stateOf, canEdit, render, reconcile, processTurn, startGrapple, releaseGrapple, moveGrappled, chooseGrappler, addToInitiative, toggleCondition, toggleEffect, damage, heal, grappledBy, followOffset, footprint, canMoveHeld, moveBlockedWhy };
+  return { stateOf, canEdit, controls, render, reconcile, processTurn, startGrapple, releaseGrapple, moveGrappled, chooseGrappler, addToInitiative, toggleCondition, toggleEffect, damage, heal, grappledBy, followOffset, footprint, canMoveHeld, moveBlockedWhy };
 }
