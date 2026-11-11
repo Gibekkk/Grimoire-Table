@@ -1,3 +1,4 @@
+import { confirmDialog, promptDialog } from "./dialogs.js";
 import { onAuthChange, getCurrentUser, isDemoMode, signOutUser } from "./auth.js";
 import { initRouter, registerRoute, navigate } from "./router.js";
 import { h, showContextMenu, toast } from "./util.js";
@@ -135,7 +136,7 @@ function buildCampaignMenu(c, isDm) {
     items.push("---");
     items.push({
       label: "Delete Campaign", danger: true, action: async () => {
-        if (!confirm(`Delete "${c.name}"? This removes all maps, NPCs, logs, and notes. Player characters are unlinked, not deleted. This can't be undone.`)) return;
+        if (!await confirmDialog(`Delete "${c.name}"? This removes all maps, NPCs, logs, and notes. Player characters are unlinked, not deleted. This can't be undone.`, { okLabel: "Delete campaign", danger: true })) return;
         await db.campaigns.remove(c.id);
         toast(`${c.name} deleted`);
         if (location.hash === `#/campaign/${c.id}`) navigate("/dashboard");
@@ -181,7 +182,7 @@ function buildCharacterMenu(c) {
   } else {
     items.push({
       label: "Join Campaign\u2026", action: async () => {
-        const code = prompt("Campaign invite code:");
+        const code = await promptDialog("Ask your DM for the campaign's invite code.", "", { title: "Join a campaign", placeholder: "e.g. K7Q2ZP", okLabel: "Join" });
         if (!code) return;
         try {
           const campId = await db.campaigns.join(code.trim(), c.ownerUid, c.ownerName);
@@ -195,7 +196,7 @@ function buildCharacterMenu(c) {
   items.push("---");
   items.push({
     label: "Delete Character", danger: true, action: async () => {
-      if (!confirm(`Delete ${c.name}? This can't be undone.`)) return;
+      if (!await confirmDialog(`Delete ${c.name}? This can't be undone.`, { okLabel: "Delete", danger: true })) return;
       await db.characters.remove(c.id);
       toast(`${c.name} deleted`);
       if (location.hash === `#/character/${c.id}`) navigate("/dashboard");

@@ -2,6 +2,7 @@ import { db } from "../../db.js";
 import { h, toast, escapeHtml } from "../../util.js";
 import { compressImageToBase64, IMAGE_PRESETS } from "../../image-utils.js";
 import { openMapEditorDialog } from "../../vtt/map-editor.js";
+import { confirmDialog } from "../../dialogs.js";
 
 export function mountMapWorkshopPanel(container, { campaignId, isDm }) {
   if (!isDm) {
@@ -86,7 +87,7 @@ function renderMapsTab(container, campaignId) {
       actions.appendChild(editBtn);
       const delBtn = h("button", { class: "btn sm ghost" }, "Delete");
       delBtn.addEventListener("click", async () => {
-        if (!confirm(`Delete map "${map.name}" and all its tokens?`)) return;
+        if (!await confirmDialog(`Delete map "${map.name}" and all its tokens?`, { okLabel: "Delete", danger: true })) return;
         await db.maps.remove(campaignId, map.id);
       });
       actions.appendChild(delBtn);
@@ -175,7 +176,7 @@ function renderComponentsTab(container, campaignId) {
     folders.forEach(folder => {
       const chip = h("span", { class: "badge", style: "margin-right:6px; cursor:pointer;" }, `${folder.name} \u00d7`);
       chip.addEventListener("click", async () => {
-        if (confirm(`Delete folder "${folder.name}"? Components inside move to "No folder".`)) await db.componentFolders.remove(campaignId, folder.id);
+        if (await confirmDialog(`Delete folder "${folder.name}"? Components inside move to "No folder".`, { okLabel: "Delete", danger: true })) await db.componentFolders.remove(campaignId, folder.id);
       });
       folderList.appendChild(chip);
     });

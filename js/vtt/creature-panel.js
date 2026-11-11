@@ -7,6 +7,7 @@ import { db } from "../db.js";
 import { h, toast, escapeHtml, showContextMenu } from "../util.js";
 import { ABILITIES, abilityModifier, formatModifier, estimateArmorClass, rollDie } from "../rules-engine.js";
 import { computeRoll, formatBreakdown } from "../dice/roll-logic.js";
+import { openDialog, promptDialog } from "../dialogs.js";
 import {
   SIZES, CONDITIONS, CONDITION_TEXT, DAMAGE_TYPES, impliedConditions, withCondition, isIncapacitated,
   attackMode, saveRule, defenseNotes, adjustDamage, takeDamage, concentrationDc, footprintGap, distanceFt, ringOffset,
@@ -237,7 +238,7 @@ export function createCreatureTools(ctx) {
     const def = effectDef(st.effects.find(e => e.id === id) || id);
     const extra = {};
     if (on && def?.askValue) {
-      const v = prompt(def.askValue, "3");
+      const v = await promptDialog(def.askValue, "3", { title: def.name, type: "number" });
       if (v == null) return;
       extra.value = parseInt(v, 10) || 0;
     }
@@ -254,10 +255,15 @@ export function createCreatureTools(ctx) {
 
   // Anything the catalog doesn't cover: a name, a duration, and damage each turn if any
   async function addCustomEffect(token) {
-    const name = prompt("Effect name (e.g. Bleeding, Cursed):");
+    const r = await openDialog({ title: "Custom effect", okLabel: "Add", fields: [
+      { name: "name", label: "Name", placeholder: "e.g. Bleeding, Cursed" },
+      { name: "rounds", label: "Lasts how many of its turns? (blank = until removed)", type: "number", min: 1 },
+      { name: "tick", label: "Damage at the start of each of its turns (blank = none)", placeholder: "e.g. 1d6 poison" }
+    ] });
+    const name = r?.name;
     if (!name?.trim()) return;
-    const rounds = parseInt(prompt("Lasts how many of its turns? (blank = until removed)", "") || "", 10);
-    const tick = (prompt('Damage at the start of each of its turns? e.g. "1d6 poison" (blank = none)', "") || "").trim().match(/^(\d*d\d+(?:[+-]\d+)?)\s*(\w+)?$/i);
+    const rounds = parseInt(r.rounds || "", 10);
+    const tick = (r.tick || "").trim().match(/^(\d*d\d+(?:[+-]\d+)?)\s*(\w+)?$/i);
     const fields = { name: name.trim(), abbr: name.trim().slice(0, 2), tone: tick ? "hazard" : "neutral", text: "Custom effect." };
     if (rounds > 0) fields.rounds = rounds;
     if (tick) { fields.tick = { dice: tick[1], type: DAMAGE_TYPES.includes(tick[2]?.toLowerCase()) ? tick[2].toLowerCase() : "" }; fields.text = `${tick[0]} at the start of each turn.`; }
@@ -577,7 +583,7 @@ export function createCreatureTools(ctx) {
     if (token.kind === "monster" && ctx.isDm) {
       const acB = stats.querySelector("div b");
       acB.title = "Click to change its base AC"; acB.style.cursor = "pointer";
-      acB.addEventListener("click", () => { const v = prompt(`Base AC for ${st.name} (before status effects):`, st.baseAc); if (v != null && v !== "" && !isNaN(+v)) patchState(token, { ac: parseInt(v, 10) }); });
+      acB.addEventListener("click", async () => { const v = await promptDialog("Before status effects.", String(st.baseAc), { title: `Base AC for ${st.name}`, type: "number", min: 0 }); if (v != null && v !== "" && !isNaN(+v)) patchState(token, { ac: parseInt(v, 10) }); });
     }
     el.appendChild(stats);
 
@@ -590,9 +596,9 @@ export function createCreatureTools(ctx) {
     if (token.kind === "monster" && ctx.isDm) {
       const maxEl = hpBox.querySelector(".max");
       maxEl.style.cursor = "pointer";
-      maxEl.addEventListener("click", () => {
+      maxEl.addEventListener("click", async () => {
         const f = token.stats?.hpFormula;
-        const v = prompt(`Max HP for ${st.name}${f ? ` (type "roll" to roll ${f})` : ""}:`, st.hp.max);
+        const v = await promptDialog(f ? `Type "roll" to roll ${f}.` : "", String(st.hp.max), { title: `Max HP for ${st.name}` });
         if (v == null || v === "") return;
         const max = /^roll$/i.test(v.trim()) && f ? Math.max(1, rollFormula(f)) : parseInt(v, 10);
         if (max > 0) patchState(token, { hp: { ...st.hp, max, current: st.hp.current >= st.hp.max ? max : Math.min(st.hp.current, max) } });
@@ -777,10 +783,10 @@ export function createCreatureTools(ctx) {
     }
     box.appendChild(exh);
     const conc = h("button", { class: "btn sm ghost", style: "margin-top:6px;" }, st.concentration ? "End Concentration" : "Start Concentration…");
-    conc.addEventListener("click", () => {
+    conc.addEventListener("click", async () => {
       if (st.concentration) { patchState(token, { concentration: null }); return; }
       if (isIncapacitated(st.conditions)) { toast("Can't concentrate while Incapacitated", "error"); return; }
-      const name = prompt("Concentrating on which spell?");
+      const name = await promptDialog("", "", { title: "Concentrating on which spell?", placeholder: "e.g. Bless", okLabel: "Start" });
       if (name) patchState(token, { concentration: name.trim() });
     });
     box.appendChild(conc);

@@ -10,6 +10,7 @@ import { createCreatureTools } from "../../vtt/creature-panel.js";
 import { SIZES, CONDITION_ABBR, SPEED_ZERO, isImmobile, effectDef, hasEffect, monsterTokenStats } from "../../vtt/creatures.js";
 import { nextTurnPatch } from "./combat-panel.js";
 import { createMapLayoutSession, renderMapForm } from "../../vtt/map-editor.js";
+import { openDialog, confirmDialog } from "../../dialogs.js";
 
 // Decoded map backgrounds and token images live in vtt-canvas.js's shared
 // session cache (loadImageCached), so switching maps never re-decodes them.
@@ -105,7 +106,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     onGrappledMoved: (token, dx, dy) => tools.moveGrappled(token, dx, dy),
     moveBlockedWhy: (token, x, y) => tools.moveBlockedWhy(token, x, y),
     onMoveRefused: (why) => toast(why, "error"),
-    onTokenContextMenu: (token, sx, sy) => isDm && showTokenContextMenu(token, sx, sy),
+    onTokenContextMenu: (token, sx, sy, here) => isDm && showTokenContextMenu(token, sx, sy, here),
     isDm: isDm,
     currentUid: user.uid,
     onFogChanged: (dataUrl) => handleFogChanged(dataUrl),
@@ -205,6 +206,15 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   fogSliderWrap.appendChild(fogSlider);
 
   let vttFullscreen = false;
+  // Snap to grid is on unless this person turned it off (hold Alt to place freely either way)
+  try { canvas.setSnap(localStorage.getItem("gt_vtt_snap") !== "0"); } catch { /* noop */ }
+  const snapBtn = toolButton({ icon: "#", label: "Snap", title: "Snap tokens and shapes to the grid (N). Hold Alt while dragging to place freely." }, () => setSnap(!canvas.snap));
+  function setSnap(on) {
+    canvas.setSnap(on);
+    try { localStorage.setItem("gt_vtt_snap", on ? "1" : "0"); } catch { /* noop */ }
+    syncToolbar();
+    toast(on ? "Snap to grid on" : "Snap to grid off \u2014 tokens can sit between squares");
+  }
   const toolButtons = new Map();
 
   function toolButton({ icon, label, title }, onClick, extraClass = "") {
@@ -227,6 +237,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       fogSliderLabel.textContent = `Brush: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
     }
     mapEditBtn.classList.toggle("active", !!mapEdit);
+    snapBtn.classList.toggle("active", canvas.snap);
     fsBtn.classList.toggle("active", vttFullscreen);
     fsBtn.querySelector(".lbl").textContent = vttFullscreen ? "Exit" : "Full";
   }
@@ -256,13 +267,14 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toolbar.appendChild(sideBtn);
 
     const group = (items) => { const g = h("div", { class: "vtt-tool-group" }); items.forEach(i => g.appendChild(i)); toolbar.appendChild(g); return g; };
-    group(TOOLS.map(t => { const b = toolButton(t, () => setTool(t.id)); toolButtons.set(t.id, b); return b; }));
+    const toolsGroup = group(TOOLS.map(t => { const b = toolButton(t, () => setTool(t.id)); toolButtons.set(t.id, b); return b; }));
+    toolsGroup.appendChild(snapBtn);
     if (isDm) {
       const fogGroup = group(FOG_TOOLS.map(t => { const b = toolButton(t, () => setTool(t.id)); toolButtons.set(t.id, b); return b; }));
       fogGroup.appendChild(fogSliderWrap);
-      fogGroup.appendChild(toolButton({ icon: "✕", label: "Clear", title: "Remove all fog from this map" }, () => {
+      fogGroup.appendChild(toolButton({ icon: "✕", label: "Clear", title: "Remove all fog from this map" }, async () => {
         if (!currentMap) return;
-        if (!confirm("Clear all fog on this map?")) return;
+        if (!await confirmDialog("Players will see the whole map.", { title: "Clear all fog on this map?", okLabel: "Clear fog", danger: true })) return;
         canvas.clearFog();
         handleFogChanged(null);
         toast("All fog cleared");
@@ -401,7 +413,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   // ---------------- Moves (cover, grapple followers, movement used) ----------------
   async function handleTokenMoved(token, x, y, followers = []) {
     const mapId = currentMap.id;
-    await db.tokens.update(campaignId, mapId, token.id, { x, y });
+    await db.tokens.update(campaignId, mapId, token.id, token.z ? { x, y, z: token.z } : { x, y });
     // The DM writes followers directly; for a player dragging a grappled monster the
     // DM's client catches up (players may only write their own token).
     if (isDm) await Promise.all(followers.map(f => db.tokens.update(campaignId, mapId, f.token.id, { x: f.x, y: f.y })));
@@ -466,11 +478,14 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       action: () => setTokenSize(token, s.squares)
     }));
     items.push("---");
-    items.push({ label: "Custom…", action: () => {
-      const input = prompt(`Size in 5 ft squares as "width,height" (currently ${token.w || 1},${token.h || 1}):`, `${token.w || 1},${token.h || 1}`);
-      if (!input) return;
-      const [w, hh] = input.split(",").map(v => Math.max(0.25, parseFloat(v.trim()) || 1));
-      db.tokens.update(campaignId, currentMap.id, token.id, { w, h: hh ?? w });
+    items.push({ label: "Custom…", action: async () => {
+      const r = await openDialog({ title: `Size of ${token.name}`, message: "In 5 ft squares.", okLabel: "Resize", fields: [
+        { name: "w", label: "Width", type: "number", value: token.w || 1, min: 0.25, step: 0.25 },
+        { name: "h", label: "Height", type: "number", value: token.h || 1, min: 0.25, step: 0.25 }
+      ] });
+      if (!r) return;
+      const w = Math.max(0.25, parseFloat(r.w) || 1), hh = Math.max(0.25, parseFloat(r.h) || w);
+      db.tokens.update(campaignId, currentMap.id, token.id, { w, h: hh });
     } });
     showContextMenu(x, y, items);
   }
@@ -481,23 +496,49 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     db.tokens.update(campaignId, currentMap.id, token.id, { hidden: !token.hidden });
     toast(token.hidden ? `${token.name} is now visible to players` : `${token.name} is hidden from players`);
   }
-  async function removeToken(token) {
-    if (token.kind === "monster" && !confirm(`Remove ${token.name}? Monsters exist only on the map, so it will be gone.`)) return;
-    if (openTokenId === token.id) closePopup();
-    await db.tokens.remove(campaignId, currentMap.id, token.id);
-    // Leave the initiative order too
-    const id = token.kind === "monster" ? token.id : null;
-    if (id && combat?.active && combat.combatants?.some(c => c.id === id)) {
-      const cur = combat.combatants[combat.currentTurnIndex]?.id;
-      const combatants = combat.combatants.filter(c => c.id !== id);
-      db.combat.set(campaignId, { combatants, currentTurnIndex: Math.max(0, combatants.findIndex(c => c.id === cur)) });
+  async function removeToken(token) { return removeTokens([token]); }
+
+  // Removes tokens, asking first when monsters are among them (they exist only on the map)
+  async function removeTokens(list) {
+    if (!list.length || !currentMap) return;
+    const monsters = list.filter(t => t.kind === "monster");
+    if (monsters.length) {
+      const what = list.length === 1 ? list[0].name : `${list.length} tokens`;
+      const ok = await confirmDialog(`Monsters exist only on the map, so ${monsters.length === 1 ? `${monsters[0].name} will be gone` : `${monsters.length} monsters will be gone`}.`, { title: `Remove ${what}?`, okLabel: "Remove", danger: true });
+      if (!ok) return;
     }
+    const mapId = currentMap.id;
+    const ids = new Set(list.map(t => t.id));
+    if (ids.has(openTokenId)) closePopup();
+    canvas.setSelection([...canvas.selectedIds].filter(id => !ids.has(id)));
+    await Promise.all(list.map(t => db.tokens.remove(campaignId, mapId, t.id)));
+    // Monsters leave the initiative order too
+    if (combat?.active && combat.combatants?.some(c => ids.has(c.id))) {
+      const cur = combat.combatants[combat.currentTurnIndex]?.id;
+      const combatants = combat.combatants.filter(c => !ids.has(c.id));
+      db.combat.set(campaignId, combatants.length ? { combatants, currentTurnIndex: Math.max(0, combatants.findIndex(c => c.id === cur)) } : { active: false, combatants: [] });
+    }
+    if (list.length > 1) toast(`Removed ${list.length} tokens`);
+  }
+
+  // Stacking: front/back put a token above or below everything else of its kind
+  function restack(list, layer) {
+    const z = Date.now();
+    list.forEach(t => db.tokens.update(campaignId, currentMap.id, t.id, { layer, z }));
   }
 
   // ---------------- DM context menu on tokens ----------------
-  function showTokenContextMenu(token, sx, sy) {
+  function showTokenContextMenu(token, sx, sy, here = []) {
     const raw = tokens.find(t => t.id === token.id) || token;
+    // Right-clicking one of several selected tokens acts on all of them
+    const selection = canvas.selectedTokens.map(t => tokens.find(x => x.id === t.id)).filter(Boolean);
+    if (selection.length > 1 && selection.some(t => t.id === raw.id)) { showGroupMenu(selection, sx, sy); return; }
     const items = [];
+    if (here.length > 1) {
+      items.push({ header: "Tokens here (top first)" });
+      here.forEach(t => items.push({ label: `${t.id === raw.id ? "\u25b8 " : ""}${t.name}`, action: () => { canvas.setSelection([t.id]); if (t.kind === "component") return; showTokenPopup(tokens.find(x => x.id === t.id) || t); } }));
+      items.push("---");
+    }
     if (raw.kind !== "component") {
       items.push({ label: "Creature panel…", action: () => showTokenPopup(raw) });
       if (raw.kind !== "monster") items.push({ label: "Open Character Sheet", action: () => navigate(`/character/${raw.refId}`) });
@@ -509,6 +550,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     }
     items.push({ label: raw.hidden ? "\u{1F441} Show to players" : "\u{1F576} Hide from players", action: () => toggleHidden(raw) });
     items.push({ label: "Size…", action: () => setTimeout(() => sizeMenu(raw, sx, sy), 0) });
+    items.push({ label: "Bring to front", action: () => restack([raw], 1) });
+    items.push({ label: "Send to back", action: () => restack([raw], -1) });
     if (raw.kind !== "component") {
       const others = allMaps.filter(m => m.id !== currentMap.id);
       if (others.length) items.push("---");
@@ -547,6 +590,22 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     mapEdit = null;
     syncToolbar();
     refreshTokens(); refreshShapes();
+  }
+
+  function showGroupMenu(list, sx, sy) {
+    const creatures = list.filter(t => t.kind !== "component");
+    const allHidden = list.every(t => t.hidden);
+    const items = [{ header: `${list.length} selected` }];
+    if (creatures.length) items.push({ label: "Add to initiative", action: () => tools.addToInitiative(creatures) });
+    items.push({ label: allHidden ? "\u{1F441} Show to players" : "\u{1F576} Hide from players", action: () => {
+      list.forEach(t => db.tokens.update(campaignId, currentMap.id, t.id, { hidden: !allHidden }));
+      toast(allHidden ? `${list.length} tokens shown to players` : `${list.length} tokens hidden from players`);
+    } });
+    items.push({ label: "Bring to front", action: () => restack(list, 1) });
+    items.push({ label: "Send to back", action: () => restack(list, -1) });
+    items.push("---");
+    items.push({ label: `Remove ${list.length} from Map`, danger: true, action: () => removeTokens(list) });
+    showContextMenu(sx, sy, items);
   }
 
   // ---------------- Fog of war handlers ----------------
@@ -652,23 +711,34 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       if (modalOpen) return; // the dialog/menu closes itself first
       if (openTokenId) { closePopup(); return; }
       if (mapEdit) { closeMapEditor(); return; }
+      if (canvas.selectedIds.size || canvas.selectedShape) { canvas.setSelection([]); canvas.selectedShape = null; canvas._markDirty(); return; }
       if (vttFullscreen) toggleVttFullscreen(false);
       return;
     }
     if (typing || modalOpen || e.ctrlKey || e.metaKey || e.altKey) return;
-    // Delete selected shape
-    if ((e.key === "Delete" || e.key === "Backspace") && canvas.selectedShape) {
+    // Delete the selected shape, or (DM) the selected tokens
+    if (e.key === "Delete" || e.key === "Backspace") {
       const shape = canvas.selectedShape;
-      if (isDm || shape.ownerUid === user.uid) {
+      if (shape && (isDm || shape.ownerUid === user.uid)) {
         canvas.removePersistentShape(shape);
         canvas.selectedShape = null;
+      } else if (isDm && canvas.selectedIds.size) {
+        removeTokens(canvas.selectedTokens.map(t => tokens.find(x => x.id === t.id)).filter(Boolean));
       }
+      e.preventDefault();
+      return;
+    }
+    // Rotate the selected square or cone: [ and ] by 15°, with Shift by 45°
+    if (e.key === "[" || e.key === "]" || e.key === "{" || e.key === "}") {
+      const step = (e.shiftKey ? 45 : 15) * Math.PI / 180;
+      if (canvas.rotateSelectedShape(e.key === "[" || e.key === "{" ? -step : step)) e.preventDefault();
       return;
     }
     const k = e.key.toLowerCase();
     const tool = [...TOOLS, ...(isDm ? FOG_TOOLS : [])].find(t => t.key === k);
     if (tool) { setTool(tool.id); e.preventDefault(); return; }
     if (k === "f") { toggleVttFullscreen(); e.preventDefault(); }
+    else if (k === "n") { setSnap(!canvas.snap); e.preventDefault(); }
     else if (k === "+" || k === "=") canvas.zoomBy(1.15);
     else if (k === "-") canvas.zoomBy(0.85);
     else if (k === "0") { canvas._fitToView(); canvas._hasSavedView = true; }
@@ -695,7 +765,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
         <h4>Quick help</h4>
         <p><b>Click</b> a creature: HP, conditions, defenses, rolls, loot.</p>
         <p><b>Right-click</b> a token: hide, size, grapple, initiative.</p>
-        <p><b>Keys</b>: V select, R ruler, S/C/T AoE, G fog, E reveal, F fullscreen, 0 fit.</p>`));
+        <p><b>Select</b>: drag on empty map for a box, Shift+click to add; drag any selected token to move them all. Click a stack again for the token below.</p>
+        <p><b>Keys</b>: V select, R ruler, S/C/T AoE, G fog, E reveal, N snap, [ ] rotate AoE, Del remove, F fullscreen, 0 fit.</p>`));
     } else {
       sidebar.appendChild(h("h3", {}, "Your Character"));
       if (!myCharacter) { sidebar.appendChild(h("p", {}, "You don't have a character in this campaign yet.")); return; }

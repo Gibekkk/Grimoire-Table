@@ -1,3 +1,4 @@
+import { confirmDialog } from "../dialogs.js";
 import { loadRuleset, findById } from "../data-loader.js";
 import { db } from "../db.js";
 import { getCurrentUser } from "../auth.js";
@@ -54,8 +55,8 @@ export async function renderCharacterCreator(container) {
   const headRow = h("div", { style: "display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;" });
   headRow.appendChild(h("h1", { style: "margin:0;" }, "Create Character"));
   const resetBtn = h("button", { class: "btn ghost sm" }, "Start over");
-  resetBtn.addEventListener("click", () => {
-    if (!confirm("Discard this character and start over?")) return;
+  resetBtn.addEventListener("click", async () => {
+    if (!await confirmDialog("Discard this character and start over?", { okLabel: "Start over", danger: true })) return;
     state = newBuildState(ruleset);
     try { localStorage.removeItem(draftKey(user.uid)); } catch { /* noop */ }
     renderAll();

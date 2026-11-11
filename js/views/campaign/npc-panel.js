@@ -4,6 +4,7 @@ import { loadRuleset, findById } from "../../data-loader.js";
 import { h, toast, escapeHtml } from "../../util.js";
 import { ABILITIES, ABILITY_NAMES } from "../../rules-engine.js";
 import { createNpcFromMonster, renderMonsterList, nextMonsterName, monsterImageFor } from "../../monsters.js";
+import { confirmDialog } from "../../dialogs.js";
 
 export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvMode }) {
   if (!isDm) {
@@ -52,7 +53,7 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
     });
     const del = h("button", { class: "btn sm danger" }, "Delete NPC");
     del.addEventListener("click", async () => {
-      if (!confirm(`Delete ${npc.name} permanently? Its tokens stay on maps until you remove them.`)) return;
+      if (!await confirmDialog(`Delete ${npc.name} permanently? Its tokens stay on maps until you remove them.`, { okLabel: "Delete", danger: true })) return;
       // Close the sheet's listeners first: reading a deleted character is denied by the rules
       sheetUnsub?.(); sheetUnsub = null;
       sheetHost.innerHTML = "";

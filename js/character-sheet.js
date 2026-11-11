@@ -9,6 +9,7 @@ import {
 } from "./rules-engine.js";
 import { openLevelUp } from "./sheet/level-up.js";
 import { parseNotation } from "./dice/roll-logic.js";
+import { promptDialog } from "./dialogs.js";
 import { STATUS_EFFECTS, effectDef, hasEffect, effectPatch, effectAc, effectiveSpeed, conditionImmunities, attackMode, saveRule, checkRule, initiativeRule, rollExtraDice } from "./vtt/creatures.js";
 import { renderCoreTab } from "./sheet/sheet-core.js";
 import { renderActionsTab } from "./sheet/sheet-actions.js";
@@ -364,9 +365,9 @@ export async function mountCharacterSheet(container, characterId, opts = {}) {
         STATUS_EFFECTS.filter(e => e.group === group && !e.hideInMenu).forEach(e => {
           const on = hasEffect(active, e.id);
           const b = h("button", { class: `btn sm ${on ? "primary" : "ghost"}`, title: e.text }, e.name);
-          b.addEventListener("click", () => {
+          b.addEventListener("click", async () => {
             let extra = {};
-            if (!on && e.askValue) { const v = prompt(e.askValue, "3"); if (v == null) return; extra = { value: parseInt(v, 10) || 0 }; }
+            if (!on && e.askValue) { const v = await promptDialog(e.askValue, "3", { title: e.name, type: "number" }); if (v == null) return; extra = { value: parseInt(v, 10) || 0 }; }
             setEffect(e.id, !on, extra);
           });
           grid.appendChild(b);

@@ -1,3 +1,4 @@
+import { promptDialog } from "../dialogs.js";
 import { h, attachRollMenu, showContextMenu, escapeHtml } from "../util.js";
 import { findById } from "../data-loader.js";
 import {
@@ -32,9 +33,9 @@ export function renderCoreTab(ctx) {
       onRoll: (mode) => onRoll({ kind: "check", ability: a, sides: 20, count: 1, modifier: mod, label: `${ABILITY_NAMES[a]} Check`, mode }),
       extraItems: canEditCore ? [{
         label: override != null ? "Clear Override" : "Set Override\u2026",
-        action: () => {
+        action: async () => {
           if (override != null) { patch({ abilityOverrides: { ...character.abilityOverrides, [a]: null } }); return; }
-          const val = prompt(`Override ${ABILITY_NAMES[a]} score (blank cancels):`, String(score));
+          const val = await promptDialog("Leave blank to cancel.", String(score), { title: `Override ${ABILITY_NAMES[a]} score`, type: "number" });
           if (val === null || val === "") return;
           patch({ abilityOverrides: { ...character.abilityOverrides, [a]: parseInt(val, 10) } });
         }
@@ -89,9 +90,9 @@ export function renderCoreTab(ctx) {
       onRoll: (mode) => onRoll({ kind: "check", ability: skill.ability, sides: 20, count: 1, modifier: mod, label: skill.name, mode }),
       extraItems: canEditCore ? [{
         label: override != null ? "Clear Override" : "Set Override\u2026",
-        action: () => {
+        action: async () => {
           if (override != null) { patch({ skillOverrides: { ...character.skillOverrides, [skill.id]: null } }); return; }
-          const val = prompt(`Override ${skill.name} modifier (blank cancels):`, String(mod));
+          const val = await promptDialog("Leave blank to cancel.", String(mod), { title: `Override ${skill.name} modifier`, type: "number" });
           if (val === null || val === "") return;
           patch({ skillOverrides: { ...character.skillOverrides, [skill.id]: parseInt(val, 10) } });
         }
@@ -135,8 +136,8 @@ export function renderCoreTab(ctx) {
     const editRow = h("div", { class: "field-row wrap" });
     [["languages", "Edit languages"], ["toolProficiencies", "Edit tools"]].forEach(([key, label]) => {
       const b = h("button", { class: "btn sm ghost" }, label);
-      b.addEventListener("click", () => {
-        const val = prompt(`${label} (comma separated):`, (character[key] || []).join(", "));
+      b.addEventListener("click", async () => {
+        const val = await promptDialog("Separate them with commas.", (character[key] || []).join(", "), { title: label, okLabel: "Save" });
         if (val === null) return;
         patch({ [key]: val.split(",").map(x => x.trim()).filter(Boolean) });
       });

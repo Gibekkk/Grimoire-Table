@@ -1,3 +1,4 @@
+import { confirmDialog } from "../dialogs.js";
 import { h, toast, escapeHtml } from "../util.js";
 import { findById } from "../data-loader.js";
 import { getClassEntries, totalLevel, proficiencyBonus, subclassSlug, ABILITY_NAMES } from "../rules-engine.js";
@@ -58,8 +59,8 @@ export function renderFeatsTab(ctx) {
     const card = featureCard(feat.name, (bits.length ? bits.join(" • ") + "\n" : "") + feat.description, { tag: `<span class="badge">${escapeHtml(sourceLabel(rec.source))}</span>` });
     if (canEditCore && character.feats?.length && rec.source?.startsWith("class-")) {
       const rm = h("button", { class: "btn sm ghost", style: "margin-top:6px;" }, "Remove feat");
-      rm.addEventListener("click", () => {
-        if (!confirm(`Remove ${feat.name}? Ability score changes it made are not reverted automatically.`)) return;
+      rm.addEventListener("click", async () => {
+        if (!await confirmDialog(`Remove ${feat.name}? Ability score changes it made are not reverted automatically.`, { okLabel: "Remove", danger: true })) return;
         patch({ feats: character.feats.filter((_, i) => i !== idx) });
       });
       card.appendChild(rm);
@@ -240,8 +241,8 @@ export function renderFeatsTab(ctx) {
         row.appendChild(lvlField);
         if (idx > 0) {
           const rm = h("button", { class: "btn sm ghost" }, "Remove class");
-          rm.addEventListener("click", () => {
-            if (!confirm(`Remove ${cls?.name} from this character?`)) return;
+          rm.addEventListener("click", async () => {
+            if (!await confirmDialog(`Remove ${cls?.name} from this character?`, { okLabel: "Remove", danger: true })) return;
             ctx.onClassesChanged(entries.filter(e => e.classId !== entry.classId));
           });
           row.appendChild(rm);

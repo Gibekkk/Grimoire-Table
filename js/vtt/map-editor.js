@@ -10,6 +10,7 @@ import { db } from "../db.js";
 import { h, toast, escapeHtml } from "../util.js";
 import { compressImageToBase64, IMAGE_PRESETS } from "../image-utils.js";
 import { VttCanvas, loadImageCached } from "./vtt-canvas.js";
+import { confirmDialog } from "../dialogs.js";
 
 export const GRID_MIN = 20, GRID_MAX = 300;
 const SIZE_MIN = 200, SIZE_MAX = 8000;
@@ -204,8 +205,8 @@ export function renderMapForm(host, { campaignId, map, session, onDone }) {
       replace.disabled = false;
     }
   });
-  remove.addEventListener("click", () => {
-    if (!confirm("Remove this map's picture? Tokens and fog stay.")) return;
+  remove.addEventListener("click", async () => {
+    if (!await confirmDialog("Remove this map's picture? Tokens and fog stay.", { okLabel: "Remove", danger: true })) return;
     session.flush();
     map = { ...map, ...session.layout, backgroundBase64: null };
     picture = null;

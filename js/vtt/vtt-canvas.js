@@ -13,7 +13,16 @@
 //
 // Mouse: left button selects/drags tokens and shapes (or uses the active tool),
 // right button drags to pan — a right click that doesn't move opens the context
-// action instead (remove shape, reset ruler, token menu).
+// action instead (token menu, remove shape, reset ruler). In Select, dragging on
+// empty map draws a selection box and Shift+click adds or removes a token; dragging
+// any selected token moves the whole selection. Tokens snap to whole squares (half
+// squares for Tiny) unless snapping is off or Alt is held. A selected square or cone
+// shows a round handle to rotate it.
+//
+// Stacking: tokens are drawn by layer (scenery under creatures; Bring to front / Send
+// to back set it), then larger under smaller, then the most recently moved on top —
+// so a character dropped onto a big creature stands on top of it. Clicking the same
+// spot again picks the next token down in a stack.
 //
 // Fog of war is a single offscreen bitmap mask (one layer): the Draw Fog brush
 // paints into it, the Erase Fog brush clears pixels out of it, so overlapping
@@ -105,8 +114,12 @@ export class VttCanvas {
     this.shape = null;
     this._images = new Map();
 
-    // --- Shape selection ---
+    // --- Selection ---
     this.selectedShape = null;
+    this.selectedIds = new Set();  // selected token ids (multi-select)
+    this.marquee = null;           // { a, b } world points of the selection box being drawn
+    this._stackPick = null;        // { x, y, id, at } last click, to step down through a stack
+    this.snap = true;              // tokens (and new shapes) snap to the grid; Alt places freely
 
     // --- Fog of war (single bitmap mask) ---
     this.fogBrushSize = 3; // brush diameter in grid squares
@@ -250,7 +263,40 @@ export class VttCanvas {
     });
     this.tokens = next;
     this._byId = new Map(next.map(t => [t.id, t]));
+    this.selectedIds.forEach(id => { if (!this._byId.has(id)) this.selectedIds.delete(id); });
+    this._sortTokens();
     this._markDirty();
+  }
+
+  // Bottom to top: layer (scenery -1, creatures 0, explicit front/back), larger under
+  // smaller, then by z (bumped when a token is dropped) so the last one moved is on top.
+  _sortTokens() {
+    const layer = (t) => t.layer ?? (t.kind === "component" ? -1 : 0);
+    const area = (t) => (t.w || 1) * (t.h || 1);
+    this._drawOrder = [...this.tokens].sort((a, b) => layer(a) - layer(b) || area(b) - area(a) || (a.z || 0) - (b.z || 0));
+  }
+
+  setSnap(on) { this.snap = !!on; }
+  setSelection(ids) { this.selectedIds = new Set(ids); this._markDirty(); this.opts.onSelectionChanged?.([...this.selectedIds]); }
+  get selectedTokens() { return this.tokens.filter(t => this.selectedIds.has(t.id)); }
+
+  // Grid position for a token: whole squares (half squares for Tiny) when snapping
+  _snapPos(t, x, y, free) {
+    if (!this.snap || free) return { x: Math.max(0, Math.round(x * 4) / 4), y: Math.max(0, Math.round(y * 4) / 4) };
+    const step = (t.w || 1) < 1 ? 0.5 : 1;
+    return { x: Math.max(0, Math.round(x / step) * step), y: Math.max(0, Math.round(y / step) * step) };
+  }
+  // Shapes snap their anchor to grid intersections
+  _snapGrid(v, free) { return this.snap && !free ? Math.round(v) : v; }
+
+  // Rotates the selected square or cone (keyboard [ and ])
+  rotateSelectedShape(radians) {
+    const sh = this.selectedShape;
+    if (!sh || sh.kind === "circle" || !this._canMoveShape(sh)) return false;
+    sh.angle = (sh.angle || 0) + radians;
+    this._markDirty();
+    this.opts.onPersistentShapeMoved?.(sh);
+    return true;
   }
 
   // Grid position a token is drawn at: drag preview, else its grappler's spot + offset, else x/y
@@ -436,7 +482,7 @@ export class VttCanvas {
   _updateCursor() {
     if (!this.canvas) return;
     if (this.drag?.type === "pan") this.canvas.style.cursor = "grabbing";
-    else if (this.drag?.type === "token" || this.drag?.type === "shape-drag") this.canvas.style.cursor = "grabbing";
+    else if (this.drag?.type === "token" || this.drag?.type === "shape-drag" || this.drag?.type === "shape-rotate") this.canvas.style.cursor = "grabbing";
     else if (this._isFogTool()) this.canvas.style.cursor = "none"; // brush outline is drawn instead
     else if (this.tool !== "select") this.canvas.style.cursor = "crosshair";
     else this.canvas.style.cursor = "";
@@ -475,17 +521,36 @@ export class VttCanvas {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
-  _tokenAt(worldX, worldY) {
+  // Every token under a point, topmost first
+  _tokensAt(worldX, worldY) {
     // Players can't pick (or discover) tokens hidden under fog
-    if (!this._isDm && this._isFogged(worldX, worldY)) return null;
-    for (let i = this.tokens.length - 1; i >= 0; i--) {
-      const t = this.tokens[i];
+    if (!this._isDm && this._isFogged(worldX, worldY)) return [];
+    const out = [];
+    const order = this._drawOrder || this.tokens;
+    for (let i = order.length - 1; i >= 0; i--) {
+      const t = order[i];
       const p = this._posOf(t);
       const tw = this.gridToWorld(p.x, p.y);
       const size = this.gridToWorld(t.w || 1, t.h || 1);
-      if (worldX >= tw.x && worldX <= tw.x + size.x && worldY >= tw.y && worldY <= tw.y + size.y) return t;
+      if (worldX >= tw.x && worldX <= tw.x + size.x && worldY >= tw.y && worldY <= tw.y + size.y) out.push(t);
     }
-    return null;
+    return out;
+  }
+  _tokenAt(worldX, worldY) { return this._tokensAt(worldX, worldY)[0] || null; }
+
+  // The token a press picks: a token you can move beats one stacked over it that you
+  // can't, and pressing the same spot again steps down through the stack
+  _pickToken(world, sx, sy) {
+    const here = this._tokensAt(world.x, world.y);
+    if (!here.length) return null;
+    const movable = here.filter(t => this.opts.canMoveToken(t));
+    const list = movable.length ? movable : here;
+    const prev = this._stackPick;
+    if (prev && list.length > 1 && Math.hypot(sx - prev.x, sy - prev.y) < 6 && Date.now() - prev.at < 1500) {
+      const i = list.findIndex(t => t.id === prev.id);
+      if (i >= 0) return list[(i + 1) % list.length];
+    }
+    return list[0];
   }
 
   _shapeAt(worldX, worldY) {
@@ -511,26 +576,49 @@ export class VttCanvas {
     if (e.button !== 0) return;
 
     if (this.tool === "select") {
-      const token = this._tokenAt(world.x, world.y);
+      // The rotate handle of the selected shape comes first: it can sit over a token
+      const sel = this.selectedShape;
+      const hd = sel && this._canMoveShape(sel) ? this._rotateHandle(sel) : null;
+      if (hd && Math.hypot(world.x - hd.x, world.y - hd.y) <= 11 / this.zoom) {
+        this.drag = { type: "shape-rotate", shape: sel, pivot: hd.pivot, startScreen: { x: sx, y: sy }, moved: false };
+        return;
+      }
+      const token = this._pickToken(world, sx, sy);
       if (token) {
         this.selectedShape = null;
-        if (this.opts.canMoveToken(token)) {
-          // Remember where inside the token it was grabbed so it doesn't snap its corner to the pointer
-          const at = this._posOf(token);
-          const tw = this.gridToWorld(at.x, at.y);
-          this.drag = {
-            type: "token", token, startScreen: { x: sx, y: sy }, moved: false,
-            grabOffset: { x: world.x - tw.x, y: world.y - tw.y }
-          };
-        } else {
+        this._stackPick = { x: sx, y: sy, id: token.id, at: Date.now() };
+        if (!this.opts.canMoveToken(token)) {
           this.drag = { type: "click", token, startScreen: { x: sx, y: sy }, moved: false };
+          this._markDirty();
+          return;
         }
+        if (e.shiftKey) {
+          // Shift+click adds to or removes from the selection
+          const ids = new Set(this.selectedIds);
+          ids.has(token.id) ? ids.delete(token.id) : ids.add(token.id);
+          this.setSelection(ids);
+          this.drag = { type: "noop" };
+          return;
+        }
+        if (!this.selectedIds.has(token.id)) this.setSelection([token.id]);
+        // Remember where inside the token it was grabbed so it doesn't snap its corner to the pointer
+        const at = this._posOf(token);
+        const tw = this.gridToWorld(at.x, at.y);
+        // Other selected tokens move with it (not ones that follow a grappler)
+        const group = token._st?.follow ? [] : this.selectedTokens
+          .filter(t => t.id !== token.id && !t._st?.follow && this.opts.canMoveToken(t))
+          .map(t => ({ id: t.id, x: t.x, y: t.y }));
+        this.drag = {
+          type: "token", token, group, origin: { x: at.x, y: at.y }, startScreen: { x: sx, y: sy }, moved: false,
+          grabOffset: { x: world.x - tw.x, y: world.y - tw.y }
+        };
         this._markDirty();
         return;
       }
       const shape = this._shapeAt(world.x, world.y);
       if (shape && this._canMoveShape(shape)) {
         this.selectedShape = shape;
+        if (!e.shiftKey) this.setSelection([]);
         const origGrid = shape.kind === "cone" ? { x: shape.originX, y: shape.originY } : { x: shape.x, y: shape.y };
         this.drag = { type: "shape-drag", shape, startWorld: world, startScreen: { x: sx, y: sy }, origGrid, moved: false };
         this._markDirty();
@@ -540,6 +628,9 @@ export class VttCanvas {
       // Touch has no right button, so a finger on empty map still pans
       if (e.pointerType === "touch") {
         this.drag = { type: "pan", button: 0, startScreen: { x: sx, y: sy }, startPan: { ...this.pan }, moved: false };
+      } else {
+        // Empty map: drag a box to select tokens (Shift keeps the current selection)
+        this.drag = { type: "marquee", startWorld: world, startScreen: { x: sx, y: sy }, add: e.shiftKey, moved: false };
       }
       this._markDirty();
       return;
@@ -553,15 +644,17 @@ export class VttCanvas {
     }
 
     if (this.tool === "shape-rect" || this.tool === "shape-circle") {
+      const start = this._snapWorld(world, e.altKey);
       this.drag = { type: "shape" };
-      this.shape = { kind: this.tool === "shape-rect" ? "rect" : "circle", startWorld: world, endWorld: world };
+      this.shape = { kind: this.tool === "shape-rect" ? "rect" : "circle", startWorld: start, endWorld: start };
       this._markDirty();
       return;
     }
 
     if (this.tool === "shape-cone") {
+      const origin = this._snapWorld(world, e.altKey);
       this.drag = { type: "shape-cone" };
-      this.shape = { kind: "cone", origin: { ...world }, endWorld: { ...world } };
+      this.shape = { kind: "cone", origin, endWorld: { ...origin } };
       this._markDirty();
       return;
     }
@@ -573,6 +666,14 @@ export class VttCanvas {
       return;
     }
   }
+
+  // A world point on the nearest grid intersection when snapping
+  _snapWorld(p, free) {
+    if (!this.snap || free) return { ...p };
+    return { x: Math.round(p.x / this.gridPx) * this.gridPx, y: Math.round(p.y / this.gridPx) * this.gridPx };
+  }
+  // Angles step by 15° when snapping
+  _snapAngle(a, free) { return this.snap && !free ? Math.round(a / (Math.PI / 12)) * (Math.PI / 12) : a; }
 
   _onPointerMove(e) {
     const { x: sx, y: sy } = this._eventPos(e);
@@ -599,9 +700,13 @@ export class VttCanvas {
       if (!this.drag.moved) return;
       this.pan = { x: this.drag.startPan.x + (sx - this.drag.startScreen.x), y: this.drag.startPan.y + (sy - this.drag.startScreen.y) };
       this._markDirty();
+    } else if (this.drag.type === "marquee") {
+      if (!this.drag.moved) return;
+      this.marquee = { a: this.drag.startWorld, b: world };
+      this._markDirty();
     } else if (this.drag.type === "token") {
       if (!this.drag.moved) return;
-      const { grabOffset } = this.drag;
+      const { grabOffset, origin } = this.drag;
       const grid = this.worldToGrid(world.x - grabOffset.x, world.y - grabOffset.y);
       const t = this.drag.token;
       const leader = t._st?.follow ? this._byId?.get(t._st.follow.id) : null;
@@ -613,30 +718,50 @@ export class VttCanvas {
         this._markDirty();
         return;
       }
-      this.drag.token._previewX = grid.x;
-      this.drag.token._previewY = grid.y;
+      const p = this._snapPos(t, grid.x, grid.y, e.altKey);
+      t._previewX = p.x; t._previewY = p.y;
+      // The rest of the selection moves by the same number of squares
+      const dx = p.x - origin.x, dy = p.y - origin.y;
+      this.drag.group.forEach(g => {
+        const o = this._byId.get(g.id);
+        if (!o) return;
+        const q = this._snapPos(o, g.x + dx, g.y + dy, e.altKey);
+        o._previewX = q.x; o._previewY = q.y;
+      });
+      this._markDirty();
+    } else if (this.drag.type === "shape-rotate") {
+      if (!this.drag.moved) return;
+      const { shape, pivot } = this.drag;
+      const raw = Math.atan2(world.y - pivot.y, world.x - pivot.x);
+      // A square's handle sits "up" from its center; a cone's sits along its axis
+      shape.angle = this._snapAngle(shape.kind === "rect" ? raw + Math.PI / 2 : raw, e.altKey);
       this._markDirty();
     } else if (this.drag.type === "ruler") {
       this.ruler.endWorld = world;
       this._markDirty();
     } else if (this.drag.type === "shape") {
-      this.shape.endWorld = world;
-      // Circle: drag distance = diameter, center = midpoint
+      this.shape.endWorld = this._snapWorld(world, e.altKey);
+      // Circle: drag distance = diameter, center = midpoint; snapped, the center stays on an
+      // intersection and the radius is whole squares
       if (this.shape.kind === "circle") {
-        this.shape._centerWorld = {
-          x: (this.shape.startWorld.x + this.shape.endWorld.x) / 2,
-          y: (this.shape.startWorld.y + this.shape.endWorld.y) / 2
-        };
-        this.shape._diameter = Math.hypot(
-          this.shape.endWorld.x - this.shape.startWorld.x,
-          this.shape.endWorld.y - this.shape.startWorld.y
-        );
+        const a = this.shape.startWorld, b = this.shape.endWorld;
+        const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        let diameter = Math.hypot(b.x - a.x, b.y - a.y);
+        if (this.snap && !e.altKey) {
+          const c = this._snapWorld(center);
+          center.x = c.x; center.y = c.y;
+          diameter = Math.max(1, Math.round(diameter / 2 / this.gridPx)) * 2 * this.gridPx;
+        }
+        this.shape._centerWorld = center;
+        this.shape._diameter = diameter;
       }
       this._markDirty();
     } else if (this.drag.type === "shape-cone") {
       // Equilateral triangle: apex at the drag start, drag length = side length, drag direction = axis
-      this.shape._dist = Math.hypot(world.x - this.shape.origin.x, world.y - this.shape.origin.y);
-      this.shape._angle = Math.atan2(world.y - this.shape.origin.y, world.x - this.shape.origin.x);
+      let dist = Math.hypot(world.x - this.shape.origin.x, world.y - this.shape.origin.y);
+      if (this.snap && !e.altKey) dist = Math.max(1, Math.round(dist / this.gridPx)) * this.gridPx;
+      this.shape._dist = dist;
+      this.shape._angle = this._snapAngle(Math.atan2(world.y - this.shape.origin.y, world.x - this.shape.origin.x), e.altKey);
       this.shape.endWorld = world;
       this._markDirty();
     } else if (this.drag.type === "draw-fog" || this.drag.type === "erase-fog") {
@@ -651,11 +776,11 @@ export class VttCanvas {
       const dx = (world.x - startWorld.x) / this.gridPx;
       const dy = (world.y - startWorld.y) / this.gridPx;
       if (shape.kind === "cone") {
-        shape.originX = origGrid.x + dx;
-        shape.originY = origGrid.y + dy;
+        shape.originX = this._snapGrid(origGrid.x + dx, e.altKey);
+        shape.originY = this._snapGrid(origGrid.y + dy, e.altKey);
       } else {
-        shape.x = origGrid.x + dx;
-        shape.y = origGrid.y + dy;
+        shape.x = this._snapGrid(origGrid.x + dx, e.altKey);
+        shape.y = this._snapGrid(origGrid.y + dy, e.altKey);
       }
       this._markDirty();
     }
@@ -665,6 +790,26 @@ export class VttCanvas {
     if (this._hoverWorld) { this._hoverWorld = null; this._markDirty(); }
   }
 
+  // Commits one token's drop; returns false if the move was refused
+  _dropToken(t, finalX, finalY) {
+    delete t._previewX; delete t._previewY;
+    const why = this.opts.moveBlockedWhy?.(t, finalX, finalY);
+    if (why) { this.opts.onMoveRefused?.(why); return false; }
+    if (finalX === t.x && finalY === t.y) return true;
+    const dx = finalX - t.x, dy = finalY - t.y;
+    t.x = finalX; t.y = finalY;
+    t.z = Date.now(); // dropped tokens come to the top of their stack
+    this._sortTokens();
+    this._pendingMoves.set(t.id, { x: finalX, y: finalY, until: Date.now() + PENDING_MOVE_TTL_MS });
+    // Creatures it is grappling come along (they keep their offset)
+    const followers = this.tokens.filter(o => o._st?.follow?.id === t.id).map(o => {
+      const x = Math.round((t.x + o._st.follow.dx) * 4) / 4, y = Math.round((t.y + o._st.follow.dy) * 4) / 4;
+      return { token: o, x, y, dx, dy };
+    });
+    this.opts.onTokenMoved?.(t, finalX, finalY, followers);
+    return true;
+  }
+
   _onPointerUp(e) {
     if (!this.drag) return;
     const drag = this.drag;
@@ -672,6 +817,22 @@ export class VttCanvas {
 
     if (drag.type === "pan") {
       if (!drag.moved && drag.button === 2) this._handleContextClick(e);
+    } else if (drag.type === "marquee") {
+      if (drag.moved && this.marquee) {
+        const { a, b } = this.marquee;
+        const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+        const hit = this.tokens.filter(t => {
+          if (!this.opts.canMoveToken(t)) return false;
+          const q = this._posOf(t);
+          const p = this.gridToWorld(q.x, q.y);
+          const s = this.gridToWorld(t.w || 1, t.h || 1);
+          return p.x < x1 && p.x + s.x > x0 && p.y < y1 && p.y + s.y > y0;
+        }).map(t => t.id);
+        this.setSelection(drag.add ? [...this.selectedIds, ...hit] : hit);
+      } else if (!drag.add) {
+        this.setSelection([]);
+      }
+      this.marquee = null;
     } else if (drag.type === "token") {
       const t = drag.token;
       if (!drag.moved) {
@@ -679,33 +840,20 @@ export class VttCanvas {
       } else if (t._st?.follow) {
         this.opts.onGrappledMoved?.(t, t._st.follow.dx, t._st.follow.dy);
       } else {
-        const finalX = Math.round((t._previewX ?? t.x) * 4) / 4;
-        const finalY = Math.round((t._previewY ?? t.y) * 4) / 4;
-        delete t._previewX; delete t._previewY;
-        const why = this.opts.moveBlockedWhy?.(t, finalX, finalY);
-        if (why) {
-          this.opts.onMoveRefused?.(why);
-          this._updateCursor(); this._markDirty();
-          return;
-        }
-        const dx = finalX - t.x, dy = finalY - t.y;
-        t.x = finalX; t.y = finalY;
-        this._pendingMoves.set(t.id, { x: finalX, y: finalY, until: Date.now() + PENDING_MOVE_TTL_MS });
-        // Creatures it is grappling come along (they keep their offset)
-        const followers = this.tokens.filter(o => o._st?.follow?.id === t.id).map(o => {
-          const x = Math.round((t.x + o._st.follow.dx) * 4) / 4, y = Math.round((t.y + o._st.follow.dy) * 4) / 4;
-          return { token: o, x, y, dx, dy };
+        const fallback = this._snapPos(t, t.x, t.y, e.altKey);
+        this._dropToken(t, t._previewX ?? fallback.x, t._previewY ?? fallback.y);
+        drag.group.forEach(g => {
+          const o = this._byId.get(g.id);
+          if (o && o._previewX != null) this._dropToken(o, o._previewX, o._previewY);
         });
-        this.opts.onTokenMoved?.(t, finalX, finalY, followers);
       }
     } else if (drag.type === "click") {
       if (!drag.moved) this.opts.onTokenClicked?.(drag.token);
+    } else if (drag.type === "shape-rotate") {
+      if (drag.moved) this.opts.onPersistentShapeMoved?.(drag.shape);
     } else if (drag.type === "shape-drag") {
-      // A plain click keeps the shape selected (Delete removes it); a drag persists the move
-      if (drag.moved) {
-        this.opts.onPersistentShapeMoved?.(drag.shape);
-        this.selectedShape = null;
-      }
+      // A plain click selects the shape (Delete removes it, the handle rotates it); a drag saves the move
+      if (drag.moved) this.opts.onPersistentShapeMoved?.(drag.shape);
     } else if (drag.type === "shape") {
       // Make persistent shape (rect or circle)
       const { kind, startWorld, endWorld } = this.shape;
@@ -723,6 +871,7 @@ export class VttCanvas {
             y: y / this.gridPx,
             w: w2,
             h: h2,
+            angle: 0,
             ownerUid: this.opts.currentUid
           });
         }
@@ -800,13 +949,6 @@ export class VttCanvas {
     const { x: sx, y: sy } = this._eventPos(e);
     const world = this.screenToWorld(sx, sy);
 
-    // Persistent shapes: right-click to remove (any tool)
-    const shape = this._shapeAt(world.x, world.y);
-    if (shape && this._canMoveShape(shape)) {
-      this.removePersistentShape(shape);
-      return;
-    }
-
     // Reset ruler on right-click
     if (this.ruler) {
       this.ruler = null;
@@ -814,8 +956,13 @@ export class VttCanvas {
       return;
     }
 
-    const token = this._tokenAt(world.x, world.y);
-    if (token) this.opts.onTokenContextMenu?.(token, e.clientX, e.clientY);
+    // A token's menu wins over a shape it stands in; a stack lists everything under the pointer
+    const here = this._tokensAt(world.x, world.y);
+    if (here.length) { this.opts.onTokenContextMenu?.(here[0], e.clientX, e.clientY, here); return; }
+
+    // Persistent shapes: right-click to remove (any tool)
+    const shape = this._shapeAt(world.x, world.y);
+    if (shape && this._canMoveShape(shape)) this.removePersistentShape(shape);
   }
 
   // Equilateral cone: apex at the origin, both edges `length` long at ±30° from
@@ -834,12 +981,35 @@ export class VttCanvas {
     return this._coneVertices(origin.x, origin.y, shape.angle, shape.distance * this.gridPx);
   }
 
+  // A square/line AoE turns about its center by shape.angle (radians)
+  _rectFrame(shape) {
+    const w = shape.w * this.gridPx, h = shape.h * this.gridPx;
+    return { cx: shape.x * this.gridPx + w / 2, cy: shape.y * this.gridPx + h / 2, w, h, a: shape.angle || 0 };
+  }
+
+  // Where a selected square or cone's rotate handle sits, and what it turns about
+  _rotateHandle(shape) {
+    const off = 26 / this.zoom;
+    if (shape.kind === "rect") {
+      const f = this._rectFrame(shape);
+      const d = f.h / 2 + off;
+      return { x: f.cx + Math.sin(f.a) * d, y: f.cy - Math.cos(f.a) * d, pivot: { x: f.cx, y: f.cy } };
+    }
+    if (shape.kind === "cone") {
+      const o = this.gridToWorld(shape.originX, shape.originY);
+      const len = shape.distance * this.gridPx * Math.cos(Math.PI / 6) + off;
+      return { x: o.x + Math.cos(shape.angle) * len, y: o.y + Math.sin(shape.angle) * len, pivot: o };
+    }
+    return null;
+  }
+
   // Check if a point is inside a persistent shape
   _pointInShape(px, py, shape) {
     if (shape.kind === "rect") {
-      const pos = this.gridToWorld(shape.x, shape.y);
-      const size = this.gridToWorld(shape.w, shape.h);
-      return px >= pos.x && px <= pos.x + size.x && py >= pos.y && py <= pos.y + size.y;
+      const f = this._rectFrame(shape);
+      const dx = px - f.cx, dy = py - f.cy;
+      const lx = dx * Math.cos(-f.a) - dy * Math.sin(-f.a), ly = dx * Math.sin(-f.a) + dy * Math.cos(-f.a);
+      return Math.abs(lx) <= f.w / 2 && Math.abs(ly) <= f.h / 2;
     }
     if (shape.kind === "circle") {
       const pos = this.gridToWorld(shape.x, shape.y);
@@ -973,9 +1143,14 @@ export class VttCanvas {
       ctx.stroke(); ctx.setLineDash([]);
     });
 
-    // Tokens
+    // Tokens, bottom to top; whatever is being dragged rides on top
     const dpr = Math.min(devicePixelRatio || 1, 2);
-    if (!fogPending) this.tokens.forEach(t => {
+    const dragged = this.drag?.type === "token" && this.drag.moved ? new Set([this.drag.token.id, ...(this.drag.group || []).map(g => g.id)]) : null;
+    const order = dragged ? [...this._drawOrder.filter(t => !dragged.has(t.id)), ...this._drawOrder.filter(t => dragged.has(t.id))] : (this._drawOrder || this.tokens);
+    // Tokens sharing exactly the same squares: the top one shows how many are there
+    const stacks = new Map();
+    order.forEach(t => { const p = this._posOf(t); const k = `${p.x},${p.y},${t.w || 1},${t.h || 1}`; stacks.set(k, { top: t.id, n: (stacks.get(k)?.n || 0) + 1 }); });
+    if (!fogPending) order.forEach(t => {
       const { x: gx, y: gy } = this._posOf(t);
       const pos = this.gridToWorld(gx, gy);
       const size = this.gridToWorld(t.w || 1, t.h || 1);
@@ -987,6 +1162,10 @@ export class VttCanvas {
         if (img) ctx.drawImage(img, pos.x, pos.y, size.x, size.y);
         else { ctx.fillStyle = "rgba(198,154,62,0.35)"; ctx.fillRect(pos.x, pos.y, size.x, size.y); }
         ctx.globalAlpha = 1;
+        if (this.selectedIds.has(t.id)) {
+          ctx.strokeStyle = "#7ad7ff"; ctx.lineWidth = 2.5 / this.zoom; ctx.setLineDash([5 / this.zoom, 3 / this.zoom]);
+          ctx.strokeRect(pos.x - 3 / this.zoom, pos.y - 3 / this.zoom, size.x + 6 / this.zoom, size.y + 6 / this.zoom); ctx.setLineDash([]);
+        }
         if (t.isCover) {
           ctx.strokeStyle = "#56b8a5"; ctx.lineWidth = 2 / this.zoom;
           ctx.strokeRect(pos.x, pos.y, size.x, size.y);
@@ -994,6 +1173,10 @@ export class VttCanvas {
       } else {
         const d = Math.min(size.x, size.y);
         const cx = pos.x + size.x / 2, cy = pos.y + size.y / 2, r = d / 2;
+        if (this.selectedIds.has(t.id)) {
+          ctx.strokeStyle = "#7ad7ff"; ctx.lineWidth = 2.5 / this.zoom; ctx.setLineDash([5 / this.zoom, 3 / this.zoom]);
+          ctx.beginPath(); ctx.arc(cx, cy, r + 4 / this.zoom, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        }
         if (st.turn) {
           ctx.save();
           ctx.shadowColor = "rgba(255,216,118,0.9)"; ctx.shadowBlur = 14 / this.zoom;
@@ -1058,6 +1241,15 @@ export class VttCanvas {
         ctx.strokeText(label, cx, pos.y + size.y + labelPx);
         ctx.fillStyle = "#fff";
         ctx.fillText(label, cx, pos.y + size.y + labelPx);
+        const stack = stacks.get(`${gx},${gy},${t.w || 1},${t.h || 1}`);
+        if (stack?.n > 1 && stack.top === t.id) {
+          const br = Math.max(7 / this.zoom, Math.min(r * 0.28, this.gridPx * 0.16));
+          const bx = cx - r + br * 0.6, by = cy + r - br * 0.6;
+          ctx.fillStyle = "#e0b95c"; ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#201404"; ctx.font = `bold ${br * 1.1}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText(String(stack.n), bx, by + br * 0.05);
+          ctx.textBaseline = "alphabetic";
+        }
       }
     });
 
@@ -1094,6 +1286,16 @@ export class VttCanvas {
       this._drawShapePreview();
     }
 
+    // Selection box
+    if (this.marquee) {
+      const { a, b } = this.marquee;
+      ctx.fillStyle = "rgba(122,215,255,0.12)"; ctx.strokeStyle = "#7ad7ff"; ctx.lineWidth = 1.5 / this.zoom;
+      ctx.setLineDash([5 / this.zoom, 3 / this.zoom]);
+      ctx.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+      ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+      ctx.setLineDash([]);
+    }
+
     // Fog brush outline
     if (this._isFogTool() && this._hoverWorld && this._isDm) {
       const { x: cx, y: cy } = this._hoverWorld;
@@ -1116,17 +1318,20 @@ export class VttCanvas {
         this._drawShapeHighlight(shape);
       }
       if (shape.kind === "rect") {
-        const pos = this.gridToWorld(shape.x, shape.y);
-        const size = this.gridToWorld(shape.w, shape.h);
+        const f = this._rectFrame(shape);
+        ctx.save();
+        ctx.translate(f.cx, f.cy); ctx.rotate(f.a);
         ctx.fillStyle = "rgba(63,143,128,0.25)";
         ctx.strokeStyle = "#56b8a5";
         ctx.lineWidth = 2 / this.zoom;
-        ctx.fillRect(pos.x, pos.y, size.x, size.y);
-        ctx.strokeRect(pos.x, pos.y, size.x, size.y);
-        // Size label
+        ctx.fillRect(-f.w / 2, -f.h / 2, f.w, f.h);
+        ctx.strokeRect(-f.w / 2, -f.h / 2, f.w, f.h);
+        ctx.restore();
+        // Size label below it, whichever way it faces
         const feetW = Math.round(shape.w * FEET_PER_GRID);
         const feetH = Math.round(shape.h * FEET_PER_GRID);
-        this._shapeLabel(`${feetW}×${feetH} ft`, pos.x + size.x / 2, pos.y + size.y + 16 / this.zoom);
+        const below = Math.abs(f.w / 2 * Math.sin(f.a)) + Math.abs(f.h / 2 * Math.cos(f.a));
+        this._shapeLabel(`${feetW}×${feetH} ft${f.a ? ` • ${Math.round(((f.a * 180 / Math.PI) % 360 + 360) % 360)}°` : ""}`, f.cx, f.cy + below + 16 / this.zoom);
       } else if (shape.kind === "circle") {
         const pos = this.gridToWorld(shape.x, shape.y);
         const r = shape.radius * this.gridPx;
@@ -1176,9 +1381,11 @@ export class VttCanvas {
     ctx.lineWidth = 2 / this.zoom;
     const pad = 3 / this.zoom;
     if (shape.kind === "rect") {
-      const pos = this.gridToWorld(shape.x, shape.y);
-      const size = this.gridToWorld(shape.w, shape.h);
-      ctx.strokeRect(pos.x - pad, pos.y - pad, size.x + pad * 2, size.y + pad * 2);
+      const f = this._rectFrame(shape);
+      ctx.save();
+      ctx.translate(f.cx, f.cy); ctx.rotate(f.a);
+      ctx.strokeRect(-f.w / 2 - pad, -f.h / 2 - pad, f.w + pad * 2, f.h + pad * 2);
+      ctx.restore();
     } else if (shape.kind === "circle") {
       const pos = this.gridToWorld(shape.x, shape.y);
       const r = shape.radius * this.gridPx;
@@ -1194,6 +1401,17 @@ export class VttCanvas {
       ctx.stroke();
     }
     ctx.setLineDash([]);
+    // Rotate handle
+    const hd = this._canMoveShape(shape) ? this._rotateHandle(shape) : null;
+    if (hd) {
+      ctx.strokeStyle = "#e0b95c"; ctx.lineWidth = 1.5 / this.zoom;
+      ctx.beginPath(); ctx.moveTo(hd.pivot.x, hd.pivot.y); ctx.lineTo(hd.x, hd.y); ctx.stroke();
+      ctx.fillStyle = "#e0b95c";
+      ctx.beginPath(); ctx.arc(hd.x, hd.y, 7 / this.zoom, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#201404"; ctx.font = `bold ${10 / this.zoom}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("\u21bb", hd.x, hd.y + 0.5 / this.zoom);
+      ctx.textBaseline = "alphabetic";
+    }
     ctx.restore();
   }
 

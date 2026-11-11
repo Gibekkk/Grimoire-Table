@@ -28,6 +28,7 @@ FILES=(
   "data/equipment.json"
   "data/languages.json"
   "js/data-loader.js"
+  "js/dialogs.js"
   "js/db.js"
   "js/firebase-init.js"
   "js/main.js"

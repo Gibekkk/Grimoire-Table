@@ -503,7 +503,7 @@ body.vtt-fullscreen-open { overflow: hidden; }
   display: none !important;
 }
 .vtt-shell--fullscreen .vtt-toolbar {
-  background: rgba(16,16,24,0.96);
+  background: var(--ink-raised);
   border-radius: 0;
   padding-top: 4px;
   padding-bottom: 4px;
@@ -827,3 +827,11 @@ details.upcoming > summary { cursor: pointer; font-family: var(--font-display); 
 @media (max-width: 800px) {
   .modal-box.map-editor-dialog { grid-template-columns: 1fr; grid-template-rows: auto minmax(220px, 1fr); height: 92vh; }
 }
+/* ---------------- In-page dialogs (replace alert / confirm / prompt) ---------------- */
+.modal-overlay.dialog-overlay { z-index: 1100; }
+.modal-box.dialog-box { max-width: 420px; text-align: left; display: flex; flex-direction: column; gap: 10px; }
+.dialog-title { margin: 0; color: var(--gold-bright); }
+.dialog-message { margin: 0; white-space: pre-line; }
+.dialog-field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.dialog-field input, .dialog-field select { margin: 0; }
+.dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
