@@ -128,7 +128,7 @@ export function mountCombatPanel(container, { campaignId, user, isDm, campaignLo
           <div style="display:flex; align-items:center; gap:10px;">
             <div class="portrait-preview sm">${portraitOrInitial(c)}</div>
             <div>
-              <div class="item-name">${isCurrent ? "\u25b6 " : ""}${escapeHtml(c.name)} ${c.type === "npc" ? '<span class="badge rune">NPC</span>' : c.type === "monster" ? '<span class="badge rune">Monster</span>' : ""}</div>
+              <div class="item-name">${isCurrent ? "\u25b6 " : ""}${escapeHtml(isDm ? c.dmName || c.name : c.name)} ${c.type === "npc" ? '<span class="badge rune">NPC</span>' : c.type === "monster" ? '<span class="badge rune">Monster</span>' : ""}</div>
             </div>
           </div>
         </div>

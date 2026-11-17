@@ -4,7 +4,7 @@ import { loadRuleset, findById } from "../../data-loader.js";
 import { h, toast, escapeHtml } from "../../util.js";
 import { ABILITIES, ABILITY_NAMES } from "../../rules-engine.js";
 import { createNpcFromMonster, renderMonsterList, nextMonsterName, monsterImageFor } from "../../monsters.js";
-import { confirmDialog } from "../../dialogs.js";
+import { confirmDialog, promptDialog } from "../../dialogs.js";
 
 export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvMode }) {
   if (!isDm) {
@@ -51,6 +51,14 @@ export async function mountNpcPanel(container, { campaignId, user, isDm, getAdvM
       await db.characters.update(npc.id, { hiddenFromRoster: !npc.hiddenFromRoster });
       toast(npc.hiddenFromRoster ? `${npc.name} is back in the roster` : `${npc.name} hidden \u2014 use \u201cShow hidden\u201d to find it again`);
     });
+    const rename = h("button", { class: "btn sm" }, "\u270E Rename");
+    rename.addEventListener("click", async () => {
+      const name = (await promptDialog("Their tokens on maps follow. What players see on the map is set per token (right-click \u2192 Name & what players see).", npc.name, { title: "Rename NPC", okLabel: "Rename" }))?.trim();
+      if (!name || name === npc.name) return;
+      await db.characters.update(npc.id, { name });
+      toast(`${npc.name} is now ${name}`);
+    });
+    npcBar.appendChild(rename);
     const del = h("button", { class: "btn sm danger" }, "Delete NPC");
     del.addEventListener("click", async () => {
       if (!await confirmDialog(`Delete ${npc.name} permanently? Its tokens stay on maps until you remove them.`, { okLabel: "Delete", danger: true })) return;

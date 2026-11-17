@@ -828,7 +828,8 @@
 "ammoType": "arrow",
 "quantity": 20,
 "weight": "1 lb.",
-"cost": "1 GP"
+"cost": "1 GP",
+"description": "Ammunition is required by a weapon that has the Ammunition property. A weapon's description specifies the type of ammunition used by the weapon. The Ammunition table lists the different types and the amount you get when you buy them. The table also lists the item that is typically used to store each type; storage must be bought separately."
 },
 {
 "id": "bolts",
@@ -836,7 +837,8 @@
 "ammoType": "bolt",
 "quantity": 20,
 "weight": "1.5 lb.",
-"cost": "1 GP"
+"cost": "1 GP",
+"description": "Ammunition is required by a weapon that has the Ammunition property. A weapon's description specifies the type of ammunition used by the weapon. The Ammunition table lists the different types and the amount you get when you buy them. The table also lists the item that is typically used to store each type; storage must be bought separately."
 },
 {
 "id": "firearm-bullets",
@@ -844,7 +846,8 @@
 "ammoType": "bullet",
 "quantity": 10,
 "weight": "2 lb.",
-"cost": "3 GP"
+"cost": "3 GP",
+"description": "Ammunition is required by a weapon that has the Ammunition property. A weapon's description specifies the type of ammunition used by the weapon. The Ammunition table lists the different types and the amount you get when you buy them. The table also lists the item that is typically used to store each type; storage must be bought separately."
 },
 {
 "id": "sling-bullets",
@@ -852,7 +855,8 @@
 "ammoType": "bullet",
 "quantity": 20,
 "weight": "1.5 lb.",
-"cost": "4 CP"
+"cost": "4 CP",
+"description": "Ammunition is required by a weapon that has the Ammunition property. A weapon's description specifies the type of ammunition used by the weapon. The Ammunition table lists the different types and the amount you get when you buy them. The table also lists the item that is typically used to store each type; storage must be bought separately."
 },
 {
 "id": "needles",
@@ -860,7 +864,8 @@
 "ammoType": "needle",
 "quantity": 50,
 "weight": "1 lb.",
-"cost": "1 GP"
+"cost": "1 GP",
+"description": "Ammunition is required by a weapon that has the Ammunition property. A weapon's description specifies the type of ammunition used by the weapon. The Ammunition table lists the different types and the amount you get when you buy them. The table also lists the item that is typically used to store each type; storage must be bought separately."
 }
 ],
 "gear": [
@@ -870,7 +875,8 @@
 "cost": "25 GP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "When you take the Attack action, you can replace one of your attacks with throwing a vial of Acid. Target one creature or object you can see within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 2d6Acid damage."
 },
 {
 "id": "alchemists-fire",
@@ -878,7 +884,8 @@
 "cost": "50 GP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "When you take the Attack action, you can replace one of your attacks with throwing a flask of Alchemist's Fire. Target one creature or object you can see within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 1d4Fire damage and start burning (see the rules glossary)."
 },
 {
 "id": "antitoxin",
@@ -886,7 +893,8 @@
 "cost": "50 GP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Bonus Action, you can dr i 1 l< a vial of Antitoxin to gain Advantage on saving t hr' !WS to avoid or end the Poisoned condition for 1 ho,.r. ADVENTU R !i\\, G GE A!'? Item Acid Alchemist 's Fire Ammunition Weight Cost 1 lb. 25 GP 1 lb. 50 GP Varies Varies 50 GP Antitoxin Varies Varies Backpack 5 lb. 2 GP Ball Bearings 216. 1 GP Barrel 70 lb. 2 GP Basket 216. 4 SP Bedroll 716. 1 GP Arcane Focus l GP Bell Blanket 3 lb. 5 SP Block and Tackle 5 lb. l GP Book 5 lb. 25 GP Bottle, Glass 2 lb. 2GP Bucket 216. 5 CP Burglar's Pack 42 lb. 16 GP Caltrops 216. l GP l CP Candle Case, Crossbow Bolt 1 lb. l GP Case, Map or Scroll 1 lb. 1 GP Chain 10 lb. 5 GP Chest 25 lb. 5 GP Climber's Kit 12 lb. 25 GP Clothes, Fine 6 lb. 15 GP Clothes, Traveler's 416. 2 GP Component Pouch 216. 25 GP Costume 4 lb. 5 GP Crowbar 5 lb. 2 GP Diplomat's Pack 39 lb. 39 GP Druidic Focus Varies Varies Dungeoneer's Pack 55 lb. 12 GP En tertainer's Pack 58½ lb. 40GP Explore r's Pack 55 lb. 10 GP Flask 1 lb. 2 CP Grappling Hook 4 lb. 2 GP Healer's Kit 3 lb. 5 GP Holy Symbol Varies Varies Holy Water 1 lb. 25 GP Hunting Trap 25 lb. 5 GP Ink 10 GP... • Item Weight Ink Pen Cost 2 CP Jug 416. 2 CP Ladder 25 lb. 1 SP Lamp 1 lb. 5 SP Lantern, Bullseye 216. 10 GP Lantern, Hooded 216. 5 GP Lock 1 lb. 10 GP Magnifying Glass Manacles 100 GP 616. Map 2 GP 1 GP Mirror 1/216. 5 GP Net 3 lb. 1 GP Oil 1 lb. 1 SP Paper 2 SP Parchment 1 SP Perfume 5 GP Poison, Basic 100 GP Pole 716. 5 CP Pot, Iron 10 lb. 2GP Potion of Healing 1/2 lb. S0GP Pouch 1 lb. 5 SP Priest's Pack 29 lb. 33 GP Quiver 1 lb. l GP Ram, Portable 3516. 4 GP Rations 2 lb. 5 SP Robe 416. 1 GP Rope 5 lb. 1 GP Sack 1/2 lb. 1 CP Scholar's Pack 22 lb. 40 GP Shovel 5 lb. 2GP Signal Whistle 5 CP Spell Scroll (Cantrip) 30GP Spell Scroll (Level 1) S0GP Spikes, Iron 5 lb. Spyglass 1 lb. 1,000 GP String 1 GP 1 SP Tent 2Cl lb. 2GP Tinderbox 1 lb. 5 SP Torch 1 lb. 1 CP Vial Waters kin 1 GP 5 lb. (full) 2 SP 22'.l ARCANE Focus (VARIES) An Arcane Focus takes one of the forms in the Arcane Focuses table and is bejeweled or carved to channel arcane magic. A Sorcerer, Warlock, or Wizard can use such an item as a Spellcasting Focus."
 },
 {
 "id": "backpack",
@@ -894,7 +902,8 @@
 "cost": "2 GP",
 "weight": "5 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Backpack holds up to 30 pounds within 1 cubic foot. It can also serve as a saddlebag."
 },
 {
 "id": "ball-bearings",
@@ -902,7 +911,8 @@
 "cost": "1 GP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Utilize action, you can spill Ball Bearings from their pouch. They spread to cover a level, 10-footsquare area within 10 feet of yourself. A creature that enters this area for the first time on a turn must succeed on a DC 10 Dexterity saving throw or have the Prone condition. It takes 10 minutes to recover the Ball Bearings."
 },
 {
 "id": "barrel",
@@ -910,7 +920,8 @@
 "cost": "2 GP",
 "weight": "70 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Barrel holds up to 40 gallons of liquid or up to 4 cubic feet of dry goods."
 },
 {
 "id": "basket",
@@ -918,7 +929,8 @@
 "cost": "4 SP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Basket holds up to 4 0 pounds within 2 cubic feet."
 },
 {
 "id": "bedroll",
@@ -926,7 +938,8 @@
 "cost": "1 GP",
 "weight": "7 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Bedroll sleeps one Small or Medium creature. While in a Bedroll, you automatically succeed on saving throws against extreme cold (see the Dun- geon Master's Guide)."
 },
 {
 "id": "bell",
@@ -934,7 +947,8 @@
 "cost": "1 GP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "When rung as a Utilize action, a Bell produces a sound that can be heard up to 60 feet away."
 },
 {
 "id": "blanket",
@@ -942,7 +956,8 @@
 "cost": "5 SP",
 "weight": "3 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "While wrapped in a blanket, you have Advantage on saving throws against extreme cold (see the Dun- geon Master's Guide)."
 },
 {
 "id": "block-and-tackle",
@@ -950,7 +965,8 @@
 "cost": "1 GP",
 "weight": "5 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Block and Tackle allows you to hoist up to four times the weight you can normally lifl."
 },
 {
 "id": "book",
@@ -958,7 +974,8 @@
 "cost": "25 GP",
 "weight": "5 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Book contains fiction or nonfiction. If you consult an accurate nonfiction Book about its topic, you gain a +5 bonus to Intelligence (Arcana, History, Nature, or Religion) checks you make about that topic."
 },
 {
 "id": "bottle-glass",
@@ -966,7 +983,8 @@
 "cost": "2 GP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Glass Bottle holds up to l½ pints."
 },
 {
 "id": "bucket",
@@ -974,7 +992,8 @@
 "cost": "5 CP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Bucket holds up to half a cubic foot of contents."
 },
 {
 "id": "caltrops",
@@ -982,7 +1001,8 @@
 "cost": "1 GP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Utilize action, you can spread Caltrops from their bag to cover a 5-foot-square area within 5 feet of yourself. A creature that enters this area for the first time on a turn must succeed on a DC 15 Dexterity saving throw or take 1 Piercing damage and have its Speed reduced toO until the start of its next turn. It takes 10 minutes to recover the Caltrops."
 },
 {
 "id": "candle",
@@ -990,7 +1010,8 @@
 "cost": "1 CP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "For 1 hour, a lit Candle sheds Bright Light in a 5-foot radius and Dim Light for an additional 5 feet."
 },
 {
 "id": "case-crossbow-bolt",
@@ -998,7 +1019,8 @@
 "cost": "1 GP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Crossbow Bolt Case holds up to 20 Bolts."
 },
 {
 "id": "case-map-or-scroll",
@@ -1006,7 +1028,8 @@
 "cost": "1 GP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Map or Scroll Case holds up to 10 sheets of paper or 5 sheets of parchment."
 },
 {
 "id": "chain",
@@ -1014,7 +1037,8 @@
 "cost": "5 GP",
 "weight": "10 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Utilize action, you can wrap 3 Chain around an unwilling creature within 5 t'eel of yourself that has the Grappled, Incapacitated, or Res lrained condition if you succeed on a DC n Strength (Athletics) check. If the aeature's legs are bound, the creature has the Restrained condition until it escapes. Escaping the Cha in requires the creature to make a successful DC 18 Dexterity (Acrobatics) check as an action. Bursting the Chain requires a successful DC 20 Strength (Athletics) check as an action."
 },
 {
 "id": "chest",
@@ -1022,7 +1046,8 @@
 "cost": "5 GP",
 "weight": "25 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Chest holds up to 12 cubic feet of contents."
 },
 {
 "id": "climbers-kit",
@@ -1030,7 +1055,8 @@
 "cost": "25 GP",
 "weight": "12 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Climber's Kit includes boot tips, gloves, pitons, and a harness. As a Utilize action, you can use the Climber's Kit to anchor yourself; when you do, you can't fall more than 25 feet from the anchor point, and you can't move more than 25 feet from there without undoing the anchor as a Bonus Action."
 },
 {
 "id": "fine-clothes",
@@ -1038,7 +1064,8 @@
 "cost": "15 GP",
 "weight": "6 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Fine Clothes are made of expensive fabrics and adorned with expertly crafted details. Some events and locations admit only people wearing these clothes."
 },
 {
 "id": "travelers-clothes",
@@ -1046,7 +1073,8 @@
 "cost": "2 GP",
 "weight": "4 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Traveler's Clothes are resilient garments designed for travel in various environments."
 },
 {
 "id": "component-pouch",
@@ -1054,7 +1082,8 @@
 "cost": "25 GP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Component Pouch is watertight and filled with compartments that hold all the free Material components of your spells."
 },
 {
 "id": "costume",
@@ -1062,7 +1091,8 @@
 "cost": "5 GP",
 "weight": "4 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "While wearing a Costume, you have Advantage on any ability check you make to impersonate the person or type of person it represents."
 },
 {
 "id": "crowbar",
@@ -1070,7 +1100,8 @@
 "cost": "2 GP",
 "weight": "5 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Using a Crow bar gives you Advantage on Strength checks where the Cr owbar's leverage can be applied."
 },
 {
 "id": "flask",
@@ -1078,7 +1109,8 @@
 "cost": "2 CP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Flask holds up to 1 pint."
 },
 {
 "id": "grappling-hook",
@@ -1086,7 +1118,8 @@
 "cost": "2 GP",
 "weight": "4 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Utilize action, you can throw the Grappling Hook at a railing, a ledge, or another catch within SO feet of yourself, and the hook catches on if you succeed on a DC 13 Dexterity (Acrobatics) check. If you tied a Rope to the hook, you can then climb it."
 },
 {
 "id": "healers-kit",
@@ -1094,7 +1127,8 @@
 "cost": "5 GP",
 "weight": "3 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Healer's Kit has ten uses. As a Utilize action, you can expend one of its uses to stabilize an Unconscious creature that has 0 Hit Points without needing to make a Wisdom (Medicine) check."
 },
 {
 "id": "holy-water",
@@ -1102,7 +1136,8 @@
 "cost": "25 GP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "When you take the Attack action, you can replace one of your attacks with throwing a flask of Holy Water. Target one creature you can see within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 2d8Radiant damage if it is a Fiend or an Undead. r"
 },
 {
 "id": "hunting-trap",
@@ -1110,7 +1145,8 @@
 "cost": "5 GP",
 "weight": "25 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Utilize action, you can set a Hunting Trap, which is a sawtooth steel ring that snaps shut when a creature steps on a pressure plate in the center. The trap is affixed by a heavy chain to an immobile object, such as a tree or a spike driven into the ground. A creature that steps on the plate must succeed on a DC 13 Dexterity saving throw or take 1d4Piercing damage and have its Speed reduced to O until the start of its next turn. Thereafter, until the creature breaks free of the trap, its movement is limited by the length of the chain (typically 3 feet). A creature can use its action to make a DC 13 Strength (Athletics) check, freeing itself or another creature within its reach on a success. Each failed check deals 1 Piercing damage to the trapped creature."
 },
 {
 "id": "ink",
@@ -1118,7 +1154,8 @@
 "cost": "10 GP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Ink comes in a 1-ounce bottle, which provides enough ink to write about 500 pages."
 },
 {
 "id": "ink-pen",
@@ -1126,7 +1163,8 @@
 "cost": "2 CP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Using Ink, an Ink Pen is used to write or draw. 226 JuG (2 CP) A Jug holds up to 1 gallon."
 },
 {
 "id": "jug",
@@ -1142,7 +1180,8 @@
 "cost": "1 SP",
 "weight": "25 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Ladder is 10 feet tall. You must climb to move up or down it. r.-"
 },
 {
 "id": "lamp",
@@ -1150,7 +1189,8 @@
 "cost": "5 SP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Lamp burns Oil as fuel to cast Bright Light in a 15-foot radius and Dim Light for an additional 30 feet."
 },
 {
 "id": "bullseye-lantern",
@@ -1158,7 +1198,8 @@
 "cost": "10 GP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Bullseye Lantern burns Oil as fuel to cast Bright Light in a 60-foot Cone and Dim Light for an additional 60 feet."
 },
 {
 "id": "hooded-lantern",
@@ -1166,7 +1207,8 @@
 "cost": "5 GP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Hooded Lantern burns Oil as fuel to cast Bright Light in a 30-foot radius and Dim Light for an additional 30 feet. As a Bonus Action, you can lower the hood, reducing the light to Dim Light in a 5-foot radius, or raise it again."
 },
 {
 "id": "lock",
@@ -1174,7 +1216,8 @@
 "cost": "10 GP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Lock comes with a key. Without the key, a creature can use Thieves' Tools to pick this Lock with a successful DC 15 Dexterity (Sleight of Hand) check."
 },
 {
 "id": "magnifying-glass",
@@ -1182,7 +1225,8 @@
 "cost": "100 GP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Magnifying Glass grants Advantage on any ability check made to appraise or inspect a highly detailed item. Lighting a fire with a Magnifying Glass requires light as bright as sunlight to focus, tinder to ignite, and about 5 minutes for the fire to ignite."
 },
 {
 "id": "manacles",
@@ -1190,7 +1234,8 @@
 "cost": "2 GP",
 "weight": "6 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Utilize action, you can use Manacles to bind an unwilling Small or Medium creature within 5 feet of yourself that has the Grappled, Incapacitated, or Restrained condition if you succeed on a DC 13 Dexterity (Sleight of Hand) check. While bound, a creature has Disadvantage on attack rolls, and the creature is Restrained if the Manacles are attached to a chain or hook that is fixed iu phce. Escaping the Manacles requires a succes,.fo l DC 20 Dexterity (Sleight of Hand) check as an ?.ctic 1. Bursting them requires a successful DC 25 Stn;-,rrth (Athletics) check as an action. Each set or Manacles comes with a key. Without the key, a cre:1t ure can use T hieves' Tools to pick the Manacles' lock with a successful DC 15 Dexterity (Sleight of Hand) check."
 },
 {
 "id": "map",
@@ -1198,7 +1243,8 @@
 "cost": "1 GP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "If you consult an accurate Map, you gain a +5 bonus to Wisdom (Survival) checks you make to find your way in the place represented on it."
 },
 {
 "id": "mirror",
@@ -1206,7 +1252,8 @@
 "cost": "5 GP",
 "weight": "1/2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A handheld steel Mirror is useful for personal cosmetics but also for peeking around corners and reflecting light as a signal."
 },
 {
 "id": "net",
@@ -1214,7 +1261,8 @@
 "cost": "1 GP",
 "weight": "3 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "When you take the Attack action, you can replace one of your attacks with throwing a Net. Target a creature you can see within 15 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or have the Restrained condition until it escapes. The target succeeds automatically if it is Huge or larger. To escape, the target or a creature within 5 feet of it must take an action to make a DC 10 Strength (Athletics) check, freeing the Restrained creature on a success. Destroying the Net (AC 10; 5 HP; Immunity to Bludgeoning, Poison, and Psychic damage) also frees the target, ending the effect."
 },
 {
 "id": "oil",
@@ -1222,7 +1270,8 @@
 "cost": "1 SP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "You can douse a creature, object, or space with Oil or use it as fuel, as detailed below. Dousing a Creature or an Object. When you take the Attack action, you can replace one of your attacks with throwing an Oil flask. Target one creature or object within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or be covered in oil. If the target takes Fire damage before the oil dries (after 1 minute), the target takes an extra 5 Fire damage from burning oil. Dousing a Space. You can take the Utilize action to pour an Oil flask on level ground to cover a 5-footsquare area with in 5 feet of yourself. If lit, the oil burns until the end of the turn 2 rounds from when the oil was lit (0 1 12 seconds) and deals 5 Fire damage to any creature that enters the area or ends its turn there. A n ~at ure can take this damage only once per turn. Fuel. Oil scr:r•i, as fuel for Lamps and Lanterns. Once lit, a fl a<. r. Oil burns for 6 hours in a Lamp or Lantern. That duration doesn't need to be consecutive; you can extinguish the burning Oil (as a Utilize action) and rekindle it again until it has burned for a total of 6 hours."
 },
 {
 "id": "paper",
@@ -1230,7 +1279,8 @@
 "cost": "2 SP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "One sheet of Paper can hold about 250 handwritten words."
 },
 {
 "id": "parchment",
@@ -1238,7 +1288,8 @@
 "cost": "1 SP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "One sheet of Parchment can hold about 250 handwritten words."
 },
 {
 "id": "perfume",
@@ -1246,7 +1297,8 @@
 "cost": "5 GP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Perfume comes in a 4-ounce vial. For 1 hour after applying Perfume to yourself, you have Advantage on Charisma (Persuasion) checks made to influence an Indifferent Humanoid within 5 feet of yourself."
 },
 {
 "id": "basic-poison",
@@ -1254,7 +1306,8 @@
 "cost": "100 GP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Bonus Action, you can use a vial of Basic Poison to coat one weapon or up to three pieces of ammunition. A creature that takes Piercing or Slashing damage from the poisoned weapon or ammunition takes an extra 1d4Poison damage. Once applied, the poison retains potency for 1 minute or until its damage is dealt, whichever comes first."
 },
 {
 "id": "pole",
@@ -1262,7 +1315,8 @@
 "cost": "5 CP",
 "weight": "7 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Pole is 10 feet long. You can use it to touch something up to 10 feet away. If you must make a Strength (Athletics) check as part of a High or Long Jump, you can use the Pole to vault, giving yourself Advantage on the check."
 },
 {
 "id": "iron-pot",
@@ -1270,7 +1324,8 @@
 "cost": "2 GP",
 "weight": "10 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "An Iron Pot holds up to 1 gallon."
 },
 {
 "id": "potion-of-healing",
@@ -1278,7 +1333,8 @@
 "cost": "50 GP",
 "weight": "1/2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "This potion is a magic item. As a Bonus Action, you can drink it or administer it to another creature within 5 feet of yourself. The creature that drinks the magical red fluid in this vial regains 2d4 + 2 Hit Points."
 },
 {
 "id": "pouch",
@@ -1286,7 +1342,8 @@
 "cost": "5 SP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Pouch holds up to 6 pounds within one-fifth of a cubic foot."
 },
 {
 "id": "quiver",
@@ -1294,7 +1351,8 @@
 "cost": "1 GP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Quiver holds up to 20 Arrows."
 },
 {
 "id": "portable-ram",
@@ -1302,7 +1360,8 @@
 "cost": "4 GP",
 "weight": "35 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "You can use a Portable Ram to break down doors. When doing so, you gain a +4 bonus to the Strength check. One other character can help you use the ram, giving you Advantage on this check."
 },
 {
 "id": "rations",
@@ -1310,7 +1369,8 @@
 "cost": "5 SP",
 "weight": "2 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Rations consist of travel-ready food, including jerky, dried fruit, hardtack, and nuts. See \"Malnutrition\" in the rules glossary for the risks of not eating."
 },
 {
 "id": "robe",
@@ -1318,7 +1378,8 @@
 "cost": "1 GP",
 "weight": "4 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Robe has vocational or ceremonial significance. Some events and locations admit only people wearing a Robe bearing certain colors or symbols. 228 CHAPTER 6 j EQUIPMENT"
 },
 {
 "id": "rope",
@@ -1326,7 +1387,8 @@
 "cost": "1 GP",
 "weight": "5 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "As a Utilize action, you can tie a knot with Rope if you succeed on a DC 10 Dexterity (Sleight of Hand) check. The Rope can be burst with a successful DC 20 Strength (Athletics) check. You can bind an unwilling creature with the Rope only if the creature has the Grappled, Incapacitated, or Restrained condition. If the creature's legs are bound, the creature has the Restrained condition until it escapes. Escaping the Rope requires the creature to make a successful DC 15 Dexterity (Acrobatics) check as an action."
 },
 {
 "id": "sack",
@@ -1334,7 +1396,8 @@
 "cost": "1 CP",
 "weight": "1/2 lb.",
 "kind": "gear",
-"isContainer": true
+"isContainer": true,
+"description": "A Sack holds up to 30 pounds within 1 cubic foot."
 },
 {
 "id": "shovel",
@@ -1342,7 +1405,8 @@
 "cost": "2 GP",
 "weight": "5 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Working for 1 hour, you can use a Shovel to dig a hole that is 5 feet on each side in soil or similar material."
 },
 {
 "id": "signal-whistle",
@@ -1350,7 +1414,8 @@
 "cost": "5 CP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "When blown as a Utilize action, a Signal Whistle produces a sound that can be heard up to 600 feet away."
 },
 {
 "id": "iron-spikes",
@@ -1366,7 +1431,8 @@
 "cost": "1,000 GP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "Objects viewed through a Spyglass are magnified to twice their size."
 },
 {
 "id": "string",
@@ -1374,7 +1440,8 @@
 "cost": "1 SP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "String is 10 feet long. You can tie a knot in it as a Utilize action. v"
 },
 {
 "id": "tent",
@@ -1382,7 +1449,8 @@
 "cost": "2 GP",
 "weight": "20 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Tent sleeps up to two Small or Medium creatures."
 },
 {
 "id": "tinderbox",
@@ -1390,7 +1458,8 @@
 "cost": "5 SP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Tinderbox is a small container holding flint, fire steel, and tinder (usually dry cloth soaked in light oil) used to kindle a fire. Using it to light a Candle, Lamp, Lantern, or Torch-or anything else with exposed fuel-takes a Bonus Action. Lighting any other fire takes 1 minute."
 },
 {
 "id": "torch",
@@ -1398,7 +1467,8 @@
 "cost": "1 CP",
 "weight": "1 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Torch burns for 1 hour, casting Bright Light in a 20-foot radius and Dim Light for an additional 20 feet. When you take the Attack action, you can attack with the Torch, using it as a Simple Melee weapon. On a hit, the target takes 1 Fire damage."
 },
 {
 "id": "vial",
@@ -1406,7 +1476,8 @@
 "cost": "1 GP",
 "weight": "—",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Vial holds up to 4 ounces."
 },
 {
 "id": "waterskin",
@@ -1414,7 +1485,8 @@
 "cost": "2 SP",
 "weight": "5 lb.",
 "kind": "gear",
-"isContainer": false
+"isContainer": false,
+"description": "A Waterskin holds up to 4 pints. If you don't drink sufficient water, you risk dehydration (see the rules glossary)."
 },
 {
 "id": "arcane-focus",
@@ -1435,7 +1507,8 @@
 "name": "Holy Symbol",
 "cost": "5 GP",
 "weight": "1 lb.",
-"kind": "focus"
+"kind": "focus",
+"description": "A Holy Symbol takes one of the forms in the Holy Symbol table and is bejeweled ~r painted to channel divine magic. A Cleric or Paladm can use a Holy Symbol as a Spellcasting Focus. The table indicates whether a Holy Symbol needs to be held, worn, or borne on fabric (such as a tabard or banner) or a Shield."
 },
 {
 "id": "spellbook",
@@ -1495,7 +1568,8 @@
 "catalogId": "waterskin",
 "quantity": 1
 }
-]
+],
+"description": "A Burglar's Pack contains the following items: Backpack, Ball Bearings, Bell, 10 Candles, Crowbar, Hooded Lantern, 7 flasks of Oil, 5 days of Rations, Rope, Tinderbox, and Waterskin."
 },
 {
 "id": "diplomats-pack",
@@ -1548,7 +1622,8 @@
 "catalogId": "tinderbox",
 "quantity": 1
 }
-]
+],
+"description": "A Diplomat's Pack contains the following items: Chest, Fine Clothes, Ink, 5 Ink Pens, Lamp, 2 Map or Scroll Cases, 4 flasks of Oil, 5 sheets of Paper, 5 sheets of Parchment, Perfume, and Tinderbox. DRUIDIC Focus (VARIES) ': _Druidic Focus takes one of the forms in the Druidi~ Focuses table and is carved, tied with ribbon, or painted to channel primal magic. A Druid or Ranger can use such an object as a Spellcasting Focus."
 },
 {
 "id": "dungeoneers-pack",
@@ -1593,7 +1668,8 @@
 "catalogId": "waterskin",
 "quantity": 1
 }
-]
+],
+"description": "A Dungeoneer's Pack contains the following items: Backpack, Caltrops, Crowbar, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin."
 },
 {
 "id": "entertainers-pack",
@@ -1642,7 +1718,8 @@
 "catalogId": "waterskin",
 "quantity": 1
 }
-]
+],
+"description": "-- An Entertainer's Pack contains the following items: Backpack, Bedroll, Bell, Bullseye Lantern, 3 Costumes, Mirror, 8 flasks of Oil, 9 days of Rations, Tinderbox, and Waterskin."
 },
 {
 "id": "explorers-pack",
@@ -1683,7 +1760,8 @@
 "catalogId": "waterskin",
 "quantity": 1
 }
-]
+],
+"description": "An Explorer's Pack contains the following items: Backpack, Bedroll, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin."
 },
 {
 "id": "priests-pack",
@@ -1720,7 +1798,8 @@
 "catalogId": "tinderbox",
 "quantity": 1
 }
-]
+],
+"description": "A Priest's Pack contains the following items: Backpack, Blanket, Holy Water, Lamp, 7 days of Rations, Robe, and Tinderbox."
 },
 {
 "id": "scholars-pack",
@@ -1761,7 +1840,8 @@
 "catalogId": "tinderbox",
 "quantity": 1
 }
-]
+],
+"description": "A Scholar's Pack contains the following items: Backpack, Book, Ink, Ink Pen, Lamp, 10 flasks of Oil, 10 sheets of Parchment, and Tinderbox."
 },
 {
 "id": "gaming-set",
@@ -1770,7 +1850,8 @@
 "weight": "—",
 "kind": "tool",
 "toolCategory": "gaming",
-"alias": "dice-set"
+"alias": "dice-set",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "alchemists-supplies",
@@ -1778,7 +1859,8 @@
 "cost": "50 GP",
 "weight": "8 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Intelligence Weight: 8 lb. Utilize: Identify a substance (DC 15), or start a fire (DC 15) Craft: Acid, Alchemist's Fire, Component Pouch, Oil, Paper, Perfume"
 },
 {
 "id": "brewers-supplies",
@@ -1786,7 +1868,8 @@
 "cost": "20 GP",
 "weight": "9 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Intelligence Weight: 9 lb. Utilize: Detect poisoned drink (DC 15), or identify alcohol (DC 10) Craft: Antitoxin"
 },
 {
 "id": "calligraphers-supplies",
@@ -1794,7 +1877,8 @@
 "cost": "10 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Dexterity Weight: 5 lb. Utilize: Write text with impressive flourishes that guard against forgery (DC 15) Craft: Ink, Spell Scroll 2~0"
 },
 {
 "id": "carpenters-tools",
@@ -1802,7 +1886,8 @@
 "cost": "8 GP",
 "weight": "6 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Strength Weight: 6 lb. Utilize: Seal or pry open a door or container (DC 20) Craft: Club, Greatclub, Quarterstaff, Barrel, Chest, Ladder, Pole, Portable Ram, Torch"
 },
 {
 "id": "cartographers-tools",
@@ -1810,7 +1895,8 @@
 "cost": "15 GP",
 "weight": "6 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Wisdom Weight: 6 lb. Utilize: Draft a map of a small area (DC 15) Craft: Map"
 },
 {
 "id": "cobblers-tools",
@@ -1818,7 +1904,8 @@
 "cost": "5 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Dexterity Weight: 5 lb. Utilize: Modify footwear to give Advantage on the wearer's next Dexterity (Acrobatics) check (DC 10) Craft: Climber's Kit"
 },
 {
 "id": "cooks-utensils",
@@ -1826,7 +1913,8 @@
 "cost": "1 GP",
 "weight": "8 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Wisdom Weight: 8 lb. Utilize: Improve food 's flavor (DC 10), or detect spoiled or poisoned food (DC 15) Craft: Rations ~ - G LASSB LOWER' sTOOLS (30 GP) Ability: Intelligence Weight: 5 lb. Utilize: Discern what a glass object held in the past 24 hours (DC 15) Craft: Glass Bottle, Magnifying Glass, Spyglass, Vial"
 },
 {
 "id": "glassblowers-tools",
@@ -1842,7 +1930,8 @@
 "cost": "25 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Intelligence Weight: 2 lb. Utilize: Discern a gem's value (DC 15) Craft: Arcane Focus, Holy Symbol -_,,,,,.::-=-- LEATHERWO RKER's Too u; (5 GP) Ability: Dexterity Weight: 5 lb. Utilize: Add a design to a leather item (DC 10) Craft: Sling, Whip, Hide Armor, Leather Armor, Studded Leather Armor, Backpack, Cross bow Bolt Case, Map or Scroll Case, Parchment, Pouch, Quiver, Waterskin C:• MASON ' S T:.> O L S (10 G P~ 'l't y: Strength Weight: Ab11. 8 lb. •1 ch sel a symbol or hole in stone (DC 10) 1 Ut11ze: Craft: Block and Tackle"
 },
 {
 "id": "leatherworkers-tools",
@@ -1866,7 +1955,8 @@
 "cost": "10 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Wisdom. W~1ght: 5 lb.. Utilize: Paint a recognizable image of something you've seen (DC 10) Craft: Druidic Focus, Holy Symbol"
 },
 {
 "id": "potters-tools",
@@ -1874,7 +1964,8 @@
 "cost": "10 GP",
 "weight": "3 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Intelligence We~ght: _3 lb.. Utilize: Discern what a ceramic obJect held in the past 24 hours (DC 15) Craft: Jug, Lamp"
 },
 {
 "id": "smiths-tools",
@@ -1882,7 +1973,8 @@
 "cost": "20 GP",
 "weight": "8 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Strength Weight: 8 lb. Utilize: Pry open a door or container (DC 20) Craft: Any Melee weapon (except Club, Greatclub, Quarterstaff, and Whip), Medium armor (except Hide), Heavy armor, Ball Bearings, Bucket, Caltrops, Chain, Crowbar, Firearm Bullets, Grappling Hook, Iron Pot, Iron Spikes, Sling Bullets -.. ~."
 },
 {
 "id": "tinkers-tools",
@@ -1890,7 +1982,8 @@
 "cost": "50 GP",
 "weight": "10 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Dexterity Weight: 10 lb. Utilize: Assemble a Tiny item composed of scrap, which falls apart in 1 minute (DC 20) Craft: Musket, Pistol, Bell, Bullseye Lantern, Flask, Hooded Lantern, Hunting Trap, Lock, Manacles, Mirror, Shovel, Signal Whistle, Tinderbox"
 },
 {
 "id": "weavers-tools",
@@ -1898,7 +1991,8 @@
 "cost": "1 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Dexterity Weight: 5 lb. Utilize: Mend a tear in clothing (DC 10), or sew a Tiny design (DC 10) Craft: Padded Armor, Basket, Bedroll, Blanket, Fine Clothes, Net, Robe, Rope, Sack, String, Tent, Traveler's Clothes WooocARVER's TooLs (1 GP) Ability: Dexterity Weight: 5 lb. Utilize: Carve a pattern in wood (DC 10) Craft: Club, Greatclub, Quarterstaff, Ranged weapons (except Pistol, Musket, and Sling), Arcane Focus, Arrows, Bolts, Dr•.1idic Focus, Ink Pen, Needles"
 },
 {
 "id": "woodcarvers-tools",
@@ -1914,7 +2008,8 @@
 "cost": "25 GP",
 "weight": "3 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Charisma Weight: 3 lb. Utilize: Apply makeup (DC 10) Craft: Costume"
 },
 {
 "id": "forgery-kit",
@@ -1922,7 +2017,8 @@
 "cost": "15 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Dexterity Weight: 5 lb. Utilize: Mimic 10 or fewer words of someone else's handwriting (DC 15), or duplicate a wax seal (DC 20)"
 },
 {
 "id": "herbalism-kit",
@@ -1930,7 +2026,8 @@
 "cost": "5 GP",
 "weight": "3 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Intelligence Weight: 3 lb. Utilize: Identify a plant (DC 10) Craft: Antitoxin, Candle, Healer's Kit, Potion of Healing"
 },
 {
 "id": "navigators-tools",
@@ -1938,7 +2035,8 @@
 "cost": "25 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Wisdom Weight: 2 lb. Utilize: Plot a course (DC 10), or determine position by stargazing (DC 15)"
 },
 {
 "id": "poisoners-kit",
@@ -1946,7 +2044,8 @@
 "cost": "50 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Intelligence Weight: 2 lb. Utilize: Detect a poisoned object (DC 10) Craft: Basic Poison"
 },
 {
 "id": "thieves-tools",
@@ -1954,7 +2053,8 @@
 "cost": "25 GP",
 "weight": "1 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Dexterity Weight: 1 lb. Utilize: Pick a lock (DC 15), or disarm a trap (DC 15)"
 },
 {
 "id": "dice-set",
@@ -1962,7 +2062,8 @@
 "cost": "1 SP",
 "weight": "—",
 "kind": "tool",
-"toolCategory": "gaming"
+"toolCategory": "gaming",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "dragonchess-set",
@@ -1970,7 +2071,8 @@
 "cost": "1 GP",
 "weight": "1/2 lb.",
 "kind": "tool",
-"toolCategory": "gaming"
+"toolCategory": "gaming",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "playing-cards",
@@ -1978,7 +2080,8 @@
 "cost": "5 SP",
 "weight": "—",
 "kind": "tool",
-"toolCategory": "gaming"
+"toolCategory": "gaming",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "three-dragon-ante-set",
@@ -1986,7 +2089,8 @@
 "cost": "1 GP",
 "weight": "—",
 "kind": "tool",
-"toolCategory": "gaming"
+"toolCategory": "gaming",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "bagpipes",
@@ -1994,7 +2098,8 @@
 "cost": "30 GP",
 "weight": "6 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "drum",
@@ -2002,7 +2107,8 @@
 "cost": "6 GP",
 "weight": "3 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "dulcimer",
@@ -2010,7 +2116,8 @@
 "cost": "25 GP",
 "weight": "10 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "flute",
@@ -2018,7 +2125,8 @@
 "cost": "2 GP",
 "weight": "1 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "horn",
@@ -2026,7 +2134,8 @@
 "cost": "3 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "lute",
@@ -2034,7 +2143,8 @@
 "cost": "35 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "lyre",
@@ -2042,7 +2152,8 @@
 "cost": "30 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "pan-flute",
@@ -2050,7 +2161,8 @@
 "cost": "12 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "shawm",
@@ -2058,7 +2170,8 @@
 "cost": "2 GP",
 "weight": "1 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "viol",
@@ -2066,7 +2179,8 @@
 "cost": "30 GP",
 "weight": "1 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 }
 ],
 "tools": [
@@ -2076,7 +2190,8 @@
 "cost": "50 GP",
 "weight": "8 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Intelligence Weight: 8 lb. Utilize: Identify a substance (DC 15), or start a fire (DC 15) Craft: Acid, Alchemist's Fire, Component Pouch, Oil, Paper, Perfume"
 },
 {
 "id": "brewers-supplies",
@@ -2084,7 +2199,8 @@
 "cost": "20 GP",
 "weight": "9 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Intelligence Weight: 9 lb. Utilize: Detect poisoned drink (DC 15), or identify alcohol (DC 10) Craft: Antitoxin"
 },
 {
 "id": "calligraphers-supplies",
@@ -2092,7 +2208,8 @@
 "cost": "10 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Dexterity Weight: 5 lb. Utilize: Write text with impressive flourishes that guard against forgery (DC 15) Craft: Ink, Spell Scroll 2~0"
 },
 {
 "id": "carpenters-tools",
@@ -2100,7 +2217,8 @@
 "cost": "8 GP",
 "weight": "6 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Strength Weight: 6 lb. Utilize: Seal or pry open a door or container (DC 20) Craft: Club, Greatclub, Quarterstaff, Barrel, Chest, Ladder, Pole, Portable Ram, Torch"
 },
 {
 "id": "cartographers-tools",
@@ -2108,7 +2226,8 @@
 "cost": "15 GP",
 "weight": "6 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Wisdom Weight: 6 lb. Utilize: Draft a map of a small area (DC 15) Craft: Map"
 },
 {
 "id": "cobblers-tools",
@@ -2116,7 +2235,8 @@
 "cost": "5 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Dexterity Weight: 5 lb. Utilize: Modify footwear to give Advantage on the wearer's next Dexterity (Acrobatics) check (DC 10) Craft: Climber's Kit"
 },
 {
 "id": "cooks-utensils",
@@ -2124,7 +2244,8 @@
 "cost": "1 GP",
 "weight": "8 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Wisdom Weight: 8 lb. Utilize: Improve food 's flavor (DC 10), or detect spoiled or poisoned food (DC 15) Craft: Rations ~ - G LASSB LOWER' sTOOLS (30 GP) Ability: Intelligence Weight: 5 lb. Utilize: Discern what a glass object held in the past 24 hours (DC 15) Craft: Glass Bottle, Magnifying Glass, Spyglass, Vial"
 },
 {
 "id": "glassblowers-tools",
@@ -2140,7 +2261,8 @@
 "cost": "25 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Intelligence Weight: 2 lb. Utilize: Discern a gem's value (DC 15) Craft: Arcane Focus, Holy Symbol -_,,,,,.::-=-- LEATHERWO RKER's Too u; (5 GP) Ability: Dexterity Weight: 5 lb. Utilize: Add a design to a leather item (DC 10) Craft: Sling, Whip, Hide Armor, Leather Armor, Studded Leather Armor, Backpack, Cross bow Bolt Case, Map or Scroll Case, Parchment, Pouch, Quiver, Waterskin C:• MASON ' S T:.> O L S (10 G P~ 'l't y: Strength Weight: Ab11. 8 lb. •1 ch sel a symbol or hole in stone (DC 10) 1 Ut11ze: Craft: Block and Tackle"
 },
 {
 "id": "leatherworkers-tools",
@@ -2164,7 +2286,8 @@
 "cost": "10 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Wisdom. W~1ght: 5 lb.. Utilize: Paint a recognizable image of something you've seen (DC 10) Craft: Druidic Focus, Holy Symbol"
 },
 {
 "id": "potters-tools",
@@ -2172,7 +2295,8 @@
 "cost": "10 GP",
 "weight": "3 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Intelligence We~ght: _3 lb.. Utilize: Discern what a ceramic obJect held in the past 24 hours (DC 15) Craft: Jug, Lamp"
 },
 {
 "id": "smiths-tools",
@@ -2180,7 +2304,8 @@
 "cost": "20 GP",
 "weight": "8 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Strength Weight: 8 lb. Utilize: Pry open a door or container (DC 20) Craft: Any Melee weapon (except Club, Greatclub, Quarterstaff, and Whip), Medium armor (except Hide), Heavy armor, Ball Bearings, Bucket, Caltrops, Chain, Crowbar, Firearm Bullets, Grappling Hook, Iron Pot, Iron Spikes, Sling Bullets -.. ~."
 },
 {
 "id": "tinkers-tools",
@@ -2188,7 +2313,8 @@
 "cost": "50 GP",
 "weight": "10 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Dexterity Weight: 10 lb. Utilize: Assemble a Tiny item composed of scrap, which falls apart in 1 minute (DC 20) Craft: Musket, Pistol, Bell, Bullseye Lantern, Flask, Hooded Lantern, Hunting Trap, Lock, Manacles, Mirror, Shovel, Signal Whistle, Tinderbox"
 },
 {
 "id": "weavers-tools",
@@ -2196,7 +2322,8 @@
 "cost": "1 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "artisan"
+"toolCategory": "artisan",
+"description": "Ability: Dexterity Weight: 5 lb. Utilize: Mend a tear in clothing (DC 10), or sew a Tiny design (DC 10) Craft: Padded Armor, Basket, Bedroll, Blanket, Fine Clothes, Net, Robe, Rope, Sack, String, Tent, Traveler's Clothes WooocARVER's TooLs (1 GP) Ability: Dexterity Weight: 5 lb. Utilize: Carve a pattern in wood (DC 10) Craft: Club, Greatclub, Quarterstaff, Ranged weapons (except Pistol, Musket, and Sling), Arcane Focus, Arrows, Bolts, Dr•.1idic Focus, Ink Pen, Needles"
 },
 {
 "id": "woodcarvers-tools",
@@ -2212,7 +2339,8 @@
 "cost": "25 GP",
 "weight": "3 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Charisma Weight: 3 lb. Utilize: Apply makeup (DC 10) Craft: Costume"
 },
 {
 "id": "forgery-kit",
@@ -2220,7 +2348,8 @@
 "cost": "15 GP",
 "weight": "5 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Dexterity Weight: 5 lb. Utilize: Mimic 10 or fewer words of someone else's handwriting (DC 15), or duplicate a wax seal (DC 20)"
 },
 {
 "id": "herbalism-kit",
@@ -2228,7 +2357,8 @@
 "cost": "5 GP",
 "weight": "3 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Intelligence Weight: 3 lb. Utilize: Identify a plant (DC 10) Craft: Antitoxin, Candle, Healer's Kit, Potion of Healing"
 },
 {
 "id": "navigators-tools",
@@ -2236,7 +2366,8 @@
 "cost": "25 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Wisdom Weight: 2 lb. Utilize: Plot a course (DC 10), or determine position by stargazing (DC 15)"
 },
 {
 "id": "poisoners-kit",
@@ -2244,7 +2375,8 @@
 "cost": "50 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Intelligence Weight: 2 lb. Utilize: Detect a poisoned object (DC 10) Craft: Basic Poison"
 },
 {
 "id": "thieves-tools",
@@ -2252,7 +2384,8 @@
 "cost": "25 GP",
 "weight": "1 lb.",
 "kind": "tool",
-"toolCategory": "other"
+"toolCategory": "other",
+"description": "Ability: Dexterity Weight: 1 lb. Utilize: Pick a lock (DC 15), or disarm a trap (DC 15)"
 },
 {
 "id": "dice-set",
@@ -2260,7 +2393,8 @@
 "cost": "1 SP",
 "weight": "—",
 "kind": "tool",
-"toolCategory": "gaming"
+"toolCategory": "gaming",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "dragonchess-set",
@@ -2268,7 +2402,8 @@
 "cost": "1 GP",
 "weight": "1/2 lb.",
 "kind": "tool",
-"toolCategory": "gaming"
+"toolCategory": "gaming",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "playing-cards",
@@ -2276,7 +2411,8 @@
 "cost": "5 SP",
 "weight": "—",
 "kind": "tool",
-"toolCategory": "gaming"
+"toolCategory": "gaming",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "three-dragon-ante-set",
@@ -2284,7 +2420,8 @@
 "cost": "1 GP",
 "weight": "—",
 "kind": "tool",
-"toolCategory": "gaming"
+"toolCategory": "gaming",
+"description": "Ability: Wisdom Weight: Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20) Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)"
 },
 {
 "id": "bagpipes",
@@ -2292,7 +2429,8 @@
 "cost": "30 GP",
 "weight": "6 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "drum",
@@ -2300,7 +2438,8 @@
 "cost": "6 GP",
 "weight": "3 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "dulcimer",
@@ -2308,7 +2447,8 @@
 "cost": "25 GP",
 "weight": "10 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "flute",
@@ -2316,7 +2456,8 @@
 "cost": "2 GP",
 "weight": "1 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "horn",
@@ -2324,7 +2465,8 @@
 "cost": "3 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "lute",
@@ -2332,7 +2474,8 @@
 "cost": "35 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "lyre",
@@ -2340,7 +2483,8 @@
 "cost": "30 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "pan-flute",
@@ -2348,7 +2492,8 @@
 "cost": "12 GP",
 "weight": "2 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "shawm",
@@ -2356,7 +2501,8 @@
 "cost": "2 GP",
 "weight": "1 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 },
 {
 "id": "viol",
@@ -2364,7 +2510,30 @@
 "cost": "30 GP",
 "weight": "1 lb.",
 "kind": "tool",
-"toolCategory": "instrument"
+"toolCategory": "instrument",
+"description": "Ability: Charisma Weight: Varies Utilize: Play a known tune (DC 10), or improvise a song (DC 15) Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 216.), lute (35 GP, 216.), lyre (30 GP, 216.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)"
 }
-]
+],
+"properties": {
+"Ammunition": "You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.",
+"Finesse": "When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls.",
+"Heavy": "You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and your Dexterity score isn't at least 13.",
+"Light": "When you take the Attack action on your turn and attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative.",
+"Loading": "You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.",
+"Range": "A Range weapon has a range in parentheses after the Ammunition or Thrown property. The range lists two numbers. The first is the weapon's normal range in feet, and the second is the weapon's long range. When attacking a target beyond normal range, you have Disadvantage on the attack roll. You can't attack a target beyond the long range.",
+"Reach": "A Reach weapon adds 5 feet to your reach when you attack with it, as well as when determining your reach for Opportunity Attacks with it.",
+"Thrown": "If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon.",
+"Two-Handed": "A Two-Handed weapon requires two hands when you attack with it.",
+"Versatile": "A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
+},
+"masteries": {
+"Cleave": "If you hit a creature with a melee attack roll using this weapon, you can make a melee attack roll with the weapon against a second creature within 5 feet of the first that is also within your reach. On a hit, the second creature takes the weapon's damage, but don't add your ability modifier to that damage unless that modifier is negative. You can make this extra attack only once per turn.",
+"Graze": "If your attack roll with this weapon misses a creature, you can deal damage to that creature equal to the ability modifier you used to make the attack roll. This damage is the same type dealt by the weapon, and the damage can be increased only by increasing the ability modifier.",
+"Nick": "When you make the extra attack of the Light property, you can make it as part of the Attack action instead of as a Bonus Action. You can make this extra attack only once per turn.",
+"Push": "If you hit a creature with this weapon, you can push the creature up to 10 feet straight away from yourself if it is Large or smaller.",
+"Sap": "If you hit a creature with this weapon, that creature has Disadvantage on its next attack roll before the start of your next turn.",
+"Slow": "If you hit a creature with this weapon and deal damage to it, you can reduce its Speed by 10 feet until the start of your next turn. If the creature is hit more than once by weapons that have this property, the Speed reduction doesn't exceed 10 feet.",
+"Topple": "If you hit a creature with this weapon, you can force the creature to make a Constitution saving throw (DC 8 plus the ability modifier used to make the attack roll and your Proficiency Bonus). On a failed save, the creature has the Prone condition.",
+"Vex": "If you hit a creature with this weapon and deal damage to the creature, you have Advantage on your next attack roll against that creature before the end of your next turn."
+}
 }

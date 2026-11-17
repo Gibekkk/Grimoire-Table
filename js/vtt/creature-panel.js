@@ -7,12 +7,14 @@ import { db } from "../db.js";
 import { h, toast, escapeHtml, showContextMenu } from "../util.js";
 import { ABILITIES, abilityModifier, formatModifier, estimateArmorClass, rollDie } from "../rules-engine.js";
 import { computeRoll, formatBreakdown } from "../dice/roll-logic.js";
-import { openDialog, promptDialog } from "../dialogs.js";
+import { openDialog, promptDialog, confirmDialog } from "../dialogs.js";
+import { showItemPopover, findItem } from "../item-info.js";
 import {
   SIZES, CONDITIONS, CONDITION_TEXT, DAMAGE_TYPES, impliedConditions, withCondition, isIncapacitated,
   attackMode, saveRule, defenseNotes, adjustDamage, takeDamage, concentrationDc, footprintGap, distanceFt, ringOffset,
+  actionInfo, legendaryUses, parseSkills, revealed, DEFAULT_ALIAS, checkRule,
   STATUS_EFFECTS, effectDef, hasEffect, effectPatch, conditionImmunities, effectAc, effectiveSpeed, effectiveSquares, initiativeRule, rollExtraDice, confusionResult, characterSpeed,
-  monsterSaveBonus, attackDamageParts, rollFormula, generateLoot, rollHoard, rollMagicItem, rollIndividualCoins, sizeIdForSquares, innateResistances
+  monsterSaveBonus, attackDamageParts, rollFormula, generateLoot, rollMagicItem, INDIVIDUAL_TREASURE, TREASURE_HOARD, treasureTier, sizeIdForSquares, innateResistances
 } from "./creatures.js";
 
 const CHAR_FIELDS = { resist: "damageResistances", immune: "damageImmunities", vulnerable: "damageVulnerabilities", condImmune: "conditionImmunities", effects: "statusEffects" };
@@ -56,6 +58,54 @@ export function createCreatureTools(ctx) {
 
   // Players the DM handed this creature to (summons, companions, a borrowed mount)
   const controls = (token) => (token.controllers || []).includes(ctx.user.uid);
+
+  // ---------------- Names and what players see ----------------
+  // The DM can keep a creature's name (showing an alias instead), its picture, or its
+  // details (health, conditions, creature type) back from the players. This only governs
+  // what the app shows; it isn't hidden from someone reading the database directly.
+  const realName = (t) => stateOf(t)?.name || t.name || "";
+  const seesAll = (t) => ctx.isDm || controls(t) || t.kind === "pc";
+  // The name as everyone at the table knows it (used for the shared log and initiative)
+  const publicName = (t) => revealed(t, "name") ? realName(t) : (t.alias || DEFAULT_ALIAS);
+  // The name as this viewer should see it
+  const displayName = (t) => seesAll(t) ? realName(t) : publicName(t);
+
+  // Rename, alias and reveal settings in one dialog (DM)
+  async function editIdentity(token) {
+    token = tokenById(token.id) || token;
+    const r = await openDialog({
+      title: "Name and what players see",
+      okLabel: "Save",
+      fields: [
+        { name: "name", label: "Name", value: realName(token) },
+        { name: "alias", label: "Players see this name while the real one is hidden", value: token.alias || "", placeholder: DEFAULT_ALIAS },
+        { name: "reveal", label: "Show players", type: "checks", value: ["name", "picture", "details"].filter(k => revealed(token, k)),
+          options: [["name", "Its real name"], ["picture", "Its picture"], ["details", "Its type, health, conditions and effects"]] }
+      ]
+    });
+    if (!r) return;
+    const name = r.name.trim() || realName(token);
+    const reveal = { name: r.reveal.includes("name"), picture: r.reveal.includes("picture"), details: r.reveal.includes("details") };
+    const writes = [db.tokens.update(ctx.campaignId, ctx.mapId(), token.id, { name, alias: r.alias.trim() || null, reveal })];
+    // An NPC's name lives on its sheet; its other tokens on this map follow
+    if (token.kind === "npc" && name !== realName(token)) {
+      writes.push(db.characters.update(token.refId, { name }));
+      ctx.tokens().filter(t => t.kind === "npc" && t.refId === token.refId && t.id !== token.id).forEach(t => writes.push(db.tokens.update(ctx.campaignId, ctx.mapId(), t.id, { name })));
+    }
+    await Promise.all(writes);
+    syncCombatName({ ...token, name, alias: r.alias.trim() || null, reveal }, name);
+    toast(reveal.name ? `${name}: players see the real name` : `${name}: players see "${r.alias.trim() || DEFAULT_ALIAS}"`);
+  }
+
+  // Keeps the initiative order's names in step: players see the public name, the DM the real one
+  function syncCombatName(token, real) {
+    const combat = ctx.combat();
+    if (!combat?.active) return;
+    const id = token.kind === "monster" ? token.id : token.refId;
+    const shown = revealed(token, "name") ? real : (token.alias || DEFAULT_ALIAS);
+    if (!combat.combatants?.some(c => c.id === id)) return;
+    db.combat.set(ctx.campaignId, { combatants: combat.combatants.map(c => c.id === id ? { ...c, name: shown, dmName: real } : c) });
+  }
 
   // NPC state lives on the NPC's character doc, which only the DM may write, so a
   // player controlling an NPC moves it but can't edit it
@@ -108,7 +158,7 @@ export function createCreatureTools(ctx) {
     const off = ringOffset(footprint(grappler), footprint(target), target.x - grappler.x, target.y - grappler.y);
     const place = { x: grappler.x + off.dx, y: grappler.y + off.dy, grappledBy: grappler.id, grappleOffset: off };
     const conditions = withCondition(st.conditions, "Grappled", true);
-    toast(`${st.name} is Grappled by ${grappler.name} \u2014 it moves with ${grappler.name}, who can drag it around to any side`);
+    toast(`${st.name} is Grappled by ${displayName(grappler)} \u2014 it moves with them, and they can drag it around to any side`);
     if (target.kind === "monster") {
       const stats = { ...(target.stats || {}), conditions };
       target.stats = stats;
@@ -154,7 +204,7 @@ export function createCreatureTools(ctx) {
     if (!others.length) { toast("No other creature on this map to grapple with", "error"); return; }
     const items = [{ header: `Who grapples ${target.name}?` }];
     others.slice(0, 14).forEach(({ t, gap }) => items.push({
-      label: `${t.name} \u2022 ${distanceFt(target, t)} ft${gap > 0 ? " (pulled adjacent)" : ""}`,
+      label: `${displayName(t)} \u2022 ${distanceFt(target, t)} ft${gap > 0 ? " (pulled adjacent)" : ""}`,
       action: () => startGrapple(target, t)
     }));
     showContextMenu(x, y, items);
@@ -172,7 +222,7 @@ export function createCreatureTools(ctx) {
     };
     const others = ctx.tokens().filter(t => t.id !== token.id && isCreature(t)).map(t => ({ t, ft: distanceFt(token, t) })).sort((a, b) => a.ft - b.ft);
     const items = [{ header: SOURCE_CONDITIONS[name] }, { label: "No specific creature", action: () => apply(null) }];
-    others.slice(0, 14).forEach(({ t, ft }) => items.push({ label: `${t.name} \u2022 ${ft} ft`, action: () => apply(t.id) }));
+    others.slice(0, 14).forEach(({ t, ft }) => items.push({ label: `${displayName(t)} \u2022 ${ft} ft`, action: () => apply(t.id) }));
     showContextMenu(x, y, items);
   }
   const sourceOf = (token, name) => token.condSources?.[name] ? tokenById(token.condSources[name]) : null;
@@ -187,7 +237,7 @@ export function createCreatureTools(ctx) {
     const c = (p, t) => ({ x: p.x + (t.w || 1) / 2, y: p.y + (t.h || 1) / 2 });
     const s = c(src, src), from = c(token, token), to = c({ x, y }, token);
     if (Math.hypot(to.x - s.x, to.y - s.y) >= Math.hypot(from.x - s.x, from.y - s.y) - 0.01) return null;
-    const why = `${st.name} is Frightened of ${src.name} and can't willingly move closer`;
+    const why = `${st.name} is Frightened of ${displayName(src)} and can't willingly move closer`;
     if (ctx.isDm) { toast(`${why} (allowed: you're the DM)`); return null; }
     return why;
   }
@@ -311,6 +361,17 @@ export function createCreatureTools(ctx) {
   async function startOfTurn(token) {
     const st = token && stateOf(token);
     if (!st || st.dead) return;
+    // Monsters: legendary actions come back, and spent Recharge abilities roll to return
+    if (token.kind === "monster") {
+      const s = token.stats || {};
+      if (s.legendaryUsed) await patchState(token, { legendaryUsed: 0 });
+      const monster = ctx.monsterOf(token);
+      for (const name of Object.keys(s.spent || {})) {
+        const a = [...(monster?.actions || []), ...(monster?.bonusActions || []), ...(monster?.reactions || [])].find(x => x.name === name);
+        const need = a ? actionInfo(a).recharge : null;
+        if (need) await rollRecharge(tokenById(token.id) || token, name, need);
+      }
+    }
     const ended = [];
     const work = { ...st, effects: st.effects.map(e => e.rounds ? { ...e, rounds: e.rounds - 1 } : e) };
     const patch = { effects: work.effects };
@@ -440,7 +501,7 @@ export function createCreatureTools(ctx) {
     const extra = rollExtraDice(dice);
     if (extra.note) label = `${label} (${extra.note})`;
     const result = computeRoll({ ...spec, modifier: (spec.modifier || 0) + extra.total });
-    const name = stateOf(token)?.name || token.name;
+    const name = publicName(token); // the log is shared
     if (ctx.isDm && (ui.privateRolls || token.hidden)) {
       toast(`\u{1F512} ${name} — ${label}: ${result.total} (${formatBreakdown(result)}${result.mode !== "normal" ? `, ${result.mode}` : ""})`);
       return result;
@@ -471,7 +532,7 @@ export function createCreatureTools(ctx) {
       if (have.has(id)) continue;
       have.add(id);
       const initMod = token.kind === "monster" ? st.init : null;
-      const c = { id, type: token.kind, name: st.name, portraitBase64: ctx.artOf(token) || null, ownerUid: st.ownerUid || null, initiative: null, initMod,
+      const c = { id, type: token.kind, name: publicName(token), dmName: st.name, portraitBase64: ctx.artOf(token) || null, ownerUid: st.ownerUid || null, initiative: null, initMod,
         actionUsed: false, bonusActionUsed: false, reactionUsed: false, movementUsed: false };
       if (token.kind === "monster") {
         const rule = initiativeRule(st.conditions, st.exhaustion, st.effects);
@@ -482,7 +543,7 @@ export function createCreatureTools(ctx) {
     if (!added.length) { toast("Already in the initiative order"); return; }
     if (combat?.active) await db.combat.set(ctx.campaignId, { combatants: [...existing, ...added] });
     else await db.combat.set(ctx.campaignId, { active: true, round: 1, currentTurnIndex: 0, combatants: added, pendingRollRequest: null, effectsTurn: null });
-    toast(`${added.length === 1 ? added[0].name : `${added.length} creatures`} added to initiative${combat?.active ? "" : " — combat started (see the Combat tab)"}`);
+    toast(`${added.length === 1 ? added[0].dmName || added[0].name : `${added.length} creatures`} added to initiative${combat?.active ? "" : " — combat started (Initiative button or Combat tab)"}`);
   }
 
   // ---------------- Loot ----------------
@@ -509,25 +570,43 @@ export function createCreatureTools(ctx) {
       maxCharges: /^\d+$/.test(item.charges || "") ? parseInt(item.charges, 10) : null, acBonus: item.acBonus || null, saveBonus: item.saveBonus || null, healDice: item.healDice || null } };
   }
 
-  async function rollHoardLoot(token) {
-    const monster = ctx.monsterOf(token);
-    const loot = { ...(token.loot || generateLoot(monster || {})) };
-    const hoard = rollHoard(token.stats?.cr);
-    const items = [...loot.items];
-    for (let i = 0; i < hoard.items; i++) {
-      const it = rollMagicItem(ctx.ruleset()?.magicItems || [], token.stats?.cr, loot.hoardThemes);
-      if (it) items.push({ ...magicLootEntry(it), source: "hoard" });
-    }
-    const coins = { ...loot.coins, gp: (loot.coins?.gp || 0) + hoard.gp };
-    await db.tokens.update(ctx.campaignId, ctx.mapId(), token.id, { loot: { ...loot, items, coins, hoardRolled: true } });
-    toast(`Hoard rolled: ${hoard.gp.toLocaleString()} GP and ${hoard.items} magic item${hoard.items === 1 ? "" : "s"}`);
+  // Loot edits always build on the newest copy of the token
+  const lootOf = (token) => ({ coins: {}, items: [], hoardThemes: [], ...((tokenById(token.id) || token).loot || {}) });
+  const saveLoot = (token, loot) => db.tokens.update(ctx.campaignId, ctx.mapId(), token.id, { loot });
+  const coinText = (c) => Object.entries(c).filter(([, v]) => v > 0).map(([k, v]) => `${v.toLocaleString()} ${k.toUpperCase()}`).join(", ") || "nothing";
+
+  async function addCoins(token, coins, what) {
+    const loot = lootOf(token);
+    const next = { ...loot.coins };
+    Object.entries(coins).forEach(([k, v]) => { next[k] = (next[k] || 0) + v; });
+    await saveLoot(token, { ...loot, coins: next });
+    toast(`${what}: ${coinText(coins)} added`);
   }
 
-  async function addRandomMagicItem(token) {
-    const loot = token.loot || { coins: {}, items: [], hoardThemes: [] };
-    const it = rollMagicItem(ctx.ruleset()?.magicItems || [], token.stats?.cr, loot.hoardThemes || []);
-    if (!it) return;
-    await db.tokens.update(ctx.campaignId, ctx.mapId(), token.id, { loot: { ...loot, items: [...loot.items, { ...magicLootEntry(it), source: "rolled" }] } });
+  async function addMagicItems(token, n) {
+    const loot = lootOf(token);
+    const cr = token.stats?.cr;
+    const picks = [];
+    for (let i = 0; i < n; i++) { const it = rollMagicItem(ctx.ruleset()?.magicItems || [], cr, loot.hoardThemes || []); if (it) picks.push({ ...magicLootEntry(it), source: "rolled" }); }
+    if (!picks.length) { toast("No magic items rolled (the table gave 0)"); return; }
+    await saveLoot(token, { ...loot, items: [...loot.items, ...picks] });
+    toast(`Rolled ${picks.map(p => `${p.name} (${p.rarity})`).join(", ")}`);
+  }
+
+  // Any item by name: a catalog magic item or piece of equipment, or something custom
+  async function addItemByName(token) {
+    const rs = ctx.ruleset() || {};
+    const names = [...(rs.magicItems || []).map(m => m.name), ...["weapons", "armor", "gear", "tools", "ammo"].flatMap(g => (rs.equipment?.[g] || []).map(e => e.name))];
+    const r = await openDialog({ title: "Add an item to the loot", okLabel: "Add", fields: [
+      { name: "name", label: "Item (start typing for the catalog, or write your own)", list: [...new Set(names)].sort() },
+      { name: "qty", label: "Quantity", type: "number", value: 1, min: 1 }
+    ] });
+    if (!r?.name?.trim()) return;
+    const loot = lootOf(token);
+    const found = findItem(rs, { name: r.name.trim() });
+    const qty = Math.max(1, parseInt(r.qty, 10) || 1);
+    const entry = found?.kind === "magic" ? { ...magicLootEntry(found.entry), quantity: qty } : { name: found?.entry?.name || r.name.trim(), quantity: qty, catalogId: found?.entry?.id || null };
+    await saveLoot(token, { ...loot, items: [...loot.items, { ...entry, source: "added" }] });
   }
 
   // ---------------- Panel ----------------
@@ -551,32 +630,46 @@ export function createCreatureTools(ctx) {
 
     // Header
     const head = h("div", { class: "cp-head" });
-    const art = ctx.artOf(token);
+    const shownName = displayName(token);
+    const art = seesAll(token) || revealed(token, "picture") ? ctx.artOf(token) : null;
     head.innerHTML = `
-      <div class="portrait-preview sm">${art ? `<img src="${art}">` : `<span>${escapeHtml((st.name || "?")[0].toUpperCase())}</span>`}</div>
+      <div class="portrait-preview sm">${art ? `<img src="${art}">` : `<span>${escapeHtml((shownName || "?")[0].toUpperCase())}</span>`}</div>
       <div class="cp-title">
-        <h4>${escapeHtml(st.name)}</h4>
+        <h4>${escapeHtml(shownName)}</h4>
         <div class="cp-badges">
           <span class="badge ${token.kind === "pc" ? "" : "rune"}">${token.kind === "pc" ? "PC" : token.kind === "npc" ? "NPC" : "Monster"}</span>
           ${token.hidden ? '<span class="badge">Hidden</span>' : ""}
           ${st.dead ? '<span class="badge dead">Dead</span>' : ""}
         </div>
       </div>`;
+    if (ctx.isDm && token.kind !== "pc") {
+      const ed = h("button", { class: "icon-btn", title: "Rename, alias, and what players see" }, "✎");
+      ed.addEventListener("click", () => editIdentity(token));
+      head.appendChild(ed);
+    }
     const close = h("button", { class: "icon-btn cp-close", title: "Close (Esc)" }, "✕");
     close.addEventListener("click", onClose);
     head.appendChild(close);
     el.appendChild(head);
 
-    if (monster) el.appendChild(h("div", { class: "cp-sub" }, escapeHtml(`${monster.size} ${monster.creatureType} • CR ${monster.cr} (${monster.xp} XP)`)));
+    // The DM sees what the players are shown
+    if (ctx.isDm && token.kind !== "pc" && ["name", "picture", "details"].some(k => !revealed(token, k))) {
+      const kept = [!revealed(token, "name") && `name (they see “${token.alias || DEFAULT_ALIAS}”)`, !revealed(token, "picture") && "picture", !revealed(token, "details") && "details"].filter(Boolean);
+      el.appendChild(h("div", { class: "cp-note" }, `\u{1F576} Kept from players: ${escapeHtml(kept.join(", "))}`));
+    }
+
+    const showDetails = seesAll(token) || revealed(token, "details");
+    if (monster && showDetails) el.appendChild(h("div", { class: "cp-sub" }, escapeHtml(`${monster.size} ${monster.creatureType}, ${monster.alignment} • CR ${monster.cr} (${monster.crNote ? monster.crNote.replace(/^XP\s*/, "") : `${monster.xp} XP`}) • PB +${monster.pb || 2}`)));
 
     // Public view for other players: no numbers, just how it looks
     if (!editable) {
+      if (!showDetails) { el.appendChild(h("p", { class: "meta" }, "You don't know anything more about it.")); return; }
       const pct = st.hp.max ? st.hp.current / st.hp.max : 1;
       const look = st.dead ? "Dead" : st.hp.current <= 0 ? "Down" : pct <= 0.5 ? "Bloodied" : pct < 1 ? "Wounded" : "Unhurt";
       el.appendChild(h("p", { class: "cp-look" }, look));
       el.appendChild(conditionChips(token, st, false));
       if (st.effects.length) el.appendChild(effectChips(token, st, false));
-      if (g) el.appendChild(h("p", { class: "meta" }, `Grappled by ${escapeHtml(g.name)}`));
+      if (g) el.appendChild(h("p", { class: "meta" }, `Grappled by ${escapeHtml(displayName(g))}`));
       return;
     }
 
@@ -639,14 +732,15 @@ export function createCreatureTools(ctx) {
     // Grapple status
     if (g) {
       const row = h("div", { class: "cp-note" });
-      row.innerHTML = `<b>Grappled by ${escapeHtml(g.name)}</b> — Speed 0; moves with ${escapeHtml(g.name)}. Disadvantage on attacks except against ${escapeHtml(g.name)}. Escape: action, Athletics or Acrobatics vs. the escape DC.${canMoveHeld(g) ? ` Drag this token to move it around ${escapeHtml(g.name)}.` : ""}`;
+      const gn = escapeHtml(displayName(g));
+      row.innerHTML = `<b>Grappled by ${gn}</b> — Speed 0; moves with ${gn}. Disadvantage on attacks except against ${gn}. Escape: action, Athletics or Acrobatics vs. the escape DC.${canMoveHeld(g) ? ` Drag this token to move it around ${gn}.` : ""}`;
       if (editable) { const b = h("button", { class: "btn sm ghost" }, "Escape / Release"); b.addEventListener("click", () => releaseGrapple(token)); row.appendChild(b); }
       el.appendChild(row);
     }
     if (held.length) {
       const row = h("div", { class: "cp-note" });
       const extra = held.some(t => !dragFree(token, t));
-      row.innerHTML = `<b>Grappling ${held.map(t => escapeHtml(t.name)).join(", ")}</b>${extra ? " — each foot moved costs 1 extra foot while dragging." : ""}`;
+      row.innerHTML = `<b>Grappling ${held.map(t => escapeHtml(displayName(t))).join(", ")}</b>${extra ? " — each foot moved costs 1 extra foot while dragging." : ""}`;
       if (ctx.isDm) held.forEach(t => { const b = h("button", { class: "btn sm ghost" }, `Release ${t.name}`); b.addEventListener("click", () => releaseGrapple(t)); row.appendChild(b); });
       el.appendChild(row);
     }
@@ -655,7 +749,7 @@ export function createCreatureTools(ctx) {
     el.appendChild(section("Conditions", conditionChips(token, st, true), conditionEditor(token, st), "cond"));
     Object.keys(SOURCE_CONDITIONS).forEach(name => {
       const src = st.conditions.includes(name) ? sourceOf(token, name) : null;
-      if (src) el.appendChild(h("div", { class: "cp-note" }, name === "Frightened" ? `<b>Frightened of ${escapeHtml(src.name)}</b> \u2014 it can't willingly move closer.` : `<b>Charmed by ${escapeHtml(src.name)}</b> \u2014 it can't attack ${escapeHtml(src.name)}, who has Advantage on social checks against it.`));
+      if (src) el.appendChild(h("div", { class: "cp-note" }, name === "Frightened" ? `<b>Frightened of ${escapeHtml(displayName(src))}</b> \u2014 it can't willingly move closer.` : `<b>Charmed by ${escapeHtml(displayName(src))}</b> \u2014 it can't attack them, and they have Advantage on social checks against it.`));
     });
     el.appendChild(section("Status effects", effectChips(token, st, true), effectEditor(token, st), "fx"));
     const notes = defenseNotes([...st.conditions, ...impliedConditions(st.conditions)], st.effects);
@@ -670,7 +764,7 @@ export function createCreatureTools(ctx) {
     el.appendChild(section("Defenses", defenseChips(st), defenseEditor(token, st), "def"));
 
     // Monster rolls
-    if (monster && (ctx.isDm || controls(token))) el.appendChild(monsterRolls(token, st, monster));
+    if (monster && (ctx.isDm || controls(token))) el.appendChild(monsterSheet(token, st, monster));
 
     if (ctx.isDm) {
       const priv = h("label", { class: "cp-private" });
@@ -847,66 +941,166 @@ export function createCreatureTools(ctx) {
     return box;
   }
 
-  function monsterRolls(token, st, monster) {
-    const wrap = h("div", { class: "cp-section" });
-    wrap.appendChild(h("div", { class: "cp-section-head" }, '<span class="lbl">Rolls</span>'));
-    // Saving throws with automatic fails / disadvantage
-    const saves = h("div", { class: "cp-saves" });
+  // One collapsible row: a toggle with the name, its roll buttons beside it, the full text below.
+  // Open/closed is remembered per creature, so live updates don't fold it back up.
+  function accordion(key, title, { tag = "", buttons = [], body = "", startOpen = false } = {}) {
+    const wrap = h("div", { class: "cp-entry" });
+    const head = h("div", { class: "cp-entry-head" });
+    const isOpen = () => ui.open[key] ?? startOpen;
+    const toggle = h("button", { class: "cp-entry-toggle", type: "button", "aria-expanded": String(isOpen()) }, `<span class="arrow">${isOpen() ? "▾" : "▸"}</span> <b>${escapeHtml(title)}</b>${tag ? ` <span class="cp-entry-tag">${tag}</span>` : ""}`);
+    const content = h("div", { class: "cp-entry-body" }, body);
+    content.hidden = !isOpen();
+    toggle.addEventListener("click", () => {
+      ui.open[key] = !isOpen();
+      content.hidden = !ui.open[key];
+      toggle.setAttribute("aria-expanded", String(ui.open[key]));
+      toggle.querySelector(".arrow").textContent = ui.open[key] ? "▾" : "▸";
+    });
+    head.appendChild(toggle);
+    if (buttons.length) { const btns = h("div", { class: "cp-entry-btns" }); buttons.forEach(b => btns.appendChild(b)); head.appendChild(btns); }
+    wrap.appendChild(head);
+    wrap.appendChild(content);
+    return wrap;
+  }
+
+  // Use pips for X/Day abilities and legendary actions (click the next pip to spend one,
+  // a spent pip to give it back)
+  function pips(total, used, onSet, title) {
+    const box = h("span", { class: "cp-pips", title });
+    for (let i = 0; i < total; i++) {
+      const p = h("button", { type: "button", class: `cp-pip ${i < used ? "used" : ""}`, "aria-label": `${title}: ${i < used ? "spent" : "available"}` });
+      p.addEventListener("click", (e) => { e.stopPropagation(); onSet(i < used ? i : i + 1); });
+      box.appendChild(p);
+    }
+    return box;
+  }
+
+  // The full monster sheet: abilities with save buttons, rollable skills, senses and the
+  // rest of the header, then every trait and action as an accordion with its rolls.
+  function monsterSheet(token, st, monster) {
+    const wrap = h("div", { class: "cp-section cp-sheet" });
+    const s = token.stats || {};
+    const sc = monster.abilityScores || {};
+    const g = grappledBy(token);
+    const key = (k) => `${token.id}:${k}`;
+
+    // Abilities and saving throws (automatic fails / Advantage from conditions and effects)
+    const abil = h("div", { class: "cp-abil-grid" });
     ABILITIES.forEach(a => {
       const bonus = monsterSaveBonus(monster, a);
       const rule = saveRule(a, st.conditions, st.exhaustion, st.effects);
-      const b = h("button", { class: `btn sm ${rule.autoFail ? "danger" : ""}`, title: rule.autoFail ? `Automatically fails (${rule.reason})` : rule.reason ? `${rule.mode} (${rule.reason})` : `${a.toUpperCase()} save` }, `${a.toUpperCase()} ${rule.autoFail ? "✖" : formatModifier(bonus + rule.penalty)}${rule.mode === "advantage" ? " ▲" : rule.mode === "disadvantage" ? " ▼" : ""}`);
+      const cell = h("div", { class: "cp-abil-cell" });
+      cell.innerHTML = `<span class="lbl">${a.toUpperCase()}</span><b>${sc[a] ?? 10}</b><small>${formatModifier(abilityModifier(sc[a] ?? 10))}</small>`;
+      const b = h("button", { class: `btn sm ${rule.autoFail ? "danger" : rule.mode === "advantage" ? "adv" : rule.mode === "disadvantage" ? "dis" : ""}`, title: rule.autoFail ? `Automatically fails (${rule.reason})` : `${a.toUpperCase()} saving throw${rule.reason ? ` — ${rule.mode} (${rule.reason})` : ""}` },
+        `Save ${rule.autoFail ? "✖" : formatModifier(bonus + rule.penalty)}`);
       b.addEventListener("click", () => {
         if (rule.autoFail) { toast(`${st.name} automatically fails the ${a.toUpperCase()} save (${rule.reason})`, "error"); return; }
         logRoll(token, `${a.toUpperCase()} save`, { sides: 20, count: 1, modifier: bonus + rule.penalty, mode: rule.mode }, rule.dice);
       });
-      saves.appendChild(b);
+      cell.appendChild(b);
+      abil.appendChild(cell);
     });
-    wrap.appendChild(saves);
-    // Attacks
-    const g = grappledBy(token);
-    const attacks = (monster.actions || []).filter(a => a.attackBonus != null);
-    if (isIncapacitated(st.conditions)) wrap.appendChild(h("div", { class: "cp-note bad" }, "Incapacitated — it can't take actions."));
-    attacks.forEach(a => {
-      const row = h("div", { class: "cp-attack" });
-      const am = attackMode(st.conditions, st.exhaustion, { effects: st.effects });
-      const parts = attackDamageParts(a);
-      row.appendChild(h("div", { class: "cp-attack-name", title: a.description || "" }, `<b>${escapeHtml(a.name)}</b><small>${escapeHtml(parts.map(p => `${p.formula} ${p.type}`).join(" + "))}</small>`));
-      const hit = h("button", { class: `btn sm ${am.mode === "disadvantage" ? "dis" : am.mode === "advantage" ? "adv" : "primary"}`, title: `${am.mode !== "normal" ? am.mode : "Normal"}${am.reasons.length ? ` (${am.reasons.join(", ")})` : ""}${g ? `\nGrappled: Disadvantage unless attacking ${g.name} (right-click)` : ""}\nRight-click for Advantage / Disadvantage` }, `${formatModifier(a.attackBonus + am.penalty)}${am.mode === "advantage" ? " ▲" : am.mode === "disadvantage" ? " ▼" : ""}`);
-      const doHit = (mode) => {
-        const r = logRoll(token, `${a.name} attack`, { sides: 20, count: 1, modifier: a.attackBonus + am.penalty, mode }, am.dice);
-        if (r.isCritHigh) toast(`Critical hit! Use Crit damage for ${a.name}.`);
-      };
-      hit.addEventListener("click", () => doHit(am.mode));
-      hit.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        const items = [{ label: "Normal", action: () => doHit("normal") }, { label: "Advantage", action: () => doHit("advantage") }, { label: "Disadvantage", action: () => doHit("disadvantage") }];
-        if (g) items.unshift({ label: `Against ${g.name} (grappler)`, action: () => doHit(attackMode(st.conditions, st.exhaustion, { vsGrappler: true, effects: st.effects }).mode) });
-        showContextMenu(e.clientX, e.clientY, items);
+    wrap.appendChild(abil);
+
+    // Skills: each one rolls a check
+    const skills = parseSkills(monster.skills);
+    if (skills.length) {
+      const row = h("div", { class: "cp-skills" });
+      row.appendChild(h("span", { class: "lbl" }, "Skills"));
+      skills.forEach(sk => {
+        const ability = (ctx.ruleset()?.skills || []).find(x => x.name.toLowerCase() === sk.name.toLowerCase())?.ability;
+        const rule = checkRule(ability, st.conditions, st.exhaustion, st.effects);
+        const b = h("button", { class: `btn sm ghost ${rule.mode === "advantage" ? "adv" : rule.mode === "disadvantage" ? "dis" : ""}`, title: rule.reason ? `${rule.mode} (${rule.reason})` : `Roll ${sk.name}` }, `${escapeHtml(sk.name)} ${formatModifier(sk.bonus + rule.penalty)}`);
+        b.addEventListener("click", () => logRoll(token, sk.name, { sides: 20, count: 1, modifier: sk.bonus + rule.penalty, mode: rule.mode }, rule.dice));
+        row.appendChild(b);
       });
-      const dmg = h("button", { class: "btn sm", title: "Roll damage" }, "Dmg");
-      dmg.addEventListener("click", () => rollDamage(token, a));
-      const crit = h("button", { class: "btn sm ghost", title: "Critical hit: double the damage dice" }, "Crit");
-      crit.addEventListener("click", () => rollDamage(token, a, true));
-      [hit, dmg, crit].forEach(b => row.appendChild(b));
       wrap.appendChild(row);
+    }
+
+    const facts = [["HP", `${monster.hpAverage} (${monster.hpFormula})`], ["Initiative", `${formatModifier(monster.initiative ?? 0)} (${10 + (monster.initiative ?? 0)})`], ["Senses", monster.senses], ["Languages", monster.languages || "—"], ["Gear", monster.gear]].filter(([, v]) => v);
+    wrap.appendChild(h("div", { class: "cp-facts" }, facts.map(([k, v]) => `<div><span class="lbl">${k}</span> ${escapeHtml(String(v))}</div>`).join("")));
+    if (isIncapacitated(st.conditions)) wrap.appendChild(h("div", { class: "cp-note bad" }, "Incapacitated — it can't take actions, Bonus Actions or Reactions."));
+
+    const am = attackMode(st.conditions, st.exhaustion, { effects: st.effects });
+    const uses = s.uses || {}, spent = s.spent || {};
+    // Buttons for one stat block entry
+    function entryButtons(a) {
+      const info = actionInfo(a);
+      const out = [];
+      if (info.hit != null) {
+        const hit = h("button", { class: `btn sm ${am.mode === "disadvantage" ? "dis" : am.mode === "advantage" ? "adv" : "primary"}`, title: `Attack roll${am.reasons.length ? ` — ${am.mode} (${am.reasons.join(", ")})` : ""}${g ? `\nGrappled: Disadvantage unless attacking ${displayName(g)} (right-click)` : ""}\nRight-click for Advantage / Disadvantage` },
+          `${formatModifier(info.hit + am.penalty)}${am.mode === "advantage" ? " ▲" : am.mode === "disadvantage" ? " ▼" : ""}`);
+        const doHit = (mode) => {
+          const r = logRoll(token, `${a.name} attack`, { sides: 20, count: 1, modifier: info.hit + am.penalty, mode }, am.dice);
+          if (r.isCritHigh) toast(`Critical hit! Use Crit for ${a.name}'s damage.`);
+        };
+        hit.addEventListener("click", () => doHit(am.mode));
+        hit.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          const items = [{ label: "Normal", action: () => doHit("normal") }, { label: "Advantage", action: () => doHit("advantage") }, { label: "Disadvantage", action: () => doHit("disadvantage") }];
+          if (g) items.unshift({ label: `Against ${displayName(g)} (grappler)`, action: () => doHit(attackMode(st.conditions, st.exhaustion, { vsGrappler: true, effects: st.effects }).mode) });
+          showContextMenu(e.clientX, e.clientY, items);
+        });
+        out.push(hit);
+      }
+      if (info.save) out.push(h("span", { class: "cp-dc", title: "Targets make this saving throw" }, `DC ${info.save.dc} ${info.save.ability.toUpperCase()}`));
+      if (info.recharge && spent[a.name]) {
+        // Used up: it comes back on a d6 roll at the start of its turn (or roll now)
+        const rr = h("button", { class: "btn sm ghost", title: `Recharges on a ${info.recharge}${info.recharge < 6 ? "–6" : ""} (rolled automatically at the start of its turn)` }, `Recharge ${info.recharge}${info.recharge < 6 ? "–6" : ""}`);
+        rr.addEventListener("click", () => rollRecharge(token, a.name, info.recharge));
+        out.push(rr);
+        return out;
+      }
+      if (info.damage.length) {
+        const dmg = h("button", { class: "btn sm", title: info.recharge ? "Roll damage (marks it as used until it recharges)" : "Roll damage" }, "Dmg");
+        dmg.addEventListener("click", () => { rollDamage(token, a); if (info.recharge) patchState(token, { spent: { ...(tokenById(token.id)?.stats?.spent || {}), [a.name]: true } }); });
+        out.push(dmg);
+        if (info.hit != null) {
+          const crit = h("button", { class: "btn sm ghost", title: "Critical hit: double the damage dice" }, "Crit");
+          crit.addEventListener("click", () => rollDamage(token, a, true));
+          out.push(crit);
+        }
+      } else if (info.recharge) {
+        const use = h("button", { class: "btn sm", title: "Mark as used until it recharges" }, "Use");
+        use.addEventListener("click", () => patchState(token, { spent: { ...(tokenById(token.id)?.stats?.spent || {}), [a.name]: true } }));
+        out.push(use);
+      }
+      if (info.perDay) out.push(pips(info.perDay, uses[a.name] || 0, (n) => patchState(token, { uses: { ...(tokenById(token.id)?.stats?.uses || {}), [a.name]: n } }), `${a.name} uses per day`));
+      return out;
+    }
+    const tagFor = (a) => {
+      const info = actionInfo(a);
+      return info.damage.length ? escapeHtml(info.damage.map(p => `${p.formula} ${p.type}`).join(" + ")) : "";
+    };
+
+    const groups = [["traits", "Traits", monster.traits], ["actions", "Actions", monster.actions], ["bonus", "Bonus Actions", monster.bonusActions], ["reactions", "Reactions", monster.reactions], ["legendary", "Legendary Actions", monster.legendaryActions]];
+    groups.forEach(([id, title, list]) => {
+      if (!list?.length) return;
+      const sec = h("div", { class: "cp-sheet-group" });
+      const head = h("div", { class: "cp-sheet-group-head" });
+      head.appendChild(h("span", { class: "lbl" }, `${title} (${list.length})`));
+      if (id === "legendary") {
+        // Legendary actions: uses per round, back at the start of its turn
+        const total = legendaryUses(monster);
+        head.appendChild(pips(total, s.legendaryUsed || 0, (n) => patchState(token, { legendaryUsed: n }), "Legendary action uses this round"));
+      }
+      sec.appendChild(head);
+      if (id === "legendary" && monster.legendaryUses) sec.appendChild(h("p", { class: "cp-sheet-note" }, escapeHtml(monster.legendaryUses)));
+      list.forEach(a => sec.appendChild(accordion(key(`${id}:${a.name}`), a.name, { tag: tagFor(a), buttons: entryButtons(a), body: escapeHtml(a.description || "") })));
+      wrap.appendChild(sec);
     });
-    // Full stat block text
-    const d = h("details", { class: "cp-edit" });
-    if (ui.open.statblock) d.open = true;
-    d.addEventListener("toggle", () => { ui.open.statblock = d.open; });
-    d.appendChild(h("summary", {}, "Stat block"));
-    const body = h("div", { class: "cp-statblock" });
-    const sc = monster.abilityScores || {};
-    const blocks = [
-      `<div class="cp-abil">${ABILITIES.map(a => `<span><b>${a.toUpperCase()}</b> ${sc[a] ?? 10} (${formatModifier(abilityModifier(sc[a] ?? 10))})</span>`).join("")}</div>`,
-      ...[["Skills", monster.skills], ["Senses", monster.senses], ["Languages", monster.languages], ["Gear", monster.gear]].filter(([, v]) => v).map(([k, v]) => `<p><b>${k}</b> ${escapeHtml(v)}</p>`)
-    ];
-    const list = (title, arr) => arr?.length ? `<h5>${title}</h5>` + arr.map(t => `<p><b>${escapeHtml(t.name)}.</b> ${escapeHtml(t.description || "")}</p>`).join("") : "";
-    body.innerHTML = blocks.join("") + list("Traits", monster.traits) + list("Actions", monster.actions) + list("Bonus Actions", monster.bonusActions) + list("Reactions", monster.reactions) + list(`Legendary Actions${monster.legendaryUses ? ` (${escapeHtml(String(monster.legendaryUses))})` : ""}`, monster.legendaryActions);
-    d.appendChild(body);
-    wrap.appendChild(d);
     return wrap;
+  }
+
+  async function rollRecharge(token, name, need) {
+    const r = rollDie(6);
+    const ok = r >= need;
+    if (ok) {
+      const { [name]: _, ...rest } = tokenById(token.id)?.stats?.spent || {};
+      await patchState(token, { spent: rest });
+    }
+    toast(`${displayName(token)} — ${name}: rolled ${r}, ${ok ? "recharged!" : "not yet"}`);
+    return ok;
   }
 
   function lootBox(token) {
@@ -919,38 +1113,93 @@ export function createCreatureTools(ctx) {
         setTimeout(() => unsub?.(), 0);
         const c = ctx.charOf(token)?.currency || {};
         const coins = Object.entries(c).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k.toUpperCase()}`).join(", ");
-        list.innerHTML = (items.length ? items.map(i => `• ${escapeHtml(i.name)}${i.quantity > 1 ? ` ×${i.quantity}` : ""}`).join("<br>") : "No items.") + (coins ? `<br>• ${coins}` : "") + "<br><small>Open the NPC's sheet to hand items over.</small>";
+        list.innerHTML = "";
+        if (!items.length) list.appendChild(h("div", {}, "No items."));
+        items.forEach(i => {
+          const row = h("div", { class: "cp-loot-item" });
+          const b = h("button", { class: "linkish", type: "button", title: "What this item does" }, `${escapeHtml(i.name)}${i.quantity > 1 ? ` ×${i.quantity}` : ""}`);
+          b.addEventListener("click", () => showItemPopover(b, ctx.ruleset(), i));
+          row.appendChild(b);
+          list.appendChild(row);
+        });
+        if (coins) list.appendChild(h("div", {}, `Coins: ${coins}`));
+        list.appendChild(h("small", {}, "Open the NPC's sheet to hand items over."));
       });
       return box;
     }
     const loot = token.loot;
     if (!loot) {
-      const b = h("button", { class: "btn sm primary" }, "Roll loot");
-      b.addEventListener("click", () => { const m = ctx.monsterOf(token); db.tokens.update(ctx.campaignId, ctx.mapId(), token.id, { loot: generateLoot(m || {}) }); });
+      const b = h("button", { class: "btn sm primary" }, "Show loot");
+      b.addEventListener("click", () => { const m = ctx.monsterOf(token); saveLoot(token, generateLoot(m || {})); });
       box.appendChild(b);
       return box;
     }
-    const coins = Object.entries(loot.coins || {}).filter(([, v]) => v > 0).map(([k, v]) => `${v.toLocaleString()} ${k.toUpperCase()}`);
-    const lines = [];
-    if (coins.length) lines.push(`<li><b>Coins:</b> ${coins.join(", ")}</li>`);
-    loot.items.forEach(it => lines.push(`<li>${it.magic ? `<span class="badge rarity-${(it.rarity || "").toLowerCase().replace(/\s+/g, "-")}">${escapeHtml(it.rarity || "Magic")}</span> ` : ""}${escapeHtml(it.name)}${it.quantity > 1 ? ` ×${it.quantity}` : ""}</li>`));
-    box.appendChild(h("ul", { class: "cp-loot-list" }, lines.join("") || "<li class='meta'>Nothing of value.</li>"));
-    const tags = ctx.monsterOf(token)?.treasure || [];
-    if (tags.length) box.appendChild(h("div", { class: "meta" }, `Treasure: ${escapeHtml(tags.join(", "))}`));
-    if (loot.sent) { box.appendChild(h("div", { class: "meta" }, "✔ Sent to the party.")); return box; }
+    const monster = ctx.monsterOf(token);
+    const tags = monster?.treasure || [];
+    box.appendChild(h("div", { class: "meta" }, `Monster Manual treasure: ${escapeHtml(tags.join(", ") || "none listed")}`));
+
+    // What it has: click an item for its description
+    const list = h("div", { class: "cp-loot-items" });
+    if (!loot.items.length) list.appendChild(h("div", { class: "meta" }, "No items yet."));
+    loot.items.forEach((it, i) => {
+      const row = h("div", { class: "cp-loot-item" });
+      if (it.magic) row.appendChild(h("span", { class: `badge rarity-${(it.rarity || "").toLowerCase().split(" (")[0].replace(/\s+/g, "-")}` }, escapeHtml(it.rarity || "Magic")));
+      const name = h("button", { class: "linkish", type: "button", title: "What this item does" }, `${escapeHtml(it.name)}${it.quantity > 1 ? ` \u00d7${it.quantity}` : ""}`);
+      name.addEventListener("click", () => showItemPopover(name, ctx.ruleset(), it));
+      row.appendChild(name);
+      if (!loot.sent) {
+        const rm = h("button", { class: "icon-btn", type: "button", title: "Take it out of the loot" }, "\u2715");
+        rm.addEventListener("click", () => { const l = lootOf(token); saveLoot(token, { ...l, items: l.items.filter((_, j) => j !== i) }); });
+        row.appendChild(rm);
+      }
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+
+    // Coins: set them directly, or add from the tables below
+    const coins = h("div", { class: "cp-coins" });
+    ["cp", "sp", "ep", "gp", "pp"].forEach(k => {
+      const lab = h("label", {}, k.toUpperCase());
+      const inp = h("input", { type: "number", min: "0", value: String(loot.coins?.[k] || 0), "aria-label": `${k.toUpperCase()} in the loot` });
+      inp.disabled = !!loot.sent;
+      inp.addEventListener("change", () => { const l = lootOf(token); saveLoot(token, { ...l, coins: { ...l.coins, [k]: Math.max(0, parseInt(inp.value, 10) || 0) } }); });
+      lab.appendChild(inp);
+      coins.appendChild(lab);
+    });
+    box.appendChild(coins);
+
+    if (loot.sent) { box.appendChild(h("div", { class: "meta" }, "\u2714 Sent to the party.")); return box; }
+
+    // The DMG tables for its CR: the DM decides whether to roll, take the average, or skip
+    const t = treasureTier(token.stats?.cr);
+    const tables = h("div", { class: "cp-tables" });
+    const btn = (label, title, fn) => { const b = h("button", { class: "btn sm ghost", type: "button", title }, label); b.addEventListener("click", fn); return b; };
+    tables.appendChild(h("h5", {}, "Individual Treasure"));
+    tables.appendChild(h("table", {}, `<tr><th>CR</th><th>Treasure</th><th>Average</th></tr>${INDIVIDUAL_TREASURE.map((r, i) => `<tr class="${i === t ? "here" : ""}"><td>${r.cr}</td><td>${r.text}</td><td>${coinText(r.avg)}</td></tr>`).join("")}`));
+    const ind = INDIVIDUAL_TREASURE[t];
+    const row1 = h("div", { class: "cp-btn-row" });
+    row1.appendChild(btn(`Roll ${ind.text}`, "Roll this CR's Individual Treasure and add it", () => addCoins(token, ind.roll(), "Individual treasure")));
+    row1.appendChild(btn(`Average (${coinText(ind.avg)})`, "Add the table's average instead of rolling", () => addCoins(token, ind.avg, "Individual treasure (average)")));
+    tables.appendChild(row1);
+    tables.appendChild(h("h5", {}, "Treasure Hoard"));
+    tables.appendChild(h("p", { class: "meta", style: "margin:0;" }, "For a lair or a creature that hoards (Treasure: Any or a theme). Usually one hoard per encounter or session, not per creature."));
+    tables.appendChild(h("table", {}, `<tr><th>CR</th><th>Coins</th><th>Magic items</th></tr>${TREASURE_HOARD.map((r, i) => `<tr class="${i === t ? "here" : ""}"><td>${r.cr}</td><td>${r.text}</td><td>${r.items}</td></tr>`).join("")}`));
+    const hoard = TREASURE_HOARD[t];
+    const row2 = h("div", { class: "cp-btn-row" });
+    row2.appendChild(btn(`Roll ${hoard.text}`, "Roll this CR's hoard coins and add them", () => addCoins(token, hoard.roll(), "Hoard coins")));
+    row2.appendChild(btn(`Average (${coinText(hoard.avg)})`, "Add the table's average instead of rolling", () => addCoins(token, hoard.avg, "Hoard coins (average)")));
+    row2.appendChild(btn(`Roll ${hoard.items} magic items`, `Rarity by CR${loot.hoardThemes?.length ? `, from the ${loot.hoardThemes.join("/")} theme` : ""}`, () => addMagicItems(token, hoard.rollItems())));
+    tables.appendChild(row2);
+    box.appendChild(accordion(`${token.id}:loot-tables`, `DMG treasure tables (CR ${token.stats?.cr ?? "?"})`, { body: "", startOpen: true }));
+    box.lastChild.querySelector(".cp-entry-body").appendChild(tables);
+
     const btns = h("div", { class: "cp-btn-row" });
-    if (loot.hoardThemes?.length && !loot.hoardRolled) {
-      const hb = h("button", { class: "btn sm", title: "DMG Random Treasure Hoard for this CR, with magic items from its treasure theme" }, `Roll hoard (${loot.hoardThemes.join("/")})`);
-      hb.addEventListener("click", () => rollHoardLoot(token));
-      btns.appendChild(hb);
-    }
-    const mi = h("button", { class: "btn sm ghost", title: "Add one random magic item (rarity by CR)" }, "+ Magic item");
-    mi.addEventListener("click", () => addRandomMagicItem(token));
-    const coinsBtn = h("button", { class: "btn sm ghost", title: "Roll Individual Treasure coins again" }, "Reroll coins");
-    coinsBtn.addEventListener("click", () => db.tokens.update(ctx.campaignId, ctx.mapId(), token.id, { loot: { ...loot, coins: rollIndividualCoins(token.stats?.cr) } }));
-    const send = h("button", { class: "btn sm primary" }, "Send to party");
+    btns.appendChild(btn("+ Magic item", "One random magic item, rarity by CR", () => addMagicItems(token, 1)));
+    btns.appendChild(btn("+ Item\u2026", "Any catalog item, or one of your own", () => addItemByName(token)));
+    btns.appendChild(btn("Clear coins", "Set every coin back to 0", async () => { if (await confirmDialog("Set all the coins in this loot back to 0?", { okLabel: "Clear" })) { const l = lootOf(token); saveLoot(token, { ...l, coins: {} }); } }));
+    const send = h("button", { class: "btn sm primary", type: "button" }, "Send to party");
     send.addEventListener("click", () => sendLootToParty(token));
-    [mi, coinsBtn, send].forEach(b => btns.appendChild(b));
+    btns.appendChild(send);
     box.appendChild(btns);
     return box;
   }
@@ -993,5 +1242,5 @@ export function createCreatureTools(ctx) {
     return row;
   }
 
-  return { stateOf, canEdit, controls, render, reconcile, processTurn, startGrapple, releaseGrapple, moveGrappled, chooseGrappler, addToInitiative, toggleCondition, toggleEffect, damage, heal, grappledBy, followOffset, footprint, canMoveHeld, moveBlockedWhy };
+  return { stateOf, canEdit, controls, displayName, publicName, editIdentity, syncCombatName, render, reconcile, processTurn, startGrapple, releaseGrapple, moveGrappled, chooseGrappler, addToInitiative, toggleCondition, toggleEffect, damage, heal, grappledBy, followOffset, footprint, canMoveHeld, moveBlockedWhy };
 }

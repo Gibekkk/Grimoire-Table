@@ -9,16 +9,21 @@ import { renderDashboard } from "./views/dashboard-view.js";
 import { renderCharacterCreator } from "./views/character-creator-view.js";
 import { renderCharacterSheetPage } from "./views/character-sheet-view.js";
 import { renderCampaign } from "./views/campaign-view.js";
+import { renderCompendium } from "./views/compendium-view.js";
 
 const appRoot = document.getElementById("app");
 
 const NAV_ITEMS = [
   { path: "/dashboard", label: "Dashboard", icon: iconHome() },
-  { path: "/character/new", label: "New Character", icon: iconPlus() }
+  { path: "/character/new", label: "New Character", icon: iconPlus() },
+  { path: "/compendium", label: "Item Compendium", icon: iconBook() }
 ];
 
 function iconHome() {
   return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>`;
+}
+function iconBook() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M4 16a4 4 0 0 1 4-4h10"/></svg>`;
 }
 function iconPlus() {
   return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>`;
@@ -211,6 +216,7 @@ function registerAllRoutes() {
   registerRoute("/character/new", { render: renderCharacterCreator });
   registerRoute("/character/:id", { render: renderCharacterSheetPage });
   registerRoute("/campaign/:id", { render: renderCampaign });
+  registerRoute("/compendium", { render: renderCompendium });
 }
 
 let routesRegistered = false;

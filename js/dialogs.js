@@ -33,6 +33,14 @@ export function openDialog({ title = "", message = "", fields = [], okLabel = "O
         (f.options || []).forEach(([v, l]) => input.appendChild(h("option", { value: v, selected: String(v) === String(f.value) ? "selected" : null }, escapeHtml(l))));
       } else {
         input = h("input", { name: f.name, type: f.type || "text", value: f.value ?? "", placeholder: f.placeholder || null, min: f.min ?? null, max: f.max ?? null, step: f.step ?? null, autocomplete: "off" });
+        // `list`: suggestions shown while typing
+        if (f.list?.length) {
+          const id = `dlg-list-${Math.random().toString(36).slice(2, 8)}`;
+          const dl = h("datalist", { id });
+          f.list.forEach(v => dl.appendChild(h("option", { value: v })));
+          input.setAttribute("list", id);
+          wrap.appendChild(dl);
+        }
       }
       inputs[f.name] = input;
       wrap.appendChild(input);

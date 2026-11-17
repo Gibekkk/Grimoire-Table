@@ -345,6 +345,7 @@ export function openMapEditorDialog(campaignId, map) {
     db.tokens.subscribe(campaignId, map.id, (t) => { tokens = t; draw(); }),
     db.shapes.subscribe(campaignId, map.id, (s) => { shapes = s; draw(); }),
     db.fogMask.subscribe(campaignId, map.id, (doc) => canvas.setFogMask(doc?.dataUrl || null, doc?.dataUrl ? [] : map.fogs || [])),
+    db.dimMask.subscribe(campaignId, map.id, (doc) => canvas.setDimMask(doc?.dataUrl || null)),
     db.maps.subscribe(campaignId, map.id, (m) => { if (m) showPicture(m.backgroundBase64 || null); })
   ];
 

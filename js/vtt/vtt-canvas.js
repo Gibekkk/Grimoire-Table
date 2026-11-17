@@ -29,6 +29,10 @@
 // strokes merge into one shape and erasing removes only what the brush touches.
 // The mask is exported as a PNG data URL for persistence.
 //
+// Dim light is a second mask of the same kind ("Dim" brush): areas the players can
+// still see, but darkened and blurred, for distance or poor lighting. Painting dim
+// over fog turns that darkness into dim; Reveal clears both.
+//
 // Performance: rendering is event-driven via a dirty flag rather than a
 // continuous rAF loop. The canvas only redraws when something changes. Decoded
 // images, round token sprites, the fog mask of each visited map and each map's
@@ -130,6 +134,7 @@ export class VttCanvas {
     this._fogMaskSrc = null;     // data URL currently shown in the mask (skips re-applying our own save)
     this._pendingFog = null;     // remote fog update that arrived mid-stroke
     this._fogLoadToken = 0;
+    this._dimLoadToken = 0;
     this._hoverWorld = null;
 
     // --- Default grid size (set by map load, but defaults to 5ft grid) ---
@@ -332,7 +337,7 @@ export class VttCanvas {
   }
   isDm() { return this._isDm; }
 
-  _isFogTool(tool = this.tool) { return tool === "draw-fog" || tool === "erase-fog"; }
+  _isFogTool(tool = this.tool) { return tool === "draw-fog" || tool === "erase-fog" || tool === "draw-dim"; }
 
   // World size the fog mask covers: the background image, else the map's stored size.
   _worldSize() {
@@ -351,13 +356,83 @@ export class VttCanvas {
       this._fogScale = scale;
       return;
     }
-    const next = document.createElement("canvas");
-    next.width = mw; next.height = mh;
-    const nctx = next.getContext("2d");
-    if (this.fogMask) nctx.drawImage(this.fogMask, 0, 0, mw, mh);
-    this.fogMask = next;
-    this.fogMaskCtx = nctx;
+    const resized = (old) => {
+      const c = document.createElement("canvas");
+      c.width = mw; c.height = mh;
+      if (old) c.getContext("2d").drawImage(old, 0, 0, mw, mh);
+      return c;
+    };
+    this.fogMask = resized(this.fogMask);
+    this.fogMaskCtx = this.fogMask.getContext("2d");
+    this.dimMask = resized(this.dimMask);
+    this.dimMaskCtx = this.dimMask.getContext("2d");
+    this._dimDirty = true;
     this._fogScale = scale;
+  }
+
+  // ---- Dim light ----
+  setDimMask(dataUrl) {
+    if (this.drag && this._isFogTool(this.drag.type)) { this._pendingDim = dataUrl; return; }
+    if (dataUrl === this._dimSrc) return;
+    this._ensureFogMask();
+    const token = ++this._dimLoadToken;
+    if (!dataUrl) {
+      this._dimSrc = null;
+      this.dimMaskCtx.clearRect(0, 0, this.dimMask.width, this.dimMask.height);
+      this._dimDirty = true; this._markDirty();
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      if (token !== this._dimLoadToken) return;
+      this._ensureFogMask();
+      this.dimMaskCtx.clearRect(0, 0, this.dimMask.width, this.dimMask.height);
+      this.dimMaskCtx.drawImage(img, 0, 0, this.dimMask.width, this.dimMask.height);
+      this._dimSrc = dataUrl;
+      this._dimDirty = true; this._markDirty();
+    };
+    img.src = dataUrl;
+  }
+  exportDimMask() {
+    if (!this.dimMask) return null;
+    const empty = !this.dimMaskCtx.getImageData(0, 0, this.dimMask.width, this.dimMask.height).data.some((v, i) => i % 4 === 3 && v);
+    this._dimSrc = empty ? null : this.dimMask.toDataURL("image/png");
+    return this._dimSrc;
+  }
+  clearDim() {
+    this._dimLoadToken++;
+    this._dimSrc = null;
+    this.dimMaskCtx?.clearRect(0, 0, this.dimMask.width, this.dimMask.height);
+    this._dimDirty = true; this._markDirty();
+  }
+
+  // What players see in dim areas, built when the dim mask or the picture changes:
+  // the picture blurred and darkened (under tokens), and a shade (over tokens)
+  _dimLayers(world) {
+    if (!this._dimDirty && this._dimCache && this._dimCache.bg === this.bgImage && this._dimCache.w === world.w && this._dimCache.h === world.h) return this._dimCache;
+    this._dimDirty = false;
+    const mw = this.dimMask.width, mh = this.dimMask.height;
+    const scale = Math.min(1, 1600 / Math.max(world.w, world.h));
+    const W = Math.max(1, Math.round(world.w * scale)), H = Math.max(1, Math.round(world.h * scale));
+    const under = document.createElement("canvas"); under.width = W; under.height = H;
+    const u = under.getContext("2d");
+    if (this.bgImage) {
+      u.filter = `blur(${Math.max(2, Math.round(5 * scale))}px) brightness(0.5) saturate(0.6)`;
+      u.drawImage(this.bgImage, 0, 0, W, H);
+      u.filter = "none";
+    } else {
+      u.fillStyle = "rgba(6,7,14,0.55)"; u.fillRect(0, 0, W, H);
+    }
+    u.globalCompositeOperation = "destination-in";
+    u.imageSmoothingEnabled = true;
+    u.drawImage(this.dimMask, 0, 0, mw, mh, 0, 0, W, H);
+    const over = document.createElement("canvas"); over.width = mw; over.height = mh;
+    const o = over.getContext("2d");
+    o.drawImage(this.dimMask, 0, 0);
+    o.globalCompositeOperation = "source-in";
+    o.fillStyle = "rgb(8,10,24)"; o.fillRect(0, 0, mw, mh);
+    this._dimCache = { under, over, bg: this.bgImage, w: world.w, h: world.h };
+    return this._dimCache;
   }
 
   // Replaces the fog with a saved mask (PNG data URL). Legacy maps stored fog as
@@ -463,8 +538,23 @@ export class VttCanvas {
   }
 
   // Paints (or erases) one brush segment into the mask, in world coordinates.
-  _paintFog(from, to, erase) {
-    const ctx = this.fogMaskCtx;
+  // One brush stroke with the active fog tool
+  _brush(from, to) {
+    if (this.drag?.type === "draw-dim" || this.tool === "draw-dim" && !this.drag) {
+      this._paintFog(from, to, false, this.dimMaskCtx);
+      this._paintFog(from, to, true);
+      this._dimDirty = true;
+    } else if ((this.drag?.type || this.tool) === "erase-fog") {
+      this._paintFog(from, to, true);
+      this._paintFog(from, to, true, this.dimMaskCtx);
+      this._dimDirty = true;
+    } else {
+      this._paintFog(from, to, false);
+    }
+  }
+
+  _paintFog(from, to, erase, target = this.fogMaskCtx) {
+    const ctx = target;
     if (!ctx) return;
     const s = this._fogScale;
     ctx.save();
@@ -676,7 +766,7 @@ export class VttCanvas {
     if (this._isFogTool() && this._isDm) {
       if (!this._fogReady) return; // the saved mask is still loading; don't paint over it
       this.drag = { type: this.tool, last: world };
-      this._paintFog(world, world, this.tool === "erase-fog");
+      this._brush(world, world);
       return;
     }
   }
@@ -778,10 +868,10 @@ export class VttCanvas {
       this.shape._angle = this._snapAngle(Math.atan2(world.y - this.shape.origin.y, world.x - this.shape.origin.x), e.altKey);
       this.shape.endWorld = world;
       this._markDirty();
-    } else if (this.drag.type === "draw-fog" || this.drag.type === "erase-fog") {
+    } else if (this._isFogTool(this.drag.type)) {
       const last = this.drag.last;
       if (Math.hypot(world.x - last.x, world.y - last.y) > 1) {
-        this._paintFog(last, world, this.drag.type === "erase-fog");
+        this._brush(last, world);
         this.drag.last = world;
       }
     } else if (this.drag.type === "shape-drag") {
@@ -922,13 +1012,15 @@ export class VttCanvas {
         });
       }
       this.shape = null;
-    } else if (drag.type === "draw-fog" || drag.type === "erase-fog") {
+    } else if (this._isFogTool(drag.type)) {
       this.opts.onFogChanged?.(this.exportFogMask());
+      if (drag.type !== "draw-fog") this.opts.onDimChanged?.(this.exportDimMask());
       if (this._pendingFog) {
         const { dataUrl, legacyFogs } = this._pendingFog;
         this._pendingFog = null;
         this.setFogMask(dataUrl, legacyFogs);
       }
+      if (this._pendingDim !== undefined) { const d = this._pendingDim; this._pendingDim = undefined; this.setDimMask(d); }
     }
     this._updateCursor();
     this._markDirty();
@@ -1144,6 +1236,11 @@ export class VttCanvas {
       ctx.stroke();
     }
 
+    // Dim light: the picture blurred and darkened (players); the DM sees a blue wash
+    const dimOn = this.dimMask && (this._dimSrc || this._dimDirty || this.drag?.type === "draw-dim" || this.drag?.type === "erase-fog");
+    const dim = dimOn && !fogPending ? this._dimLayers(world) : null;
+    if (dim && !this._isDm) ctx.drawImage(dim.under, 0, 0, world.w, world.h);
+
     // Grapple tethers under the tokens
     if (!fogPending) this.tokens.forEach(t => {
       const f = t._st?.follow;
@@ -1267,6 +1364,13 @@ export class VttCanvas {
       }
     });
 
+    if (dim) {
+      ctx.save();
+      ctx.globalAlpha = this._isDm ? 0.3 : 0.45;
+      ctx.drawImage(dim.over, 0, 0, world.w, world.h);
+      ctx.restore();
+    }
+
     // Fog of war — one merged layer above tokens. Opaque for players, see-through for the DM.
     if (fogPending) {
       ctx.fillStyle = "#000";
@@ -1314,7 +1418,7 @@ export class VttCanvas {
     if (this._isFogTool() && this._hoverWorld && this._isDm) {
       const { x: cx, y: cy } = this._hoverWorld;
       const r = this.fogBrushSize * this.gridPx / 2;
-      ctx.strokeStyle = this.tool === "erase-fog" ? "rgba(255,120,120,0.9)" : "rgba(255,255,255,0.85)";
+      ctx.strokeStyle = this.tool === "erase-fog" ? "rgba(255,120,120,0.9)" : this.tool === "draw-dim" ? "rgba(140,170,255,0.9)" : "rgba(255,255,255,0.85)";
       ctx.lineWidth = 1.5 / this.zoom;
       ctx.setLineDash([4 / this.zoom, 4 / this.zoom]);
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();

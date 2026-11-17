@@ -420,17 +420,28 @@ const RARITY_BANDS = [   // Magic Item Rarities: d100 ranges per tier
 function tier(cr) { const v = crValue(cr); return v <= 4 ? 0 : v <= 10 ? 1 : v <= 16 ? 2 : 3; }
 const dice = (n, s) => { let t = 0; for (let i = 0; i < n; i++) t += rollDie(s); return t; };
 
+// DMG 2024 treasure tables, one row per CR band (tiers 0-3), with their average results
+export const INDIVIDUAL_TREASURE = [
+  { cr: "0\u20134", text: "3d6 GP", avg: { gp: 10 }, roll: () => ({ gp: dice(3, 6) }) },
+  { cr: "5\u201310", text: "2d8 \u00d7 10 GP", avg: { gp: 90 }, roll: () => ({ gp: dice(2, 8) * 10 }) },
+  { cr: "11\u201316", text: "2d10 \u00d7 10 PP", avg: { pp: 110 }, roll: () => ({ pp: dice(2, 10) * 10 }) },
+  { cr: "17+", text: "2d8 \u00d7 100 PP", avg: { pp: 900 }, roll: () => ({ pp: dice(2, 8) * 100 }) }
+];
+export const TREASURE_HOARD = [
+  { cr: "0\u20134", text: "2d4 \u00d7 100 GP", items: "1d4 \u2212 1", avg: { gp: 500 }, roll: () => ({ gp: dice(2, 4) * 100 }), rollItems: () => Math.max(0, rollDie(4) - 1) },
+  { cr: "5\u201310", text: "8d10 \u00d7 100 GP", items: "1d3", avg: { gp: 4400 }, roll: () => ({ gp: dice(8, 10) * 100 }), rollItems: () => rollDie(3) },
+  { cr: "11\u201316", text: "8d8 \u00d7 1,000 GP", items: "1d4", avg: { gp: 36000 }, roll: () => ({ gp: dice(8, 8) * 1000 }), rollItems: () => rollDie(4) },
+  { cr: "17+", text: "6d10 \u00d7 10,000 GP", items: "1d6", avg: { gp: 330000 }, roll: () => ({ gp: dice(6, 10) * 10000 }), rollItems: () => rollDie(6) }
+];
+export const treasureTier = (cr) => tier(cr);
+
 // Random Individual Treasure
-export function rollIndividualCoins(cr) {
-  return [() => ({ gp: dice(3, 6) }), () => ({ gp: dice(2, 8) * 10 }), () => ({ pp: dice(2, 10) * 10 }), () => ({ pp: dice(2, 8) * 100 })][tier(cr)]();
-}
+export function rollIndividualCoins(cr) { return INDIVIDUAL_TREASURE[tier(cr)].roll(); }
 
 // Random Treasure Hoard: coins and how many magic items
 export function rollHoard(cr) {
-  const t = tier(cr);
-  const gp = [() => dice(2, 4) * 100, () => dice(8, 10) * 100, () => dice(8, 8) * 1000, () => dice(6, 10) * 10000][t]();
-  const items = [() => Math.max(0, rollDie(4) - 1), () => rollDie(3), () => rollDie(4), () => rollDie(6)][t]();
-  return { gp, items };
+  const row = TREASURE_HOARD[tier(cr)];
+  return { gp: row.roll().gp, items: row.rollItems() };
 }
 
 export function rollRarity(cr) {
@@ -456,14 +467,50 @@ export function parseGear(s) {
   });
 }
 
-// Loot rolled when a monster dies: its Gear, plus coins when it carries Individual
-// treasure (or has no tag but is a gear-carrying humanoid). Themed/Any monsters get
-// a hoard hint the DM can roll from the panel.
+// Loot when a monster dies: only what its stat block says it carries (Gear). Coins and
+// magic items are left to the DM, who gets the DMG tables for its CR in the panel.
 export function generateLoot(monster) {
   const tags = monster?.treasure || [];
   const items = parseGear(monster?.gear).map(g => ({ ...g, source: "gear" }));
-  let coins = {};
-  if (tags.includes("Individual") || (!tags.length && /humanoid/i.test(monster?.creatureType || "") && items.length)) coins = rollIndividualCoins(monster?.cr);
   const hoardThemes = tags.filter(t => t !== "Individual" && t !== "None");
-  return { coins, items, hoardThemes, hoardRolled: false, sent: false, rolledAt: Date.now() };
+  return { coins: {}, items, hoardThemes, sent: false, rolledAt: Date.now() };
+}
+
+// ---------------- Stat block entries ----------------
+const ABILITY_WORDS = { strength: "str", dexterity: "dex", constitution: "con", intelligence: "int", wisdom: "wis", charisma: "cha" };
+
+// What a trait / action can do at the table: attack bonus, saving throw, damage dice,
+// Recharge X–6, or X/Day uses (all read from the MM 2025 wording)
+export function actionInfo(a) {
+  const d = a.description || "";
+  const hitText = d.match(/Attack Roll:\s*([+−-])\s*(\d+)/);
+  const hit = a.attackBonus ?? (hitText ? (hitText[1] === "+" ? 1 : -1) * parseInt(hitText[2], 10) : null);
+  const save = d.match(/(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) Saving Throw:\s*DC\s*(\d+)/i);
+  const recharge = (a.name || "").match(/Recharge\s*(\d)/i);
+  const perDay = (a.name || "").match(/\((\d+)\/Day/i);
+  return {
+    hit,
+    save: save ? { ability: ABILITY_WORDS[save[1].toLowerCase()], dc: parseInt(save[2], 10) } : null,
+    damage: attackDamageParts(a),
+    recharge: recharge ? parseInt(recharge[1], 10) : null,
+    perDay: perDay ? parseInt(perDay[1], 10) : null
+  };
+}
+
+// "Legendary Action Uses: 3 (4 in Lair)…" -> 3
+export function legendaryUses(m) {
+  const n = String(m?.legendaryUses || "").match(/Uses:\s*(\d+)/i);
+  return n ? parseInt(n[1], 10) : (m?.legendaryActions?.length ? 3 : 0);
+}
+
+// "Perception +13, Stealth +6" -> [{ name: "Perception", bonus: 13 }, ...]
+export function parseSkills(s) {
+  return String(s || "").split(",").map(x => x.trim().match(/^(.+?)\s*([+−-])\s*(\d+)$/)).filter(Boolean)
+    .map(m => ({ name: m[1], bonus: (m[2] === "+" ? 1 : -1) * parseInt(m[3], 10) }));
+}
+
+// What players see of a creature the DM has given an alias or kept details back on
+export const DEFAULT_ALIAS = "Unknown creature";
+export function revealed(token, key) {
+  return token?.kind === "pc" || token?.reveal?.[key] !== false;
 }

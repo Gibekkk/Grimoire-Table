@@ -136,10 +136,12 @@ const localDb = {
       Object.keys(tokens).forEach(key => { if (key.startsWith(`${campaignId}:`)) { delete tokens[key]; tokensChanged = true; } });
       if (tokensChanged) writeTable("tokens", tokens);
 
-      const masks = readTable("fogMasks");
-      let masksChanged = false;
-      Object.keys(masks).forEach(key => { if (key.startsWith(`${campaignId}:`)) { delete masks[key]; masksChanged = true; } });
-      if (masksChanged) writeTable("fogMasks", masks);
+      ["fogMasks", "dimMasks"].forEach(name => {
+        const masks = readTable(name);
+        let masksChanged = false;
+        Object.keys(masks).forEach(key => { if (key.startsWith(`${campaignId}:`)) { delete masks[key]; masksChanged = true; } });
+        if (masksChanged) writeTable(name, masks);
+      });
 
       const chars = readTable("characters");
       let charsChanged = false;
@@ -340,6 +342,8 @@ const localDb = {
       writeTable("tokens", tokens);
       const masks = readTable("fogMasks");
       if (masks[`${campaignId}:${mapId}`]) { delete masks[`${campaignId}:${mapId}`]; writeTable("fogMasks", masks); }
+      const dims = readTable("dimMasks");
+      if (dims[`${campaignId}:${mapId}`]) { delete dims[`${campaignId}:${mapId}`]; writeTable("dimMasks", dims); }
     },
     // Grid or size change plus the tokens and shapes that move with it
     async updateLayout(campaignId, mapId, { patch, tokens: tokenMoves = [], shapes: shapeMoves = [] }) {
@@ -435,6 +439,19 @@ const localDb = {
 
   // Fog of war: one bitmap mask per map (PNG data URL), kept out of the map doc
   // so a brush stroke doesn't re-send the map background to every client.
+  // Dim light: a second mask like the fog's
+  dimMask: {
+    async set(campaignId, mapId, dataUrl) {
+      const masks = readTable("dimMasks");
+      masks[`${campaignId}:${mapId}`] = { dataUrl: dataUrl || null, updatedAt: Date.now() };
+      writeTable("dimMasks", masks);
+    },
+    subscribe(campaignId, mapId, cb) {
+      const key = `${campaignId}:${mapId}`;
+      return subscribeTable("dimMasks", () => cb(readTable("dimMasks")[key] || null));
+    }
+  },
+
   fogMask: {
     async set(campaignId, mapId, dataUrl) {
       const masks = readTable("fogMasks");
@@ -932,6 +949,7 @@ const firestoreDb = {
       const tokSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps", mapId, "tokens"));
       await Promise.all(tokSnap.docs.map(d => fx.deleteDoc(d.ref)));
       await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "mask")).catch(() => {});
+      await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "dim")).catch(() => {});
       const shapeSnap = await fx.getDocs(fx.collection(db, "campaigns", campaignId, "maps", mapId, "aoeShapes")).catch(() => null);
       if (shapeSnap) await Promise.all(shapeSnap.docs.map(d => fx.deleteDoc(d.ref)));
       await fx.deleteDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId));
@@ -1009,6 +1027,21 @@ const firestoreDb = {
       initFirebase().then(({ db, fx }) => {
         const q = fx.query(fx.collection(db, "campaigns", campaignId, "maps", mapId, "roomInventory"), fx.orderBy("createdAt", "asc"));
         unsub = fx.onSnapshot(q, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), listenFailed(`campaigns/${campaignId}/maps/${mapId}/roomInventory`));
+      });
+      return () => unsub();
+    }
+  },
+
+  // Dim light lives beside the fog mask (maps/{mapId}/fogs/dim, same rules)
+  dimMask: {
+    async set(campaignId, mapId, dataUrl) {
+      const { db, fx } = await initFirebase();
+      await fx.setDoc(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "dim"), { dataUrl: dataUrl || null, updatedAt: fx.serverTimestamp() });
+    },
+    subscribe(campaignId, mapId, cb) {
+      let unsub = () => {};
+      initFirebase().then(({ db, fx }) => {
+        unsub = fx.onSnapshot(fx.doc(db, "campaigns", campaignId, "maps", mapId, "fogs", "dim"), (snap) => cb(snap.exists() ? snap.data() : null), listenFailed(`campaigns/${campaignId}/maps/${mapId}/fogs/dim`));
       });
       return () => unsub();
     }

@@ -7,8 +7,8 @@ import { navigate } from "../../router.js";
 import { loadRuleset } from "../../data-loader.js";
 import { pickMonster, tokenSquaresForSize, monsterImageFor, monsterDefaultArt, once } from "../../monsters.js";
 import { createCreatureTools } from "../../vtt/creature-panel.js";
-import { SIZES, CONDITION_ABBR, SPEED_ZERO, isImmobile, effectDef, hasEffect, monsterTokenStats } from "../../vtt/creatures.js";
-import { nextTurnPatch } from "./combat-panel.js";
+import { revealed, SIZES, CONDITION_ABBR, SPEED_ZERO, isImmobile, effectDef, hasEffect, monsterTokenStats } from "../../vtt/creatures.js";
+import { nextTurnPatch, mountCombatPanel } from "./combat-panel.js";
 import { createMapLayoutSession, renderMapForm } from "../../vtt/map-editor.js";
 import { openDialog, confirmDialog, chooseDialog } from "../../dialogs.js";
 
@@ -32,6 +32,7 @@ const TOOLS = [
 ];
 const FOG_TOOLS = [
   { id: "draw-fog", icon: "☁", label: "Fog", key: "g", title: "Paint fog (G)" },
+  { id: "draw-dim", icon: "◐", label: "Dim", key: "d", title: "Paint dim light (D): players still see the map there, darkened and blurred — distance, shadows, poor lighting. Painting it over fog turns that fog into dim." },
   { id: "erase-fog", icon: "☀", label: "Reveal", key: "e", title: "Erase fog to reveal (E)" }
 ];
 
@@ -118,6 +119,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     isDm: isDm,
     currentUid: user.uid,
     onFogChanged: (dataUrl) => handleFogChanged(dataUrl),
+    onDimChanged: (dataUrl) => { if (isDm && currentMap) db.dimMask.set(campaignId, currentMap.id, dataUrl); },
     onPersistentShapeAdded: (shape) => handleShapeAdded(shape),
     onPersistentShapeRemoved: (shape) => handleShapeRemoved(shape),
     onPersistentShapeMoved: (shape) => handleShapeMoved(shape)
@@ -137,7 +139,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     const { w, h: tall } = tools.footprint(t);
     const cur = combat?.active ? combat.combatants?.[combat.currentTurnIndex] : null;
     const showHp = isDm || t.kind === "pc" || controls(t);
-    return { ...t, w, h: tall, imageBase64: artOf(t), _st: {
+    return { ...t, w, h: tall, name: tools.displayName(t),
+      imageBase64: isDm || controls(t) || revealed(t, "picture") ? artOf(t) : null, _st: {
       conds, follow, dead: st.dead, invisible: st.conditions.includes("Invisible") && !hasEffect(st.effects, "faerie-fire"),
       outline: hasEffect(st.effects, "faerie-fire"),
       hpFrac: showHp && st.hp.max ? st.hp.current / st.hp.max : null,
@@ -239,13 +242,14 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   function syncToolbar() {
     toolButtons.forEach((b, id) => b.classList.toggle("active", canvas.tool === id));
-    const isFogTool = isDm && (canvas.tool === "draw-fog" || canvas.tool === "erase-fog");
+    const isFogTool = isDm && (canvas.tool === "draw-fog" || canvas.tool === "erase-fog" || canvas.tool === "draw-dim");
     fogSliderWrap.style.display = isFogTool ? "flex" : "none";
     if (isFogTool) {
       fogSlider.value = canvas.getFogBrushSize();
       fogSliderLabel.textContent = `Brush: ${Math.round(canvas.getFogBrushSize() * 5)}ft`;
     }
     mapEditBtn.classList.toggle("active", !!mapEdit);
+    initiativeBtn.classList.toggle("active", !!combatDrawer);
     snapBtn.classList.toggle("active", canvas.snap);
     fsBtn.classList.toggle("active", vttFullscreen);
     fsBtn.querySelector(".lbl").textContent = vttFullscreen ? "Exit" : "Full";
@@ -261,13 +265,47 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     turnBar.style.display = cur ? "inline-flex" : "none";
     if (!cur) return;
     turnBar.innerHTML = "";
-    turnBar.appendChild(h("span", { class: "vtt-turn-text", title: "Current turn" }, `Round ${combat.round}: <b>${escapeHtml(cur.name)}</b>`));
+    turnBar.appendChild(h("span", { class: "vtt-turn-text", title: "Current turn" }, `Round ${combat.round}: <b>${escapeHtml(isDm ? cur.dmName || cur.name : cur.name)}</b>`));
     // Whoever runs the creature can end its turn
     if (isDm || cur.ownerUid === user.uid || tokens.some(t => (t.id === cur.id || (t.kind !== "monster" && t.refId === cur.id)) && controls(t))) {
       const end = h("button", { class: "vtt-tool", type: "button", title: "End this turn" }, '<span class="lbl">End Turn</span>');
       end.addEventListener("click", () => db.combat.set(campaignId, nextTurnPatch(combat)));
       turnBar.appendChild(end);
     }
+  }
+
+  // ---------------- Initiative drawer ----------------
+  // The Combat tab, docked over the map: reorder, roll, edit initiative, toggle actions,
+  // end turns and end the fight without leaving the VTT (or fullscreen).
+  let combatDrawer = null; // { el, unmount }
+  const initiativeBtn = toolButton({ icon: "\u2630", label: "Initiative", title: "Initiative order: run or end the encounter from here (I)" }, () => toggleCombatDrawer());
+  function toggleCombatDrawer() {
+    if (combatDrawer) { closeCombatDrawer(); return; }
+    closeMapEditor();
+    const el = h("div", { class: "vtt-side-panel vtt-combat-drawer" });
+    const head = h("div", { class: "map-form-head" }, "<h4>Initiative</h4>");
+    const btns = h("div", { class: "cp-btn-row", style: "margin:0;" });
+    if (isDm) {
+      const add = h("button", { class: "btn sm", type: "button", title: "Put the creatures on this map into the initiative order" }, "+ From map");
+      add.addEventListener("click", () => startEncounter());
+      btns.appendChild(add);
+    }
+    const x = h("button", { class: "icon-btn", type: "button", title: "Close (Esc)" }, "\u2715");
+    x.addEventListener("click", closeCombatDrawer);
+    btns.appendChild(x);
+    head.appendChild(btns);
+    const body = h("div", { class: "vtt-combat-body" });
+    el.appendChild(head); el.appendChild(body);
+    canvasHost.appendChild(el);
+    combatDrawer = { el, unmount: mountCombatPanel(body, { campaignId, user, isDm, campaignLog: (entry) => db.log.add(campaignId, entry) }) };
+    syncToolbar();
+  }
+  function closeCombatDrawer() {
+    if (!combatDrawer) return;
+    combatDrawer.unmount?.();
+    combatDrawer.el.remove();
+    combatDrawer = null;
+    syncToolbar();
   }
 
   function buildToolbar() {
@@ -292,10 +330,13 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       }));
       fogGroup.appendChild(toolButton({ icon: "✕", label: "Clear", title: "Remove all fog from this map" }, async () => {
         if (!currentMap) return;
-        if (!await confirmDialog("Players will see the whole map.", { title: "Clear all fog on this map?", okLabel: "Clear fog", danger: true })) return;
-        canvas.clearFog();
-        handleFogChanged(null);
-        toast("All fog cleared");
+        const pick = await chooseDialog({ title: "Clear this map's fog?", message: "Players will see whatever you clear.", choices: [
+          { value: "dim", label: "Dim light only" }, { value: "fog", label: "Fog only" }, { value: "both", label: "Both", danger: true }
+        ] });
+        if (!pick) return;
+        if (pick !== "dim") { canvas.clearFog(); handleFogChanged(null); }
+        if (pick !== "fog") { canvas.clearDim(); db.dimMask.set(campaignId, currentMap.id, null); }
+        toast(pick === "both" ? "Fog and dim light cleared" : pick === "fog" ? "Fog cleared" : "Dim light cleared");
       }, "danger"));
     }
     group([
@@ -304,30 +345,9 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       toolButton({ icon: "⤢", label: "Fit", title: "Fit the map to the view (0)" }, () => { canvas._fitToView(); canvas._hasSavedView = true; }),
       fsBtn
     ]);
+    if (!isDm) group([initiativeBtn]);
     if (isDm) {
-      group([toolButton({ icon: "\u2694", label: "Encounter", title: "Put the creatures on this map into the initiative order (monsters roll automatically)" }, async () => {
-        const creatures = tokens.filter(t => t.kind !== "component");
-        const hidden = creatures.filter(t => t.hidden);
-        let list = creatures.filter(t => !t.hidden);
-        if (hidden.length) {
-          // Spawned creatures start hidden, so starting a fight usually means revealing them
-          const pick = await chooseDialog({
-            title: `${hidden.length} hidden creature${hidden.length === 1 ? "" : "s"}`,
-            message: `${hidden.map(t => t.name).slice(0, 8).join(", ")}${hidden.length > 8 ? "\u2026" : ""}\nPlayers will see the names of everyone in the initiative order.`,
-            choices: [
-              { value: "visible", label: list.length ? "Visible ones only" : "Nobody yet" },
-              { value: "reveal", label: "Reveal and add them", primary: true }
-            ]
-          });
-          if (!pick) return;
-          if (pick === "reveal") {
-            hidden.forEach(t => db.tokens.update(campaignId, currentMap.id, t.id, { hidden: false }));
-            list = creatures;
-          }
-        }
-        if (!list.length) { toast("No visible creatures on this map", "error"); return; }
-        tools.addToInitiative(list);
-      })]);
+      group([toolButton({ icon: "\u2694", label: "Encounter", title: "Put the creatures on this map into the initiative order (monsters roll automatically)" }, () => startEncounter()), initiativeBtn]);
       group([mapEditBtn]);
       const mapSel = h("select", { class: "vtt-map-select", title: "Switch map" });
       allMaps.forEach(m => mapSel.appendChild(h("option", { value: m.id, selected: currentMap?.id === m.id ? "selected" : null }, m.name)));
@@ -574,6 +594,24 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toast(names.length ? `${list.length === 1 ? list[0].name : `${list.length} creatures`}: controlled by ${names.join(", ")}` : "Back under your control only");
   }
 
+  // Reveal settings for several creatures at once (names stay as they are)
+  async function setRevealFor(list) {
+    const r = await openDialog({
+      title: `What players see of ${list.length} creatures`,
+      okLabel: "Save",
+      fields: [
+        { name: "alias", label: "Name shown while the real one is hidden (blank keeps each one's own)", placeholder: "Unknown creature" },
+        { name: "reveal", label: "Show players", type: "checks", value: ["name", "picture", "details"].filter(k => list.every(t => revealed(t, k))),
+          options: [["name", "Their real names"], ["picture", "Their pictures"], ["details", "Their type, health, conditions and effects"]] }
+      ]
+    });
+    if (!r) return;
+    const reveal = { name: r.reveal.includes("name"), picture: r.reveal.includes("picture"), details: r.reveal.includes("details") };
+    await Promise.all(list.map(t => db.tokens.update(campaignId, currentMap.id, t.id, { reveal, ...(r.alias.trim() ? { alias: r.alias.trim() } : {}) })));
+    list.forEach(t => tools.syncCombatName({ ...t, reveal, alias: r.alias.trim() || t.alias }, tools.stateOf(t)?.name || t.name));
+    toast(`Updated what players see of ${list.length} creatures`);
+  }
+
   // Stacking: front/back put a token above or below everything else of its kind
   function restack(list, layer) {
     const z = Date.now();
@@ -594,6 +632,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     }
     if (raw.kind !== "component") {
       items.push({ label: "Creature panel…", action: () => showTokenPopup(raw) });
+      if (raw.kind !== "pc") items.push({ label: "Name & what players see…", action: () => tools.editIdentity(raw) });
       if (raw.kind !== "monster") items.push({ label: "Open Character Sheet", action: () => navigate(`/character/${raw.refId}`) });
       items.push({ label: "Add to initiative", action: () => tools.addToInitiative([raw]) });
       if (raw.kind !== "pc") items.push({ label: `Give control\u2026${raw.controllers?.length ? ` (${raw.controllers.length})` : ""}`, action: () => giveControl([raw]) });
@@ -622,9 +661,35 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     showContextMenu(sx, sy, items);
   }
 
+  // Puts the creatures on this map into initiative; offers to reveal hidden ones first
+  async function startEncounter() {
+    const creatures = tokens.filter(t => t.kind !== "component");
+    const hidden = creatures.filter(t => t.hidden);
+    let list = creatures.filter(t => !t.hidden);
+    if (hidden.length) {
+      // Spawned creatures start hidden, so starting a fight usually means revealing them
+      const pick = await chooseDialog({
+        title: `${hidden.length} hidden creature${hidden.length === 1 ? "" : "s"}`,
+        message: `${hidden.map(t => t.name).slice(0, 8).join(", ")}${hidden.length > 8 ? "\u2026" : ""}\nPlayers will see the names of everyone in the initiative order.`,
+        choices: [
+          { value: "visible", label: list.length ? "Visible ones only" : "Nobody yet" },
+          { value: "reveal", label: "Reveal and add them", primary: true }
+        ]
+      });
+      if (!pick) return;
+      if (pick === "reveal") {
+        hidden.forEach(t => db.tokens.update(campaignId, currentMap.id, t.id, { hidden: false }));
+        list = creatures;
+      }
+    }
+    if (!list.length) { toast("No visible creatures on this map", "error"); return; }
+    tools.addToInitiative(list);
+  }
+
   // ---------------- Map editor ----------------
   function toggleMapEditor() {
     if (mapEdit) { closeMapEditor(); return; }
+    closeCombatDrawer();
     if (!currentMap) { toast("Create a map first", "error"); return; }
     const panel = h("div", { class: "vtt-map-panel" });
     canvasHost.appendChild(panel);
@@ -657,6 +722,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       list.forEach(t => db.tokens.update(campaignId, currentMap.id, t.id, { hidden: !allHidden }));
       toast(allHidden ? `${list.length} tokens shown to players` : `${list.length} tokens hidden from players`);
     } });
+    const npcsAndMobs = creatures.filter(t => t.kind !== "pc");
+    if (npcsAndMobs.length) items.push({ label: "What players see\u2026", action: () => setRevealFor(npcsAndMobs) });
     items.push({ label: "Bring to front", action: () => restack(list, 1) });
     items.push({ label: "Send to back", action: () => restack(list, -1) });
     items.push("---");
@@ -671,7 +738,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   let legacyFogs = [];
   let fogMaskDoc;            // undefined until the first snapshot arrives
   let lastFogKey = null;
-  let unsubFogs = null, unsubFogMask = null;
+  let unsubFogs = null, unsubFogMask = null, unsubDim = null;
 
   function applyFog() {
     if (fogMaskDoc === undefined) return;
@@ -767,6 +834,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       if (modalOpen) return; // the dialog/menu closes itself first
       if (openTokenId) { closePopup(); return; }
       if (mapEdit) { closeMapEditor(); return; }
+      if (combatDrawer) { closeCombatDrawer(); return; }
       if (canvas.selectedIds.size || canvas.selectedShape) { canvas.setSelection([]); canvas.selectedShape = null; canvas._markDirty(); return; }
       if (vttFullscreen) toggleVttFullscreen(false);
       return;
@@ -795,6 +863,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (tool) { setTool(tool.id); e.preventDefault(); return; }
     if (k === "f") { toggleVttFullscreen(); e.preventDefault(); }
     else if (k === "n") { setSnap(!canvas.snap); e.preventDefault(); }
+    else if (k === "i") { toggleCombatDrawer(); e.preventDefault(); }
     else if (k === "+" || k === "=") canvas.zoomBy(1.15);
     else if (k === "-") canvas.zoomBy(0.85);
     else if (k === "0") { canvas._fitToView(); canvas._hasSavedView = true; }
@@ -822,7 +891,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
         <p><b>Click</b> a creature: HP, conditions, defenses, rolls, loot.</p>
         <p><b>Right-click</b> a token: hide, size, grapple, initiative.</p>
         <p><b>Select</b>: drag on empty map for a box, Shift+click to add; drag any selected token to move them all. Click a stack again for the token below.</p>
-        <p><b>Keys</b>: V select, R ruler, S/C/T AoE, G fog, E reveal, N snap, [ ] rotate AoE, Del remove, F fullscreen, 0 fit.</p>`));
+        <p><b>Keys</b>: V select, R ruler, S/C/T AoE, G fog, D dim, E reveal, N snap, I initiative, [ ] rotate AoE, Del remove, F fullscreen, 0 fit.</p>`));
     } else {
       sidebar.appendChild(h("h3", {}, "Your Character"));
       if (!myCharacter) { sidebar.appendChild(h("p", {}, "You don't have a character in this campaign yet.")); return; }
@@ -866,7 +935,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (!mapId) return;
     if (mapId === loadedMapId && currentMap) return; // already showing it
     closeMapEditor();
-    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.();
+    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); unsubDim?.();
     const map = allMaps.find(m => m.id === mapId) || (currentMap?.id === mapId ? currentMap : null);
     loadedMapId = mapId;
     closePopup();
@@ -883,6 +952,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       fogMaskDoc = doc;
       applyFog();
     });
+    canvas.clearDim();
+    unsubDim = db.dimMask.subscribe(campaignId, mapId, (doc) => canvas.setDimMask(doc?.dataUrl || null));
     tokensLoaded = false;
     unsubTokens = db.tokens.subscribe(campaignId, mapId, (t) => { tokens = t; tokensLoaded = true; refreshTokens(); });
     unsubShapes = db.shapes.subscribe(campaignId, mapId, (list) => { docShapes = list; refreshShapes(); });
@@ -928,7 +999,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
       if (myCharacter.currentMapId !== loadedMapId) loadMap(myCharacter.currentMapId);
     } else {
       if (loadedMapId) {
-        unsubTokens?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.();
+        unsubTokens?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); unsubDim?.();
         loadedMapId = null; currentMap = null; tokens = [];
         canvas.setTokens([]); canvas.setPersistentShapes([]);
         closePopup();
@@ -941,9 +1012,10 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   buildSidebar();
   return () => {
     closeMapEditor();
+    closeCombatDrawer();
     unsubCampaign();
     unsubMaps(); unsubParty(); unsubNpcs(); unsubCombat(); unsubSync();
-    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); sheetUnsub?.();
+    unsubTokens?.(); unsubMap?.(); unsubFogs?.(); unsubFogMask?.(); unsubShapes?.(); unsubDim?.(); sheetUnsub?.();
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("fullscreenchange", onFullscreenChange);
     document.body.classList.remove("vtt-fullscreen-open");
