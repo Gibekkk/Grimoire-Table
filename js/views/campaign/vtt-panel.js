@@ -33,7 +33,8 @@ const TOOLS = [
 const FOG_TOOLS = [
   { id: "draw-fog", icon: "☁", label: "Fog", key: "g", title: "Paint fog (G)" },
   { id: "draw-dim", icon: "◐", label: "Dim", key: "d", title: "Paint dim light (D): players still see the map there, darkened and blurred — distance, shadows, poor lighting. Painting it over fog turns that fog into dim." },
-  { id: "erase-fog", icon: "☀", label: "Reveal", key: "e", title: "Erase fog to reveal (E)" }
+  { id: "erase-fog", icon: "☀", label: "Reveal", key: "e", title: "Reveal (E): erases fog and dim light" },
+  { id: "erase-dim", icon: "◑", label: "Reveal dim", key: "x", title: "Reveal dim (X): erases only dim light, fog stays" }
 ];
 
 export async function mountVttPanel(container, { campaignId, user, isDm, getAdvMode, onRoll }) {
@@ -217,6 +218,21 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   fogSliderWrap.appendChild(fogSliderLabel);
   fogSliderWrap.appendChild(fogSlider);
 
+  // How dark dim light looks to players on this map (saved on the map doc)
+  const dimStrengthWrap = h("div", { class: "fog-slider-wrap", style: "display:none;" });
+  const dimStrengthLabel = h("span", { class: "fog-slider-label" }, "Dim: 35%");
+  const dimStrength = h("input", { type: "range", min: "10", max: "90", value: "35", class: "fog-slider", title: "How dark dim light looks to players", "aria-label": "Dim light strength" });
+  let dimSaveTimer = null;
+  dimStrength.addEventListener("input", () => {
+    const v = parseInt(dimStrength.value, 10) / 100;
+    dimStrengthLabel.textContent = `Dim: ${dimStrength.value}%`;
+    canvas.setDimStrength(v);
+    clearTimeout(dimSaveTimer);
+    dimSaveTimer = setTimeout(() => { if (currentMap) db.maps.update(campaignId, currentMap.id, { dimStrength: v }); }, 300);
+  });
+  dimStrengthWrap.appendChild(dimStrengthLabel);
+  dimStrengthWrap.appendChild(dimStrength);
+
   let vttFullscreen = false;
   // Snap to grid is on unless this person turned it off (hold Alt to place freely either way)
   try { canvas.setSnap(localStorage.getItem("gt_vtt_snap") !== "0"); } catch { /* noop */ }
@@ -242,7 +258,8 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
 
   function syncToolbar() {
     toolButtons.forEach((b, id) => b.classList.toggle("active", canvas.tool === id));
-    const isFogTool = isDm && (canvas.tool === "draw-fog" || canvas.tool === "erase-fog" || canvas.tool === "draw-dim");
+    const isFogTool = isDm && ["draw-fog", "erase-fog", "draw-dim", "erase-dim"].includes(canvas.tool);
+    dimStrengthWrap.style.display = isDm && (canvas.tool === "draw-dim" || canvas.tool === "erase-dim") ? "flex" : "none";
     fogSliderWrap.style.display = isFogTool ? "flex" : "none";
     if (isFogTool) {
       fogSlider.value = canvas.getFogBrushSize();
@@ -320,6 +337,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (isDm) {
       const fogGroup = group(FOG_TOOLS.map(t => { const b = toolButton(t, () => setTool(t.id)); toolButtons.set(t.id, b); return b; }));
       fogGroup.appendChild(fogSliderWrap);
+      fogGroup.appendChild(dimStrengthWrap);
       fogGroup.appendChild(toolButton({ icon: "■", label: "Fog all", title: "Cover the whole map in fog, then reveal what the players should see" }, async () => {
         if (!currentMap) return;
         if (!await confirmDialog("Anything already revealed gets covered too. Use Reveal to uncover areas afterwards.", { title: "Cover the whole map in fog?", okLabel: "Fog all" })) return;
@@ -891,7 +909,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
         <p><b>Click</b> a creature: HP, conditions, defenses, rolls, loot.</p>
         <p><b>Right-click</b> a token: hide, size, grapple, initiative.</p>
         <p><b>Select</b>: drag on empty map for a box, Shift+click to add; drag any selected token to move them all. Click a stack again for the token below.</p>
-        <p><b>Keys</b>: V select, R ruler, S/C/T AoE, G fog, D dim, E reveal, N snap, I initiative, [ ] rotate AoE, Del remove, F fullscreen, 0 fit.</p>`));
+        <p><b>Keys</b>: V select, R ruler, S/C/T AoE, G fog, D dim, E reveal, X reveal dim, N snap, I initiative, [ ] rotate AoE, Del remove, F fullscreen, 0 fit.</p>`));
     } else {
       sidebar.appendChild(h("h3", {}, "Your Character"));
       if (!myCharacter) { sidebar.appendChild(h("p", {}, "You don't have a character in this campaign yet.")); return; }
@@ -915,6 +933,11 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
   function applyMapDoc(map) {
     if (!map) return;
     currentMap = map;
+    canvas.setDimStrength(map.dimStrength ?? 0.35);
+    if (document.activeElement !== dimStrength) {
+      dimStrength.value = String(Math.round((map.dimStrength ?? 0.35) * 100));
+      dimStrengthLabel.textContent = `Dim: ${dimStrength.value}%`;
+    }
     // The open editor owns grid and size: a snapshot of an earlier save mustn't pull them back
     if (!mapEdit) {
       canvas.setMapSize(map.widthPx, map.heightPx);

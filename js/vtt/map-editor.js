@@ -346,7 +346,7 @@ export function openMapEditorDialog(campaignId, map) {
     db.shapes.subscribe(campaignId, map.id, (s) => { shapes = s; draw(); }),
     db.fogMask.subscribe(campaignId, map.id, (doc) => canvas.setFogMask(doc?.dataUrl || null, doc?.dataUrl ? [] : map.fogs || [])),
     db.dimMask.subscribe(campaignId, map.id, (doc) => canvas.setDimMask(doc?.dataUrl || null)),
-    db.maps.subscribe(campaignId, map.id, (m) => { if (m) showPicture(m.backgroundBase64 || null); })
+    db.maps.subscribe(campaignId, map.id, (m) => { if (m) { showPicture(m.backgroundBase64 || null); canvas.setDimStrength(m.dimStrength ?? 0.35); } })
   ];
 
   const form = renderMapForm(formHost, { campaignId, map, session, onDone: () => close() });
