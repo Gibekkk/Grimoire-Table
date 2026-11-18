@@ -29,7 +29,9 @@ export function openDialog({ title = "", message = "", fields = [], okLabel = "O
           input.appendChild(row);
         });
       } else if (f.type === "select") {
-        input = h("select", { name: f.name });
+        // `size` shows a scrolling list instead of a dropdown
+        input = h("select", { name: f.name, size: f.size || null, class: f.size ? "dialog-listbox" : null });
+        if (f.size) input.addEventListener("dblclick", () => box.requestSubmit());
         (f.options || []).forEach(([v, l]) => input.appendChild(h("option", { value: v, selected: String(v) === String(f.value) ? "selected" : null }, escapeHtml(l))));
       } else {
         input = h("input", { name: f.name, type: f.type || "text", value: f.value ?? "", placeholder: f.placeholder || null, min: f.min ?? null, max: f.max ?? null, step: f.step ?? null, autocomplete: "off" });

@@ -57,8 +57,9 @@ export function showContextMenu(x, y, items) {
   document.body.appendChild(menu);
   const vw = window.innerWidth, vh = window.innerHeight;
   const rect = menu.getBoundingClientRect();
-  menu.style.left = `${Math.min(x, vw - rect.width - 8)}px`;
-  menu.style.top = `${Math.min(y, vh - rect.height - 8)}px`;
+  // Keep it on screen; a menu taller than the window scrolls (see .ctx-menu max-height)
+  menu.style.left = `${Math.max(8, Math.min(x, vw - rect.width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, vh - rect.height - 8))}px`;
   requestAnimationFrame(() => menu.classList.add("show"));
   const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("mousedown", close); } };
   setTimeout(() => document.addEventListener("mousedown", close), 0);

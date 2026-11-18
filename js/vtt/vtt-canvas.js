@@ -21,8 +21,8 @@
 //
 // Stacking: tokens are drawn by layer (scenery under creatures; Bring to front / Send
 // to back set it), then larger under smaller, then the most recently moved on top —
-// so a character dropped onto a big creature stands on top of it. Clicking the same
-// spot again picks the next token down in a stack.
+// so a character dropped onto a big creature stands on top of it. Clicking a spot
+// with several tokens asks which one you mean; the one picked is what a drag there moves.
 //
 // Fog of war is a single offscreen bitmap mask (one layer): the Draw Fog brush
 // paints into it, the Erase Fog brush clears pixels out of it, so overlapping
@@ -122,7 +122,6 @@ export class VttCanvas {
     this.selectedShape = null;
     this.selectedIds = new Set();  // selected token ids (multi-select)
     this.marquee = null;           // { a, b } world points of the selection box being drawn
-    this._stackPick = null;        // { x, y, id, at } last click, to step down through a stack
     this.snap = true;              // tokens (and new shapes) snap to the grid; Alt places freely
 
     // --- Fog of war (single bitmap mask) ---
@@ -400,10 +399,11 @@ export class VttCanvas {
     this.dimStrength = s;
     this._dimDirty = true; this._markDirty();
   }
+  // No pixel read-back to check for an empty mask: reading a canvas back makes the browser
+  // keep it in main memory, and every frame then pays to re-upload it for drawing
   exportDimMask() {
     if (!this.dimMask) return null;
-    const empty = !this.dimMaskCtx.getImageData(0, 0, this.dimMask.width, this.dimMask.height).data.some((v, i) => i % 4 === 3 && v);
-    this._dimSrc = empty ? null : this.dimMask.toDataURL("image/png");
+    this._dimSrc = this.dimMask.toDataURL("image/png");
     return this._dimSrc;
   }
   clearDim() {
@@ -413,17 +413,19 @@ export class VttCanvas {
     this._dimDirty = true; this._markDirty();
   }
 
-  // What players see in dim areas, built when the dim mask or the picture changes:
-  // the picture blurred and darkened (under tokens), and a shade (over tokens)
-  _dimLayers(world) {
-    if (!this._dimDirty && this._dimCache && this._dimCache.bg === this.bgImage && this._dimCache.w === world.w && this._dimCache.h === world.h && this._dimCache.s === this.dimStrength) return this._dimCache;
+  // The darkened, blurred picture players see in dim areas. Built only on a player's client,
+  // only when the dim mask, the picture or the strength changes (never per frame or per
+  // brush stroke), at a low resolution since it's blurred anyway, then handed to the GPU
+  // as an ImageBitmap so redrawing it every frame is cheap.
+  _dimUnder(world) {
+    const c = this._dimCache;
+    if (!this._dimDirty && c && c.bg === this.bgImage && c.w === world.w && c.h === world.h && c.s === this.dimStrength) return c.bitmap || c.canvas;
     const s = this.dimStrength;
     this._dimDirty = false;
-    const mw = this.dimMask.width, mh = this.dimMask.height;
-    const scale = Math.min(1, 1600 / Math.max(world.w, world.h));
+    const scale = Math.min(1, 900 / Math.max(world.w, world.h));
     const W = Math.max(1, Math.round(world.w * scale)), H = Math.max(1, Math.round(world.h * scale));
-    const under = document.createElement("canvas"); under.width = W; under.height = H;
-    const u = under.getContext("2d");
+    const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+    const u = canvas.getContext("2d");
     if (this.bgImage) {
       // Strength 0.35 (default) leaves the picture about two thirds as bright, softly blurred
       u.filter = `blur(${Math.max(1, Math.round((2 + 6 * s) * scale))}px) brightness(${(1 - 0.75 * s).toFixed(2)}) saturate(${(1 - 0.5 * s).toFixed(2)})`;
@@ -433,15 +435,13 @@ export class VttCanvas {
       u.fillStyle = `rgba(6,7,14,${(0.6 * s).toFixed(2)})`; u.fillRect(0, 0, W, H);
     }
     u.globalCompositeOperation = "destination-in";
-    u.imageSmoothingEnabled = true;
-    u.drawImage(this.dimMask, 0, 0, mw, mh, 0, 0, W, H);
-    const over = document.createElement("canvas"); over.width = mw; over.height = mh;
-    const o = over.getContext("2d");
-    o.drawImage(this.dimMask, 0, 0);
-    o.globalCompositeOperation = "source-in";
-    o.fillStyle = "rgb(8,10,24)"; o.fillRect(0, 0, mw, mh);
-    this._dimCache = { under, over, bg: this.bgImage, w: world.w, h: world.h, s };
-    return this._dimCache;
+    u.drawImage(this.dimMask, 0, 0, W, H);
+    const cache = { canvas, bitmap: null, bg: this.bgImage, w: world.w, h: world.h, s };
+    this._dimCache = cache;
+    if (typeof createImageBitmap === "function") {
+      createImageBitmap(canvas).then(bmp => { if (this._dimCache === cache) { cache.bitmap = bmp; this._markDirty(); } else bmp.close?.(); }).catch(() => {});
+    }
+    return canvas;
   }
 
   // Replaces the fog with a saved mask (PNG data URL). Legacy maps stored fog as
@@ -655,19 +655,24 @@ export class VttCanvas {
   }
   _tokenAt(worldX, worldY) { return this._tokensAt(worldX, worldY)[0] || null; }
 
-  // The token a press picks: a token you can move beats one stacked over it that you
-  // can't, and pressing the same spot again steps down through the stack
-  _pickToken(world, sx, sy) {
+  // The token a press picks: the selected one if it's in the stack (picked from the
+  // stack list), else a token you can move over one stacked above it that you can't
+  _pickToken(world) {
     const here = this._tokensAt(world.x, world.y);
     if (!here.length) return null;
+    const chosen = here.find(t => this.selectedIds.has(t.id) && this.opts.canMoveToken(t));
+    if (chosen) return chosen;
     const movable = here.filter(t => this.opts.canMoveToken(t));
-    const list = movable.length ? movable : here;
-    const prev = this._stackPick;
-    if (prev && list.length > 1 && Math.hypot(sx - prev.x, sy - prev.y) < 6 && Date.now() - prev.at < 1500) {
-      const i = list.findIndex(t => t.id === prev.id);
-      if (i >= 0) return list[(i + 1) % list.length];
-    }
-    return list[0];
+    return (movable.length ? movable : here)[0];
+  }
+
+  // A click (not a drag) on a token: with several tokens on that spot, ask which one
+  _clickToken(token, e) {
+    const p = this._eventPos(e);
+    const world = this.screenToWorld(p.x, p.y);
+    const here = this._tokensAt(world.x, world.y);
+    if (here.length > 1 && this.opts.onStackClicked) this.opts.onStackClicked(here, e.clientX, e.clientY);
+    else this.opts.onTokenClicked?.(token);
   }
 
   _shapeAt(worldX, worldY) {
@@ -700,10 +705,9 @@ export class VttCanvas {
         this.drag = { type: "shape-rotate", shape: sel, pivot: hd.pivot, startScreen: { x: sx, y: sy }, moved: false };
         return;
       }
-      const token = this._pickToken(world, sx, sy);
+      const token = this._pickToken(world);
       if (token) {
         this.selectedShape = null;
-        this._stackPick = { x: sx, y: sy, id: token.id, at: Date.now() };
         if (!this.opts.canMoveToken(token)) {
           this.drag = { type: "click", token, startScreen: { x: sx, y: sy }, moved: false };
           this._markDirty();
@@ -953,7 +957,7 @@ export class VttCanvas {
     } else if (drag.type === "token") {
       const t = drag.token;
       if (!drag.moved) {
-        this.opts.onTokenClicked?.(t);
+        this._clickToken(t, e);
       } else if (t._st?.follow) {
         this.opts.onGrappledMoved?.(t, t._st.follow.dx, t._st.follow.dy);
       } else {
@@ -965,7 +969,7 @@ export class VttCanvas {
         });
       }
     } else if (drag.type === "click") {
-      if (!drag.moved) this.opts.onTokenClicked?.(drag.token);
+      if (!drag.moved) this._clickToken(drag.token, e);
     } else if (drag.type === "shape-rotate") {
       if (drag.moved) this.opts.onPersistentShapeMoved?.(drag.shape);
     } else if (drag.type === "shape-drag") {
@@ -1027,7 +1031,8 @@ export class VttCanvas {
       this.shape = null;
     } else if (this._isFogTool(drag.type)) {
       if (drag.type !== "erase-dim") this.opts.onFogChanged?.(this.exportFogMask());
-      if (drag.type !== "draw-fog") this.opts.onDimChanged?.(this.exportDimMask());
+      // Erasing can't create dim light, so a Reveal on a map without any saves nothing extra
+      if (drag.type === "draw-dim" || (drag.type !== "draw-fog" && this._dimSrc)) this.opts.onDimChanged?.(this.exportDimMask());
       if (this._pendingFog) {
         const { dataUrl, legacyFogs } = this._pendingFog;
         this._pendingFog = null;
@@ -1249,10 +1254,10 @@ export class VttCanvas {
       ctx.stroke();
     }
 
-    // Dim light: the picture blurred and darkened (players); the DM sees a blue wash
-    const dimOn = this.dimMask && (this._dimSrc || this._dimDirty || ["draw-dim", "erase-fog", "erase-dim"].includes(this.drag?.type));
-    const dim = dimOn && !fogPending ? this._dimLayers(world) : null;
-    if (dim && !this._isDm) ctx.drawImage(dim.under, 0, 0, world.w, world.h);
+    // Dim light. Players: the picture blurred and darkened under tokens, a light shade over
+    // them. DM: just a see-through wash drawn straight from the mask, so painting stays cheap.
+    const dimOn = !!this.dimMask && !fogPending && (!!this._dimSrc || ["draw-dim", "erase-fog", "erase-dim"].includes(this.drag?.type));
+    if (dimOn && !this._isDm) ctx.drawImage(this._dimUnder(world), 0, 0, world.w, world.h);
 
     // Grapple tethers under the tokens
     if (!fogPending) this.tokens.forEach(t => {
@@ -1377,11 +1382,11 @@ export class VttCanvas {
       }
     });
 
-    if (dim) {
+    if (dimOn) {
       ctx.save();
-      // Players: a light shade over tokens on top of the darkened picture; DM: a wash that's always see-through
-      ctx.globalAlpha = this._isDm ? 0.12 + 0.15 * this.dimStrength : 0.35 * this.dimStrength;
-      ctx.drawImage(dim.over, 0, 0, world.w, world.h);
+      ctx.globalAlpha = this._isDm ? 0.15 + 0.2 * this.dimStrength : 0.35 * this.dimStrength;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(this.dimMask, 0, 0, world.w, world.h);
       ctx.restore();
     }
 

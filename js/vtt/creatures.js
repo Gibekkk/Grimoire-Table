@@ -509,8 +509,11 @@ export function parseSkills(s) {
     .map(m => ({ name: m[1], bonus: (m[2] === "+" ? 1 : -1) * parseInt(m[3], 10) }));
 }
 
-// What players see of a creature the DM has given an alias or kept details back on
+// What players see of a creature the DM has given an alias or kept details back on.
+// A monster's or NPC's sheet (type, health, conditions, effects) stays hidden until the DM
+// shows it; its name and picture are shown unless the DM hides them.
 export const DEFAULT_ALIAS = "Unknown creature";
 export function revealed(token, key) {
-  return token?.kind === "pc" || token?.reveal?.[key] !== false;
+  if (token?.kind === "pc") return true;
+  return key === "details" ? token?.reveal?.details === true : token?.reveal?.[key] !== false;
 }

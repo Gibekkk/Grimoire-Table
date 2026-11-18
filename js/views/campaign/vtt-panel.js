@@ -112,6 +112,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     canMoveShape: (shape) => isDm || shape.ownerUid === user.uid,
     onTokenMoved: (token, x, y, followers) => handleTokenMoved(token, x, y, followers),
     onTokenClicked: (token) => showTokenPopup(token),
+    onStackClicked: (list, x, y) => chooseFromStack(list, x, y),
     onTokenBlocked: (token) => explainBlocked(token),
     onGrappledMoved: (token, dx, dy) => tools.moveGrappled(token, dx, dy),
     moveBlockedWhy: (token, x, y) => tools.moveBlockedWhy(token, x, y),
@@ -630,6 +631,37 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     toast(`Updated what players see of ${list.length} creatures`);
   }
 
+  // Sends tokens to another map, keeping how they stand relative to each other (a party
+  // walking through a door arrives in formation). PCs' players follow them there.
+  async function moveTokensToMap(list) {
+    const others = allMaps.filter(m => m.id !== currentMap?.id);
+    if (!others.length || !list.length) return;
+    const r = await openDialog({
+      title: list.length === 1 ? `Move ${list[0].name} to\u2026` : `Move ${list.length} tokens to\u2026`,
+      okLabel: "Move",
+      fields: [
+        { name: "map", type: "select", size: Math.min(10, Math.max(4, others.length)), value: others[0].id, options: others.map(m => [m.id, m.name]) },
+        { name: "go", type: "checks", value: [], options: [["go", "Open that map afterwards"]] }
+      ]
+    });
+    if (!r?.map) return;
+    const target = others.find(m => m.id === r.map);
+    const fromId = currentMap.id;
+    const minX = Math.min(...list.map(t => t.x)), minY = Math.min(...list.map(t => t.y));
+    const ids = new Set(list.map(t => t.id));
+    if (ids.has(openTokenId)) closePopup();
+    canvas.setSelection([]);
+    await Promise.all(list.map(async (t) => {
+      // A grapple doesn't survive the trip unless both go together
+      const keepGrapple = t.grappledBy && ids.has(t.grappledBy);
+      const { _st, ...clean } = t;
+      await db.tokens.moveToMap(campaignId, fromId, target.id, keepGrapple ? clean : { ...clean, grappledBy: null, grappleOffset: null }, { x: 2 + (t.x - minX), y: 2 + (t.y - minY) });
+      if (t.kind === "pc") await db.characters.update(t.refId, { currentMapId: target.id });
+    }));
+    toast(`Moved ${list.length === 1 ? list[0].name : `${list.length} tokens`} to ${target.name}`);
+    if (r.go.includes("go")) loadMap(target.id);
+  }
+
   // Stacking: front/back put a token above or below everything else of its kind
   function restack(list, layer) {
     const z = Date.now();
@@ -663,17 +695,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     items.push({ label: "Size…", action: () => setTimeout(() => sizeMenu(raw, sx, sy), 0) });
     items.push({ label: "Bring to front", action: () => restack([raw], 1) });
     items.push({ label: "Send to back", action: () => restack([raw], -1) });
-    if (raw.kind !== "component") {
-      const others = allMaps.filter(m => m.id !== currentMap.id);
-      if (others.length) items.push("---");
-      others.forEach(m => {
-        items.push({ label: `Move to: ${m.name}`, action: async () => {
-          await db.tokens.moveToMap(campaignId, currentMap.id, m.id, { ...raw, grappledBy: null, grappleOffset: null });
-          if (raw.kind === "pc") await db.characters.update(raw.refId, { currentMapId: m.id });
-          toast(`Moved ${raw.name} to ${m.name}`);
-        }});
-      });
-    }
+    if (allMaps.length > 1) items.push({ label: "Move to another map\u2026", action: () => moveTokensToMap([raw]) });
     items.push("---");
     items.push({ label: "Remove from Map", danger: true, action: () => removeToken(raw) });
     showContextMenu(sx, sy, items);
@@ -729,6 +751,18 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     refreshTokens(); refreshShapes();
   }
 
+  // Several tokens on one spot: pick one to select it (so a drag there moves it) and open its panel
+  function chooseFromStack(list, x, y) {
+    const kind = (t) => t.kind === "pc" ? "PC" : t.kind === "npc" ? "NPC" : t.kind === "monster" ? "Monster" : "Scenery";
+    showContextMenu(x, y, [
+      { header: `${list.length} tokens here (top first)` },
+      ...list.map(t => ({ label: `${t.name || "Token"} \u2022 ${kind(t)}${t.hidden && isDm ? " \u2022 hidden" : ""}`, action: () => {
+        canvas.setSelection(canMove(t) ? [t.id] : []);
+        showTokenPopup(tokens.find(x => x.id === t.id) || t);
+      } }))
+    ]);
+  }
+
   function showGroupMenu(list, sx, sy) {
     const creatures = list.filter(t => t.kind !== "component");
     const allHidden = list.every(t => t.hidden);
@@ -744,6 +778,7 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     if (npcsAndMobs.length) items.push({ label: "What players see\u2026", action: () => setRevealFor(npcsAndMobs) });
     items.push({ label: "Bring to front", action: () => restack(list, 1) });
     items.push({ label: "Send to back", action: () => restack(list, -1) });
+    if (allMaps.length > 1) items.push({ label: `Move ${list.length} to another map\u2026`, action: () => moveTokensToMap(list) });
     items.push("---");
     items.push({ label: `Remove ${list.length} from Map`, danger: true, action: () => removeTokens(list) });
     showContextMenu(sx, sy, items);
@@ -898,17 +933,30 @@ export async function mountVttPanel(container, { campaignId, user, isDm, getAdvM
     sheetUnsub?.(); sheetUnsub = null; sheetCharId = null;
     sidebar.innerHTML = "";
     if (isDm) {
-      sidebar.appendChild(h("h3", {}, "Maps"));
-      allMaps.forEach(m => {
-        const btn = h("button", { class: `btn sm block ${currentMap?.id === m.id ? "primary" : ""}`, style: "margin-bottom:6px;" }, m.name);
-        btn.addEventListener("click", () => loadMap(m.id));
-        sidebar.appendChild(btn);
-      });
+      sidebar.appendChild(h("h3", {}, `Maps (${allMaps.length})`));
+      const list = h("div", { class: "vtt-map-list" });
+      const drawMaps = (q = "") => {
+        list.innerHTML = "";
+        allMaps.filter(m => !q || m.name.toLowerCase().includes(q.toLowerCase())).forEach(m => {
+          const btn = h("button", { class: `btn sm block ${currentMap?.id === m.id ? "primary" : ""}` }, escapeHtml(m.name));
+          btn.addEventListener("click", () => loadMap(m.id));
+          list.appendChild(btn);
+        });
+      };
+      if (allMaps.length > 8) {
+        const filter = h("input", { type: "search", placeholder: "Find a map\u2026", "aria-label": "Find a map", class: "vtt-map-filter" });
+        filter.addEventListener("input", () => drawMaps(filter.value));
+        sidebar.appendChild(filter);
+      }
+      drawMaps();
+      sidebar.appendChild(list);
+      // keep the current map in view
+      requestAnimationFrame(() => list.querySelector(".btn.primary")?.scrollIntoView({ block: "nearest" }));
       sidebar.appendChild(h("div", { class: "vtt-help" }, `
         <h4>Quick help</h4>
         <p><b>Click</b> a creature: HP, conditions, defenses, rolls, loot.</p>
         <p><b>Right-click</b> a token: hide, size, grapple, initiative.</p>
-        <p><b>Select</b>: drag on empty map for a box, Shift+click to add; drag any selected token to move them all. Click a stack again for the token below.</p>
+        <p><b>Select</b>: drag on empty map for a box, Shift+click to add; drag any selected token to move them all. Clicking a spot with several tokens asks which one you mean; then dragging there moves that one.</p>
         <p><b>Keys</b>: V select, R ruler, S/C/T AoE, G fog, D dim, E reveal, X reveal dim, N snap, I initiative, [ ] rotate AoE, Del remove, F fullscreen, 0 fit.</p>`));
     } else {
       sidebar.appendChild(h("h3", {}, "Your Character"));

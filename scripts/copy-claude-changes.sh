@@ -51,6 +51,7 @@ FILES=(
   "js/views/campaign/map-workshop-panel.js"
   "js/views/campaign/npc-panel.js"
   "js/views/campaign/vtt-panel.js"
+  "js/util.js"
   "js/vtt/vtt-canvas.js"
   "js/vtt/creatures.js"
   "js/vtt/creature-panel.js"

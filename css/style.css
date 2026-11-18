@@ -902,3 +902,10 @@ details.upcoming > summary { cursor: pointer; font-family: var(--font-display); 
 .cp-tables th, .cp-tables td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--line); }
 .cp-tables tr.here td { background: rgba(198,154,62,0.15); color: var(--gold-bright); }
 .cp-tables h5 { margin: 6px 0 2px; font-size: 0.72rem; color: var(--gold); text-transform: uppercase; font-family: var(--font-display); }
+/* Long menus and map lists scroll */
+.ctx-menu { max-height: calc(100vh - 16px); overflow-y: auto; }
+.vtt-map-list { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; padding-right: 2px; flex-shrink: 0; }
+.vtt-map-list .btn { margin: 0; flex-shrink: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vtt-map-filter { margin: 0 0 8px; }
+.dialog-listbox { width: 100%; padding: 4px; }
+.dialog-listbox option { padding: 6px 8px; border-radius: 4px; }

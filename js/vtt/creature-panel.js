@@ -655,7 +655,7 @@ export function createCreatureTools(ctx) {
     // The DM sees what the players are shown
     if (ctx.isDm && token.kind !== "pc" && ["name", "picture", "details"].some(k => !revealed(token, k))) {
       const kept = [!revealed(token, "name") && `name (they see “${token.alias || DEFAULT_ALIAS}”)`, !revealed(token, "picture") && "picture", !revealed(token, "details") && "details"].filter(Boolean);
-      el.appendChild(h("div", { class: "cp-note" }, `\u{1F576} Kept from players: ${escapeHtml(kept.join(", "))}`));
+      el.appendChild(h("div", { class: "cp-note" }, `\u{1F576} Kept from players: ${escapeHtml(kept.join(", "))} \u2014 \u270E to change`));
     }
 
     const showDetails = seesAll(token) || revealed(token, "details");
