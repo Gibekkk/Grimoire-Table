@@ -804,6 +804,11 @@ export class VttCanvas {
       this._hoverWorld = world;
       this._markDirty();
     }
+    // The token under the pointer shows its full name
+    if (!this.drag && this.tool === "select") {
+      const id = this._tokenAt(world.x, world.y)?.id || null;
+      if (id !== this._hoverTokenId) { this._hoverTokenId = id; this._markDirty(); }
+    }
     if (!this.drag) return;
 
     if (this.drag.startScreen && !this.drag.moved &&
@@ -909,6 +914,7 @@ export class VttCanvas {
 
   _onPointerLeave() {
     if (this._hoverWorld) { this._hoverWorld = null; this._markDirty(); }
+    if (this._hoverTokenId) { this._hoverTokenId = null; this._markDirty(); }
   }
 
   // Commits one token's drop; returns false if the move was refused
@@ -1212,6 +1218,72 @@ export class VttCanvas {
     return c;
   }
 
+  // Splits a name into at most `maxLines` lines no wider than maxW (a single long word may
+  // overflow rather than be cut); returns null if it doesn't fit
+  _wrapName(ctx, text, maxW, maxLines) {
+    const words = text.split(/\s+/).filter(Boolean);
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const next = cur ? `${cur} ${w}` : w;
+      if (!cur || ctx.measureText(next).width <= maxW) cur = next;
+      else { lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    return lines.length <= maxLines ? lines : null;
+  }
+
+  // Token names in full: wrapped onto two lines and shrunk a little if needed, on a dark
+  // tab so they read over any map. The hovered or selected token shows its name on one
+  // line on top of everything. Only a name too long even for two smaller lines is shortened.
+  _drawLabels(labels) {
+    const ctx = this.ctx;
+    const z = this.zoom;
+    const focus = labels.filter(l => l.t.id === this._hoverTokenId || this.selectedIds.has(l.t.id));
+    // In a stack only the top token is labelled (the count badge says more are there)
+    const rest = labels.filter(l => !focus.includes(l) && !l.under);
+    const draw = (l, full) => {
+      const base = Math.max(10, Math.min(l.r * 0.4, this.gridPx * 0.3));
+      const maxW = Math.max(l.w * 1.6, this.gridPx * 2);
+      const name = l.t.name || "";
+      let px = base, lines = null;
+      if (full) {
+        ctx.font = `bold ${px}px sans-serif`;
+        lines = [name];
+      } else {
+        for (const k of [1, 0.88, 0.78]) {
+          px = base * k;
+          ctx.font = `bold ${px}px sans-serif`;
+          lines = this._wrapName(ctx, name, maxW, 2);
+          if (lines) break;
+        }
+        if (!lines) {
+          // Extremely long: two lines, the second shortened
+          const all = this._wrapName(ctx, name, maxW, 99) || [name];
+          let second = all.slice(1).join(" ");
+          while (second.length > 1 && ctx.measureText(second + "\u2026").width > maxW) second = second.slice(0, -1);
+          lines = [all[0], second + "\u2026"];
+        }
+      }
+      const lh = px * 1.18, pad = px * 0.3;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      lines.forEach((line, i) => {
+        const w = ctx.measureText(line).width;
+        const y = l.y + 2 / z + lh * i + lh / 2;
+        ctx.fillStyle = full ? "rgba(12,13,20,0.9)" : "rgba(12,13,20,0.68)";
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(l.cx - w / 2 - pad, y - lh / 2, w + pad * 2, lh, lh / 3);
+        else ctx.rect(l.cx - w / 2 - pad, y - lh / 2, w + pad * 2, lh);
+        ctx.fill();
+        ctx.fillStyle = full ? "#ffd876" : "#fff";
+        ctx.fillText(line, l.cx, y + px * 0.04);
+      });
+      ctx.textBaseline = "alphabetic";
+    };
+    rest.forEach(l => draw(l, false));
+    focus.forEach(l => draw(l, true));
+  }
+
   // --- Rendering ---
 
   _draw() {
@@ -1279,6 +1351,7 @@ export class VttCanvas {
     // Tokens sharing exactly the same squares: the top one shows how many are there
     const stacks = new Map();
     order.forEach(t => { const p = this._posOf(t); const k = `${p.x},${p.y},${t.w || 1},${t.h || 1}`; stacks.set(k, { top: t.id, n: (stacks.get(k)?.n || 0) + 1 }); });
+    const labels = [];
     if (!fogPending) order.forEach(t => {
       const { x: gx, y: gy } = this._posOf(t);
       const pos = this.gridToWorld(gx, gy);
@@ -1354,23 +1427,9 @@ export class VttCanvas {
           });
           ctx.textBaseline = "alphabetic";
         }
-        // Label size is capped so Huge/Gargantuan tokens don't get giant names
-        const labelPx = Math.max(10, Math.min(r * 0.4, this.gridPx * 0.3));
-        ctx.font = `bold ${labelPx}px sans-serif`; ctx.textAlign = "center";
-        ctx.lineWidth = Math.max(2, labelPx / 4); ctx.strokeStyle = "rgba(0,0,0,0.75)"; ctx.lineJoin = "round";
-        // Keep names about as wide as the token so neighbours' labels don't run together
-        let label = t.name || "";
-        const maxW = Math.max(size.x * 1.15, this.gridPx * 1.1);
-        if (ctx.measureText(label).width > maxW) {
-          while (label.length > 1 && ctx.measureText(label + "\u2026").width > maxW) label = label.slice(0, -1);
-          // keep a trailing copy number ("Goblin Warrior 2" -> "Goblin W\u2026 2")
-          const num = (t.name || "").match(/ (\d+)$/);
-          label = num ? label.slice(0, Math.max(1, label.length - num[0].length)) + "\u2026" + num[0] : label + "\u2026";
-        }
-        ctx.strokeText(label, cx, pos.y + size.y + labelPx);
-        ctx.fillStyle = "#fff";
-        ctx.fillText(label, cx, pos.y + size.y + labelPx);
+        // Names are drawn after every token (below) so no token covers a neighbour's name
         const stack = stacks.get(`${gx},${gy},${t.w || 1},${t.h || 1}`);
+        labels.push({ t, cx, y: pos.y + size.y, r, w: size.x, under: stack?.n > 1 && stack.top !== t.id });
         if (stack?.n > 1 && stack.top === t.id) {
           const br = Math.max(7 / this.zoom, Math.min(r * 0.28, this.gridPx * 0.16));
           const bx = cx - r + br * 0.6, by = cy + r - br * 0.6;
@@ -1381,6 +1440,7 @@ export class VttCanvas {
         }
       }
     });
+    this._drawLabels(labels);
 
     if (dimOn) {
       ctx.save();
